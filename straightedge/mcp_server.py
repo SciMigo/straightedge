@@ -31,6 +31,7 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
+from . import __version__
 from .catalog import as_dicts
 from .errors import StraightedgeError
 from .estimate import estimate
@@ -52,7 +53,9 @@ def build_server():
 
     server = MCPServer(
         name="straightedge",
-        version="0.1",
+        # Read from the package rather than restated, so a release bump cannot
+        # leave clients being told they are talking to an older server.
+        version=__version__,
         instructions=(
             "Render math animations and figures from a request. Call "
             "list_templates to see what exists and how each is invoked, plan to "

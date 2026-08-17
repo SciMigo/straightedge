@@ -4,7 +4,10 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "straightedge"
-version = "0.1.0"
+# Read from `straightedge.__version__` rather than restated here. One literal,
+# so the packaged metadata, the CLI, and the version the MCP server advertises
+# to clients cannot drift apart at a release.
+dynamic = ["version"]
 description = "Generate deterministic, machine-checkable SVG diagrams and Manim animations from structured data, templates, or a prompt"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -65,6 +68,9 @@ addopts = "-m 'not smoke'"
 markers = [
     "smoke: live Manim render of one scene per builder; slow, opt-in via -m smoke",
 ]
+
+[tool.setuptools.dynamic]
+version = { attr = "straightedge.__version__" }
 
 [tool.setuptools.packages.find]
 include = ["straightedge*"]

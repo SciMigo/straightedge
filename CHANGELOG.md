@@ -6,6 +6,14 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-08-17
+
+A minor rather than a patch release: the public API grew by seven names and a
+CLI flag, and nothing was removed or changed. Code written against 0.1.0 keeps
+working — `style` is the last parameter of `scene_code_for` and defaults to
+`textbook`, which is tested against Manim's own palette, so existing renders are
+unchanged unless a theme is asked for.
+
 ### Added
 - A style layer (`straightedge.style`) naming colours, stroke widths, and fill
   opacities by **visual role** rather than by what they happen to depict, so one
@@ -19,13 +27,22 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   covering the token vocabulary and why generated scenes resolve a theme at
   generation time while hand-written scenes import it.
 
+### Fixed
+- The MCP server advertised `version="0.1"` to connected clients, hardcoded and
+  already stale through the whole 0.1.x line. The version is now written once as
+  `straightedge.__version__`; `pyproject.toml` derives its own from that
+  attribute and the server reads it, so a release bump cannot be applied by
+  halves. Regression-tested, including a check that no module reintroduces a
+  second copy — which runs without the `mcp` extra, unlike the server test it
+  backs up.
+
 ### Changed
 - The package summary no longer scopes the project to lectures. It now reads
   "Generate deterministic, machine-checkable SVG diagrams and Manim animations
   from structured data, templates, or a prompt", matching the wording used in
   the README and on the gallery — three descriptions of the same library made it
   harder to place, for readers and for search alike. Package metadata is
-  immutable once published, so this reaches PyPI with the next release.
+  immutable once published, so 0.1.0 keeps the old wording on PyPI.
 
 ## [0.1.0] - 2026-08-17
 
