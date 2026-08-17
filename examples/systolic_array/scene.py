@@ -37,7 +37,6 @@ from manim import (
     Create, FadeIn, FadeOut, Flash, Indicate, Transform, Write,
     AnimationGroup, Scene, VGroup,
     RoundedRectangle, Square, Text, Line, Arrow,
-    BLACK, GREY_B, GREY_D, WHITE,
 )
 
 import sys
@@ -46,7 +45,7 @@ from pathlib import Path
 # The layout check lives one directory up, shared by every example. Python puts
 # this file's directory on the path, not examples/, so it needs saying.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from _layout import assert_readable
+from _layout import STYLE as S, assert_readable
 
 # --- the problem -----------------------------------------------------------
 
@@ -62,12 +61,15 @@ _, N = B.shape
 
 # --- palette ---------------------------------------------------------------
 
-INK = "#0d1117"
-WEIGHT = "#f2b45b"        # amber: stationary
-ACT = "#4aa8ff"           # blue: streaming right
-PSUM = "#4CAF50"          # green: falling down
-DIM = "#5a6885"
-HOT = "#E5533D"
+# The style names visual roles; this scene names what they mean here. `S.hold` is
+# whatever the blue's counterpart is in a given picture — in this one it is a
+# weight that never moves, which is why the alias exists rather than a token
+# called `weight` that two of the other three examples would have to misuse.
+WEIGHT = S.hold           # amber: stationary
+ACT = S.flow              # blue: streaming right
+PSUM = S.done             # green: falling down
+DIM = S.dim
+HOT = S.warn
 
 CELL = 1.16               # PE pitch, in scene units
 ARRAY_AT = np.array([-1.35, -0.45, 0.0])   # centre of the PE grid
@@ -115,10 +117,11 @@ def _chip(value: int, color: str, width: int = 1) -> VGroup:
     """
     box = RoundedRectangle(
         width=0.56, height=0.52, corner_radius=0.11,
-        stroke_color=color, stroke_width=3,
+        stroke_color=color, stroke_width=S.width.chip,
         fill_color=color, fill_opacity=0.20,
     )
-    label = Text(f"{value:0{width}d}", font_size=19, color=WHITE, weight="BOLD")
+    label = Text(f"{value:0{width}d}", font_size=S.size.body, color=S.fg,
+                 weight="BOLD")
     return VGroup(box, label.move_to(box.get_center()))
 
 
@@ -126,10 +129,10 @@ class SystolicArray(Scene):
     """Y = A @ B on a 3x3 weight-stationary array, cycle by cycle."""
 
     def construct(self) -> None:
-        self.camera.background_color = INK
+        self.camera.background_color = S.ink
 
-        title = Text("Weight-stationary systolic array", font_size=34,
-                     color=WHITE, weight="BOLD").to_edge(UP, buff=0.45)
+        title = Text("Weight-stationary systolic array", font_size=S.size.title,
+                     color=S.fg, weight="BOLD").to_edge(UP, buff=0.45)
         subtitle = Text("the weights never move — the data flows past them",
                         font_size=22, color=DIM).next_to(title, DOWN, buff=0.18)
         self.play(Write(title), FadeIn(subtitle, shift=UP * 0.1))
@@ -156,7 +159,8 @@ class SystolicArray(Scene):
         slots, caption = self._build_result()
         self.play(Create(slots), FadeIn(caption), run_time=0.8)
 
-        cycle_label = Text("cycle 00", font_size=26, color=WHITE, weight="BOLD")
+        cycle_label = Text("cycle 00", font_size=S.size.display, color=S.fg,
+                           weight="BOLD")
         cycle_label.to_corner(UP + LEFT, buff=0.6)
         self.play(FadeIn(cycle_label))
 
@@ -173,9 +177,9 @@ class SystolicArray(Scene):
                                (ACT, "activation · moves right"),
                                (PSUM, "partial sum · moves down")):
             swatch = RoundedRectangle(width=0.26, height=0.26, corner_radius=0.06,
-                                      stroke_color=color, stroke_width=2.5,
+                                      stroke_color=color, stroke_width=S.width.accent,
                                       fill_color=color, fill_opacity=0.35)
-            label = Text(caption, font_size=17, color=GREY_B)
+            label = Text(caption, font_size=S.size.label, color=S.muted)
             row.add(VGroup(swatch, label.next_to(swatch, RIGHT, buff=0.13)))
         return row.arrange(RIGHT, buff=0.75)
 
@@ -186,7 +190,7 @@ class SystolicArray(Scene):
         for k in range(K):
             for j in range(N):
                 square = Square(side_length=CELL * 0.92)
-                square.set_stroke(GREY_D, 2.5).set_fill(BLACK, 0.35)
+                square.set_stroke(S.rule, S.width.accent).set_fill(S.well, 0.35)
                 square.move_to(_cell_center(k, j))
                 cells.add(square)
                 # A badge in the corner, not a number in the middle: the middle
@@ -207,7 +211,7 @@ class SystolicArray(Scene):
         for m in range(M):
             for k in range(K):
                 cell = Square(side_length=ACELL * 0.86)
-                cell.set_stroke(GREY_D, 1.6).set_fill(BLACK, 0.25)
+                cell.set_stroke(S.rule, 1.6).set_fill(S.well, S.opacity.tint)
                 cell.move_to(_input_slot(m, k))
                 cells.add(cell)
                 num = Text(str(A[m][k]), font_size=22, color=ACT, weight="BOLD")
@@ -222,7 +226,7 @@ class SystolicArray(Scene):
         for m in range(M):
             for j in range(N):
                 slot = Square(side_length=RCELL * 0.86)
-                slot.set_stroke(GREY_D, 1.6).set_fill(BLACK, 0.25)
+                slot.set_stroke(S.rule, 1.6).set_fill(S.well, S.opacity.tint)
                 slot.move_to(_result_slot(m, j))
                 slots.add(slot)
         caption = Text("Y = A · B", font_size=22, color=PSUM, weight="BOLD")
@@ -328,8 +332,8 @@ class SystolicArray(Scene):
 
             # Zero-padded for the same reason the psum tiles are: a Transform
             # between Texts of different glyph counts mangles the label.
-            new_label = Text(f"cycle {cycle:02d}", font_size=26, color=WHITE,
-                             weight="BOLD").move_to(cycle_label)
+            new_label = Text(f"cycle {cycle:02d}", font_size=S.size.display,
+                             color=S.fg, weight="BOLD").move_to(cycle_label)
             steps = births + moves + deaths
             if steps:
                 # Deliberately unhurried. Every step here is a fact the viewer

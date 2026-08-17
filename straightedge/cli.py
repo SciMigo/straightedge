@@ -10,6 +10,7 @@ from typing import Sequence
 from .agent import run_agent_plan, run_agent_render, run_agent_scaffold
 from .agent.llm import LLMError
 from .aspect import ASPECTS, LANDSCAPE
+from .style import TEXTBOOK, THEME_NAMES, theme
 from .errors import (
     DependencyError, FontError, InputFileError, PreconditionError, RenderError,
     RequestError, StraightedgeError,
@@ -60,6 +61,10 @@ def main(argv: list[str] | None = None) -> int:
                         help="JSON file mapping beat key to measured narration "
                              "seconds, e.g. {\"b01\": 3.2}; each step then runs "
                              "as long as the voice over it")
+    parser.add_argument("--style", default=TEXTBOOK.name, choices=list(THEME_NAMES),
+                        help="Palette: textbook is Manim's own colours (default), "
+                             "paper is light for print, dataflow is the dark "
+                             "technical look the examples use")
     parser.add_argument("--font", default=DEFAULT_CJK_FONT,
                         help="CJK font for Chinese labels (must be installed)")
     parser.add_argument("--skip-font-check", action="store_true",
@@ -178,7 +183,7 @@ def _dispatch(args: argparse.Namespace, out: _Emitter) -> int:
     scene_path = write_scene(plan, args.output_dir, font=args.font,
                              beat_seconds=beat_seconds,
                              aspect=args.aspect, language=args.language,
-                             qc_sidecar=sidecar)
+                             qc_sidecar=sidecar, style=theme(args.style))
     untranslated_labels = _warn_untranslated(
         scene_path.read_text(encoding="utf-8"), args.language, out)
     if args.command == "scaffold":

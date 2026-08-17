@@ -37,7 +37,6 @@ from manim import (
     FadeIn, FadeOut, Transform, Write,
     Scene, VGroup,
     CurvedArrow, Rectangle, Text,
-    BLACK, GREY_B, GREY_D, WHITE,
 )
 
 import sys
@@ -46,7 +45,7 @@ from pathlib import Path
 # The layout check lives one directory up, shared by every example. Python puts
 # this file's directory on the path, not examples/, so it needs saying.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from _layout import assert_readable
+from _layout import STYLE as S, assert_readable
 
 N = 4                            # ranks in the ring
 STEPS = 2 * (N - 1)              # reduce-scatter, then all-gather
@@ -58,13 +57,15 @@ INITIAL = np.array([[(r + 1) * (c + 1) for c in range(N)] for r in range(N)])
 TRUTH = INITIAL.sum(axis=0)
 
 # --- palette ---------------------------------------------------------------
-INK = "#0d1117"
-OWNED = "#4aa8ff"                # the chunk this rank is accumulating
-PARTIAL = "#2c5c86"             # partially reduced
-DONE = "#4CAF50"                 # holds the final sum
-MOVING = "#f2b45b"               # in flight
-DIM = "#5a6885"
-COST = "#E5533D"                 # the naive comparison
+# Roles from the shared style, aliased to what they mean in a collective. `S.deep`
+# is a darker `S.flow`, which is exactly what a partially reduced chunk should
+# look like: the same quantity, not yet finished.
+OWNED = S.flow                   # the chunk this rank is accumulating
+PARTIAL = S.deep                 # partially reduced
+DONE = S.done                    # holds the final sum
+MOVING = S.hold                  # in flight
+DIM = S.dim
+COST = S.warn                    # the naive comparison
 
 CELL_W, CELL_H = 0.62, 0.30
 RADIUS = 2.05
@@ -155,9 +156,10 @@ class RingAllReduce(Scene):
     """Four ranks, sixteen chunks, and a byte counter that refuses to grow."""
 
     def construct(self) -> None:
-        self.camera.background_color = INK
+        self.camera.background_color = S.ink
 
-        title = Text("Ring all-reduce", font_size=34, color=WHITE, weight="BOLD")
+        title = Text("Ring all-reduce", font_size=S.size.title, color=S.fg,
+                     weight="BOLD")
         title.to_edge(UP, buff=0.20)
         sub = Text(f"{N} ranks · {N} chunks each · one step = one hop round the ring",
                    font_size=18, color=DIM).next_to(title, DOWN, buff=0.09)
@@ -193,9 +195,9 @@ class RingAllReduce(Scene):
             column = VGroup()
             for c in range(N):
                 cell = Rectangle(width=CELL_W, height=CELL_H,
-                                 stroke_color=GREY_D, stroke_width=0.9,
-                                 fill_color=BLACK, fill_opacity=0.6)
-                value = Text(f"{INITIAL[r][c]:02d}", font_size=14, color=GREY_B)
+                                 stroke_color=S.rule, stroke_width=0.9,
+                                 fill_color=S.well, fill_opacity=0.6)
+                value = Text(f"{INITIAL[r][c]:02d}", font_size=14, color=S.muted)
                 value.move_to(cell.get_center())
                 self.cells[(r, c)] = {"box": cell, "text": value}
                 column.add(VGroup(cell, value))
@@ -216,8 +218,8 @@ class RingAllReduce(Scene):
         inset = 0.62
         a = start + (end - start) * (inset / np.linalg.norm(end - start))
         b = end - (end - start) * (inset / np.linalg.norm(end - start))
-        return CurvedArrow(a, b, angle=-0.55, color=GREY_D,
-                           stroke_width=2, tip_length=0.14)
+        return CurvedArrow(a, b, angle=-0.55, color=S.rule,
+                           stroke_width=S.width.mark, tip_length=0.14)
 
     def _counter(self) -> VGroup:
         """Bytes shipped per rank so far, against what naive would have cost."""
@@ -255,8 +257,9 @@ class RingAllReduce(Scene):
         flying = []
         for r, chunk in entry["sends"].items():
             source = self.cells[(r, chunk)]
-            ghost = source["box"].copy().set_fill(MOVING, 0.85).set_stroke(MOVING, 1.4)
-            label = source["text"].copy().set_color(BLACK)
+            ghost = (source["box"].copy()
+                     .set_fill(MOVING, S.opacity.solid).set_stroke(MOVING, 1.4))
+            label = source["text"].copy().set_color(S.on_fill)
             flying.append((VGroup(ghost, label), (r + 1) % N, chunk))
 
         self.play(
@@ -274,9 +277,10 @@ class RingAllReduce(Scene):
             cell = self.cells[(dst, chunk)]
             complete = state["complete"][(dst, chunk)]
             colour = DONE if complete else (PARTIAL if entry["accumulate"] else OWNED)
-            filled = cell["box"].copy().set_fill(colour, 0.75).set_stroke(colour, 1.2)
+            filled = (cell["box"].copy()
+                      .set_fill(colour, 0.75).set_stroke(colour, S.width.rule))
             value = Text(f"{state['buf'][dst][chunk]:02d}", font_size=14,
-                         color=WHITE if complete else GREY_B)
+                         color=S.fg if complete else S.muted)
             value.move_to(cell["box"].get_center())
             landings.append(cell["box"].animate.become(filled))
             landings.append(Transform(cell["text"], value))

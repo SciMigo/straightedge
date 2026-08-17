@@ -3,7 +3,9 @@
 Each example here already asserts its *arithmetic* at import time — the systolic
 array checks its outputs against ``A @ B``, the pipeline schedules check that the
 two makespans agree, the ring all-reduce checks that every rank ends holding the
-true sum. A scene that renders is therefore a scene whose numbers are right.
+true sum, and the tensor-parallel block checks both that the good split is exact
+and that the bad one is *wrong*. A scene that renders is therefore a scene whose
+numbers are right.
 
 None of that says the picture is legible. A label can sit on another label, a
 caption can run through a tick row, a curve can leave its axes, and every
@@ -27,7 +29,7 @@ Practical notes:
   usually deliberate here (a tangent line is *supposed* to touch the curve it
   labels), and failing on it would make the check something people switch off.
 
-**A limitation these examples exposed.** All three draw numbers inside cells — a
+**A limitation these examples exposed.** All four draw numbers inside cells — a
 PE in the array, a slot in the Gantt chart, a chunk on a rank — and ``qc`` reports
 every one as ``text_obscured``: *'F0' is 100% covered by 'Rectangle'*. It is
 true and it is the intended design. Text placed inside a filled shape is
@@ -44,9 +46,22 @@ the answer is to fix the check rather than to teach people to skim past it.
 
 from __future__ import annotations
 
+import os
 from collections import Counter
 
 from straightedge.qc import boxes_from_scene, check, frame_from_scene
+from straightedge.style import DATAFLOW, theme
+
+#: The style every example in this directory draws in. Set once here rather than
+#: per scene, because the four of them are meant to look like one set::
+#:
+#:     manim -qm scene.py TensorParallel                      # dataflow, the default
+#:     STRAIGHTEDGE_STYLE=paper manim -qm scene.py TensorParallel
+#:
+#: An unknown name raises :class:`~straightedge.errors.RequestError` naming the
+#: available themes, which is a better failure than rendering four minutes of
+#: video in a style nobody asked for.
+STYLE = theme(os.environ.get("STRAIGHTEDGE_STYLE") or DATAFLOW.name)
 
 
 def assert_readable(scene) -> None:

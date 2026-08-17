@@ -10,6 +10,7 @@ from .expr import to_latex_expr, to_numpy_expr, validate_expression
 from .fonts import DEFAULT_CJK_FONT
 from .labels import DEFAULT_LANGUAGE, translate
 from .models import AnimationPlan, Topic
+from .style import TEXTBOOK, Style
 from .solids3d import (
     Concept3D,
     SOLID_HELPERS_SRC,
@@ -111,6 +112,7 @@ def scene_code_for(
     aspect: str = LANDSCAPE,
     language: str = DEFAULT_LANGUAGE,
     qc_sidecar: str | None = None,
+    style: Style = TEXTBOOK,
 ) -> str:
     """Python source for one scene.
 
@@ -131,18 +133,55 @@ def scene_code_for(
     the caller to check once the render subprocess has exited. Off by default:
     the emitted scene otherwise depends on nothing but Manim, and that is worth
     keeping for hosts that render without this package installed.
+
+    ``style`` picks the palette. It is **resolved here and baked into the emitted
+    source as hex literals** — the generated scene must render on a host with
+    Manim and no ``straightedge`` (see :func:`qc_tail_source`), so it cannot
+    import a theme. The default is :data:`~straightedge.style.TEXTBOOK`, whose
+    values are Manim's own constants, which is what these builders drew with
+    before the palette was named; passing it changes no pixel.
     """
     body = _SCENE_BUILDERS.get(plan.topic, _geometry_scene)(plan)
-    code = _preamble(font, beat_seconds, aspect) + "\n\n\n" + body
+    code = _preamble(font, beat_seconds, aspect, style) + "\n\n\n" + body
     if qc_sidecar is not None:
         code += "\n\n\n" + qc_tail_source(qc_sidecar)
     return translate(code, language)
+
+
+def _palette_source(style: Style) -> str:
+    """The chosen theme, as colour constants the emitted scene can use directly.
+
+    Named with a ``C_`` prefix rather than shadowing Manim's own colour
+    constants: the scene does ``from manim import *``, and rebinding those would
+    leave a reader unable to tell a themed colour from a Manim default. The role
+    names are the ones in :mod:`straightedge.style`, so the generated source says
+    what a colour is *for* — a warning rather than a particular red — which is
+    what makes it re-themable without re-reading every builder.
+
+    **Wrapped in ``ManimColor``, not left as bare strings.** Manim accepts a hex
+    string almost everywhere, which makes the exception easy to miss:
+    ``interpolate_color`` calls a method on its first argument, so a string
+    raises ``AttributeError: 'str' object has no attribute 'interpolate'`` — and
+    raises it *during* the render, long after the source looked fine. The Riemann
+    builder gradients its rectangles that way. Constructing the colours here
+    removes the class of failure instead of fixing the one caller that found it.
+    """
+    tokens = ("fg", "muted", "dim", "rule", "ink", "well",
+              "flow", "hold", "deep", "done", "warn", "aux", "warm")
+    lines = "\n        ".join(
+        f'C_{name.upper()} = ManimColor("{getattr(style, name)}")'
+        for name in tokens
+    )
+    return (f"# Palette: {style.name}. Resolved from straightedge.style at\n"
+            f"        # generation time, so this scene needs only Manim to render.\n"
+            f"        {lines}")
 
 
 def _preamble(
     font: str,
     beat_seconds: dict[str, float] | None = None,
     aspect: str = LANDSCAPE,
+    style: Style = TEXTBOOK,
 ) -> str:
     # Imports + a CJK-aware Text wrapper shared by every scene, so 中文 labels
     # render with a real font instead of tofu boxes. Solid-geometry helpers
@@ -158,6 +197,7 @@ def _preamble(
     # leading whitespace, so one flush-left continuation line would leave the
     # whole preamble indented.
     frame_config = frame_config_source(aspect).replace("\n", "\n        ")
+    palette = _palette_source(style)
     base = dedent(
         f'''
         from manim import *
@@ -166,6 +206,28 @@ def _preamble(
 
 
         CJK_FONT = "{font}"
+
+
+        {palette}
+
+
+        # The theme has to reach the things no builder names a colour for. A
+        # light palette otherwise renders dark marks on Manim's black default —
+        # worse than no theme at all, because it looks like a bug in the scene
+        # rather than a missing wire. Set once, at module scope, before any
+        # mobject is constructed:
+        #   * the background, which nothing else sets;
+        #   * the default text colour, which every unstyled label inherits;
+        #   * axes, whose lines default to white;
+        #   * DecimalNumber, which is what an axis draws its tick labels with and
+        #     is neither a Text nor a MathTex — miss it and a light theme loses
+        #     every number on both axes while everything else looks right.
+        config.background_color = C_INK
+        Text.set_default(color=C_FG)
+        MathTex.set_default(color=C_FG)
+        Tex.set_default(color=C_FG)
+        DecimalNumber.set_default(color=C_FG)
+        Axes.set_default(axis_config={{"color": C_FG}})
 
 
         # The bottom of the frame belongs to captions. A formula sitting on the
@@ -253,14 +315,14 @@ def _geometry_scene(plan: AnimationPlan) -> str:
                 a = np.array([-3, -1.4, 0])
                 b = np.array([2.8, -1.4, 0])
                 c = np.array([-0.6, 1.7, 0])
-                triangle = Polygon(a, b, c, color=BLUE)
+                triangle = Polygon(a, b, c, color=C_FLOW)
                 labels = VGroup(
                     _t("A", font_size=28).next_to(a, DOWN),
                     _t("B", font_size=28).next_to(b, DOWN),
                     _t("C", font_size=28).next_to(c, UP),
                 )
-                angle = Angle(Line(a, c), Line(a, b), radius=0.55, color=YELLOW)
-                side = Line(a, b, color=GREEN, stroke_width=8)
+                angle = Angle(Line(a, c), Line(a, b), radius=0.55, color=C_HOLD)
+                side = Line(a, b, color=C_DONE, stroke_width=8)
                 conclusion = _t("通过标注边和角，观察几何关系", font_size=30).to_edge(DOWN)
 
                 self.play(Write(title))
@@ -290,11 +352,11 @@ def _trig_basic_scene(plan: AnimationPlan) -> str:
                     y_length=4,
                     tips=False,
                 ).shift(DOWN * 0.2)
-                curve = axes.plot(lambda x: np.sin(x), x_range=[0, TAU], color=BLUE)
-                amp_line = Line(axes.c2p(PI / 2, 0), axes.c2p(PI / 2, 1), color=YELLOW)
-                period_line = Line(axes.c2p(0, -1.2), axes.c2p(TAU, -1.2), color=GREEN)
-                amp_label = _t("振幅 = 1", font_size=28, color=YELLOW).next_to(amp_line, RIGHT)
-                period_label = _t("周期 = 2π", font_size=28, color=GREEN).next_to(period_line, DOWN)
+                curve = axes.plot(lambda x: np.sin(x), x_range=[0, TAU], color=C_FLOW)
+                amp_line = Line(axes.c2p(PI / 2, 0), axes.c2p(PI / 2, 1), color=C_HOLD)
+                period_line = Line(axes.c2p(0, -1.2), axes.c2p(TAU, -1.2), color=C_DONE)
+                amp_label = _t("振幅 = 1", font_size=28, color=C_HOLD).next_to(amp_line, RIGHT)
+                period_label = _t("周期 = 2π", font_size=28, color=C_DONE).next_to(period_line, DOWN)
 
                 self.play(Write(title), Create(axes))
                 self.play(Create(curve), run_time=2)
@@ -314,10 +376,10 @@ def _unit_circle_to_sine_scene(plan: AnimationPlan) -> str:
 
                 circle_origin = LEFT * 4.0 + DOWN * 0.15
                 radius = 1.35
-                circle = Circle(radius=radius, color=BLUE).move_to(circle_origin)
+                circle = Circle(radius=radius, color=C_FLOW).move_to(circle_origin)
                 circle_axes = VGroup(
-                    Line(circle_origin + LEFT * 1.65, circle_origin + RIGHT * 1.65, color=GRAY, stroke_width=2),
-                    Line(circle_origin + DOWN * 1.65, circle_origin + UP * 1.65, color=GRAY, stroke_width=2),
+                    Line(circle_origin + LEFT * 1.65, circle_origin + RIGHT * 1.65, color=C_DIM, stroke_width=2),
+                    Line(circle_origin + DOWN * 1.65, circle_origin + UP * 1.65, color=C_DIM, stroke_width=2),
                 )
                 circle_label = _t("单位圆", font_size=26).next_to(circle, DOWN, buff=0.28)
 
@@ -342,7 +404,7 @@ def _unit_circle_to_sine_scene(plan: AnimationPlan) -> str:
                 full_curve = graph_axes.plot(
                     lambda x: np.sin(x),
                     x_range=[0, TAU, 0.02],
-                    color=GRAY,
+                    color=C_DIM,
                     stroke_width=2,
                     stroke_opacity=0.35,
                 )
@@ -354,32 +416,32 @@ def _unit_circle_to_sine_scene(plan: AnimationPlan) -> str:
                     return circle_origin + radius * np.array([np.cos(t), np.sin(t), 0])
 
                 moving_radius = always_redraw(
-                    lambda: Line(circle_origin, circle_point(), color=YELLOW, stroke_width=5)
+                    lambda: Line(circle_origin, circle_point(), color=C_HOLD, stroke_width=5)
                 )
-                moving_dot = always_redraw(lambda: Dot(circle_point(), color=RED, radius=0.07))
+                moving_dot = always_redraw(lambda: Dot(circle_point(), color=C_WARN, radius=0.07))
                 angle_arc = always_redraw(
                     lambda: Arc(
                         radius=0.38,
                         start_angle=0,
                         angle=theta.get_value(),
                         arc_center=circle_origin,
-                        color=YELLOW,
+                        color=C_HOLD,
                     )
                 )
-                theta_label = MathTex(r"\theta", font_size=26, color=YELLOW).move_to(
+                theta_label = MathTex(r"\theta", font_size=26, color=C_HOLD).move_to(
                     circle_origin + RIGHT * 0.58 + UP * 0.22
                 )
 
                 sine_dot = always_redraw(
                     lambda: Dot(
                         graph_axes.c2p(theta.get_value(), np.sin(theta.get_value())),
-                        color=RED,
+                        color=C_WARN,
                         radius=0.06,
                     )
                 )
                 sine_trace = TracedPath(
                     sine_dot.get_center,
-                    stroke_color=BLUE,
+                    stroke_color=C_FLOW,
                     stroke_width=5,
                     dissipating_time=None,
                 )
@@ -387,7 +449,7 @@ def _unit_circle_to_sine_scene(plan: AnimationPlan) -> str:
                     lambda: DashedLine(
                         circle_point(),
                         graph_axes.c2p(theta.get_value(), np.sin(theta.get_value())),
-                        color=YELLOW,
+                        color=C_HOLD,
                         stroke_width=2,
                         dash_length=0.12,
                     )
@@ -396,11 +458,11 @@ def _unit_circle_to_sine_scene(plan: AnimationPlan) -> str:
                     lambda: Line(
                         circle_origin + RIGHT * 1.75,
                         circle_origin + RIGHT * 1.75 + UP * radius * np.sin(theta.get_value()),
-                        color=GREEN,
+                        color=C_DONE,
                         stroke_width=4,
                     )
                 )
-                height_label = MathTex(r"\sin\theta", font_size=26, color=GREEN).next_to(
+                height_label = MathTex(r"\sin\theta", font_size=26, color=C_DONE).next_to(
                     circle_origin + RIGHT * 1.75 + UP * radius * 0.75,
                     RIGHT,
                     buff=0.1,
@@ -409,17 +471,17 @@ def _unit_circle_to_sine_scene(plan: AnimationPlan) -> str:
                 period_line = Line(
                     graph_axes.c2p(0, -1.18),
                     graph_axes.c2p(TAU, -1.18),
-                    color=GREEN,
+                    color=C_DONE,
                     stroke_width=4,
                 )
-                period_brace = Brace(period_line, direction=DOWN, color=GREEN)
-                period_label = MathTex(r"T = 2\pi", font_size=28, color=GREEN).next_to(
+                period_brace = Brace(period_line, direction=DOWN, color=C_DONE)
+                period_label = MathTex(r"T = 2\pi", font_size=28, color=C_DONE).next_to(
                     period_brace,
                     DOWN,
                     buff=0.05,
                 )
 
-                graph_title = MathTex(r"y = \sin x", font_size=32, color=BLUE).next_to(
+                graph_title = MathTex(r"y = \sin x", font_size=32, color=C_FLOW).next_to(
                     graph_axes,
                     UP,
                     buff=0.2,
@@ -548,10 +610,10 @@ def _trig_transform_scene(plan: AnimationPlan) -> str:
             amp_line = Line(
                 axes.c2p(__AMP_X__, __AMP_BOTTOM_Y__),
                 axes.c2p(__AMP_X__, __AMP_TOP_Y__),
-                color=RED, stroke_width=4,
+                color=C_WARN, stroke_width=4,
             )
-            amp_brace = Brace(amp_line, direction=RIGHT, color=RED)
-            amp_label = MathTex(r"__AMP_LATEX__", font_size=26, color=RED).next_to(amp_brace, RIGHT, buff=0.05)
+            amp_brace = Brace(amp_line, direction=RIGHT, color=C_WARN)
+            amp_label = MathTex(r"__AMP_LATEX__", font_size=26, color=C_WARN).next_to(amp_brace, RIGHT, buff=0.05)
             '''
         ).strip()
         play_amp = (
@@ -627,27 +689,27 @@ def _trig_transform_scene(plan: AnimationPlan) -> str:
                         return k_val
 
                 base = axes.plot(
-                    base_f, x_range=[x_min, x_max, 0.02], color=GRAY,
+                    base_f, x_range=[x_min, x_max, 0.02], color=C_DIM,
                     use_smoothing=False, discontinuities=__BASE_DISC__, dt=0.005,
                 )
                 target = axes.plot(
-                    target_f, x_range=[x_min, x_max, 0.02], color=BLUE,
+                    target_f, x_range=[x_min, x_max, 0.02], color=C_FLOW,
                     use_smoothing=False, discontinuities=__TARGET_DISC__, dt=0.005,
                 )
 
                 midline = DashedLine(
                     axes.c2p(x_min, k_val), axes.c2p(x_max, k_val),
-                    color=YELLOW, stroke_width=2,
+                    color=C_HOLD, stroke_width=2,
                 )
-                midline_label = MathTex(r"__MIDLINE__", font_size=26, color=YELLOW).next_to(midline.get_end(), RIGHT, buff=0.1)
+                midline_label = MathTex(r"__MIDLINE__", font_size=26, color=C_HOLD).next_to(midline.get_end(), RIGHT, buff=0.1)
 
                 period_line = Line(
                     axes.c2p(__PERIOD_X__, __PERIOD_Y__),
                     axes.c2p(__PERIOD_END_X__, __PERIOD_Y__),
-                    color=GREEN, stroke_width=4,
+                    color=C_DONE, stroke_width=4,
                 )
-                period_brace = Brace(period_line, direction=DOWN, color=GREEN)
-                period_label = MathTex(r"__PERIOD__", font_size=26, color=GREEN).next_to(period_brace, DOWN, buff=0.05)
+                period_brace = Brace(period_line, direction=DOWN, color=C_DONE)
+                period_label = MathTex(r"__PERIOD__", font_size=26, color=C_DONE).next_to(period_brace, DOWN, buff=0.05)
 
                 __AMP_BLOCK__
 
@@ -772,15 +834,15 @@ def _ellipse_foci_scene(plan: AnimationPlan) -> str:
                 a = 3.0
                 b = 1.75
                 c = np.sqrt(a * a - b * b)
-                ellipse = Ellipse(width=2 * a, height=2 * b, color=BLUE, stroke_width=5).move_to(center)
-                major_axis = Line(center + LEFT * a, center + RIGHT * a, color=GREEN, stroke_width=5)
+                ellipse = Ellipse(width=2 * a, height=2 * b, color=C_FLOW, stroke_width=5).move_to(center)
+                major_axis = Line(center + LEFT * a, center + RIGHT * a, color=C_DONE, stroke_width=5)
                 f1_pos = center + LEFT * c
                 f2_pos = center + RIGHT * c
-                f1 = Dot(f1_pos, color=YELLOW, radius=0.08)
-                f2 = Dot(f2_pos, color=YELLOW, radius=0.08)
-                f1_label = _t("F1", font_size=26, color=YELLOW).next_to(f1, DOWN, buff=0.12)
-                f2_label = _t("F2", font_size=26, color=YELLOW).next_to(f2, DOWN, buff=0.12)
-                axis_label = MathTex(r"2a", font_size=30, color=GREEN).next_to(major_axis, DOWN, buff=0.18)
+                f1 = Dot(f1_pos, color=C_HOLD, radius=0.08)
+                f2 = Dot(f2_pos, color=C_HOLD, radius=0.08)
+                f1_label = _t("F1", font_size=26, color=C_HOLD).next_to(f1, DOWN, buff=0.12)
+                f2_label = _t("F2", font_size=26, color=C_HOLD).next_to(f2, DOWN, buff=0.12)
+                axis_label = MathTex(r"2a", font_size=30, color=C_DONE).next_to(major_axis, DOWN, buff=0.18)
 
                 t = ValueTracker(0.35)
 
@@ -788,18 +850,18 @@ def _ellipse_foci_scene(plan: AnimationPlan) -> str:
                     angle = t.get_value()
                     return center + np.array([a * np.cos(angle), b * np.sin(angle), 0])
 
-                moving_point = always_redraw(lambda: Dot(point_coords(), color=RED, radius=0.075))
+                moving_point = always_redraw(lambda: Dot(point_coords(), color=C_WARN, radius=0.075))
                 point_label = always_redraw(
-                    lambda: _t("P", font_size=26, color=RED).next_to(moving_point, UR, buff=0.08)
+                    lambda: _t("P", font_size=26, color=C_WARN).next_to(moving_point, UR, buff=0.08)
                 )
-                pf1 = always_redraw(lambda: Line(point_coords(), f1_pos, color=YELLOW, stroke_width=5))
-                pf2 = always_redraw(lambda: Line(point_coords(), f2_pos, color=ORANGE, stroke_width=5))
+                pf1 = always_redraw(lambda: Line(point_coords(), f1_pos, color=C_HOLD, stroke_width=5))
+                pf2 = always_redraw(lambda: Line(point_coords(), f2_pos, color=C_WARM, stroke_width=5))
                 # A legend under the title, not parked in the frame corner. The
                 # corner is where the conclusion lives once the frame is narrow,
                 # so `to_corner(DL)` collided with it in a 9:16 cut and merely
                 # looked stranded in a 16:9 one.
-                pf1_label = MathTex(r"PF_1", font_size=30, color=YELLOW)
-                pf2_label = MathTex(r"PF_2", font_size=30, color=ORANGE)
+                pf1_label = MathTex(r"PF_1", font_size=30, color=C_HOLD)
+                pf2_label = MathTex(r"PF_2", font_size=30, color=C_WARM)
                 legend = VGroup(pf1_label, pf2_label).arrange(RIGHT, buff=0.45)
                 legend.next_to(title, DOWN, buff=0.25)
                 invariant = MathTex(r"PF_1 + PF_2 = 2a", font_size=38).to_edge(DOWN)
@@ -809,7 +871,7 @@ def _ellipse_foci_scene(plan: AnimationPlan) -> str:
                 ).next_to(invariant, UP, buff=0.18)
 
                 sample_points = VGroup(*[
-                    Dot(center + np.array([a * np.cos(angle), b * np.sin(angle), 0]), color=BLUE, radius=0.035)
+                    Dot(center + np.array([a * np.cos(angle), b * np.sin(angle), 0]), color=C_FLOW, radius=0.035)
                     for angle in (0, PI / 3, 2 * PI / 3, PI, 4 * PI / 3, 5 * PI / 3)
                 ])
 
@@ -842,16 +904,16 @@ def _ellipse_static_scene(plan: AnimationPlan) -> str:
         class GeneratedScene(Scene):
             def construct(self):
                 title = _t("椭圆的焦点与长轴", font_size=38).to_edge(UP)
-                ellipse = Ellipse(width=6, height=3, color=BLUE)
-                major_axis = Line(LEFT * 3, RIGHT * 3, color=GREEN, stroke_width=6)
-                f1 = Dot(LEFT * 1.8, color=YELLOW)
-                f2 = Dot(RIGHT * 1.8, color=YELLOW)
+                ellipse = Ellipse(width=6, height=3, color=C_FLOW)
+                major_axis = Line(LEFT * 3, RIGHT * 3, color=C_DONE, stroke_width=6)
+                f1 = Dot(LEFT * 1.8, color=C_HOLD)
+                f2 = Dot(RIGHT * 1.8, color=C_HOLD)
                 labels = VGroup(
                     _t("F1", font_size=26).next_to(f1, DOWN),
                     _t("F2", font_size=26).next_to(f2, DOWN),
-                    _t("长轴", font_size=28, color=GREEN).next_to(major_axis, DOWN),
+                    _t("长轴", font_size=28, color=C_DONE).next_to(major_axis, DOWN),
                 )
-                p = Dot(ellipse.point_at_angle(PI / 3), color=RED)
+                p = Dot(ellipse.point_at_angle(PI / 3), color=C_WARN)
                 segments = VGroup(Line(p.get_center(), f1.get_center()), Line(p.get_center(), f2.get_center()))
                 relation = _t("椭圆上任意点到两个焦点的距离和不变", font_size=30).to_edge(DOWN)
 
@@ -885,19 +947,19 @@ def _parabola_focus_directrix_scene(plan: AnimationPlan) -> str:
                 parabola = axes.plot_parametric_curve(
                     lambda t: [(t * t) / (4 * p_val), t, 0],
                     t_range=[-2.9, 2.9, 0.02],
-                    color=BLUE,
+                    color=C_FLOW,
                     stroke_width=5,
                 )
                 directrix = DashedLine(
                     axes.c2p(directrix_x, -3.0),
                     axes.c2p(directrix_x, 3.0),
-                    color=GREEN,
+                    color=C_DONE,
                     stroke_width=4,
                     dash_length=0.16,
                 )
-                focus_dot = Dot(focus, color=YELLOW, radius=0.08)
-                focus_label = _t("焦点 F", font_size=26, color=YELLOW).next_to(focus_dot, UR, buff=0.12)
-                directrix_label = _t("准线", font_size=26, color=GREEN).next_to(directrix, LEFT, buff=0.16)
+                focus_dot = Dot(focus, color=C_HOLD, radius=0.08)
+                focus_label = _t("焦点 F", font_size=26, color=C_HOLD).next_to(focus_dot, UR, buff=0.12)
+                directrix_label = _t("准线", font_size=26, color=C_DONE).next_to(directrix, LEFT, buff=0.16)
 
                 y_tracker = ValueTracker(-2.35)
 
@@ -910,23 +972,23 @@ def _parabola_focus_directrix_scene(plan: AnimationPlan) -> str:
                     y = y_tracker.get_value()
                     return axes.c2p(directrix_x, y)
 
-                moving_point = always_redraw(lambda: Dot(point_coords(), color=RED, radius=0.075))
+                moving_point = always_redraw(lambda: Dot(point_coords(), color=C_WARN, radius=0.075))
                 point_label = always_redraw(
-                    lambda: _t("P", font_size=26, color=RED).next_to(moving_point, RIGHT, buff=0.1)
+                    lambda: _t("P", font_size=26, color=C_WARN).next_to(moving_point, RIGHT, buff=0.1)
                 )
                 focus_segment = always_redraw(
-                    lambda: Line(point_coords(), focus, color=YELLOW, stroke_width=5)
+                    lambda: Line(point_coords(), focus, color=C_HOLD, stroke_width=5)
                 )
                 directrix_segment = always_redraw(
-                    lambda: Line(point_coords(), foot_coords(), color=GREEN, stroke_width=5)
+                    lambda: Line(point_coords(), foot_coords(), color=C_DONE, stroke_width=5)
                 )
-                foot_dot = always_redraw(lambda: Dot(foot_coords(), color=GREEN, radius=0.055))
+                foot_dot = always_redraw(lambda: Dot(foot_coords(), color=C_DONE, radius=0.055))
                 right_angle = always_redraw(
                     lambda: RightAngle(
                         Line(foot_coords(), foot_coords() + UP * 0.5),
                         Line(foot_coords(), point_coords()),
                         length=0.18,
-                        color=GREEN,
+                        color=C_DONE,
                         quadrant=(-1, 1),
                     )
                 )
@@ -943,12 +1005,12 @@ def _parabola_focus_directrix_scene(plan: AnimationPlan) -> str:
                 # is three times longer and reaches back into the corner: one
                 # collision, in one language, from a number that only ever
                 # described the language it was tuned in.
-                focus_distance_label = MathTex(r"PF", font_size=30, color=YELLOW)
+                focus_distance_label = MathTex(r"PF", font_size=30, color=C_HOLD)
                 focus_distance_label.next_to(conclusion, UP, buff=0.3).to_edge(LEFT)
                 directrix_distance_label = _t(
                     "d(P, 准线)",
                     font_size=30,
-                    color=GREEN,
+                    color=C_DONE,
                 ).next_to(focus_distance_label, RIGHT, buff=0.5)
 
                 self.play(Write(title), Create(axes))
@@ -1069,7 +1131,7 @@ def _cone_slice_scene(plan: AnimationPlan) -> str:
         def _section_mobject(h, m):
             group = VGroup()
             for pts in _section_branches(h, m):
-                curve = VMobject(color=YELLOW, stroke_width=6)
+                curve = VMobject(color=C_HOLD, stroke_width=6)
                 curve.set_points_as_corners(pts)
                 group.add(curve)
             return group
@@ -1141,14 +1203,14 @@ def _cone_slice_scene(plan: AnimationPlan) -> str:
                     u_range=[-CONE_Z, CONE_Z],
                     v_range=[0, TAU],
                     resolution=(12, 48),
-                ).set_opacity(0.30).set_color(BLUE)
+                ).set_opacity(0.30).set_color(C_FLOW)
                 axis = DashedLine(
                     np.array([0.0, 0.0, -CONE_Z - 0.35]),
                     np.array([0.0, 0.0, CONE_Z + 0.35]),
-                    color=GREY_B,
+                    color=C_MUTED,
                     stroke_width=2,
                 )
-                apex = Dot3D(ORIGIN, color=WHITE, radius=0.07)
+                apex = Dot3D(ORIGIN, color=C_FG, radius=0.07)
 
                 height = ValueTracker(1.0)
                 slope = ValueTracker(0.0)
@@ -1165,7 +1227,7 @@ def _cone_slice_scene(plan: AnimationPlan) -> str:
                         u_range=[-half, half],
                         v_range=[-1.9, 1.9],
                         resolution=(2, 2),
-                    ).set_opacity(0.32).set_color(GREEN)
+                    ).set_opacity(0.32).set_color(C_DONE)
 
                 plane = always_redraw(plane_sheet)
                 section = always_redraw(
@@ -1216,22 +1278,22 @@ def _cone_slice_scene(plan: AnimationPlan) -> str:
                     return float(np.arctan2(1.0, slope.get_value()))
 
                 generator = Line(ORIGIN, np.array([CONE_R, 0.0, CONE_Z]),
-                                 color=YELLOW, stroke_width=5)
-                alpha_arc = _axis_arc(ALPHA, A_R, YELLOW)
+                                 color=C_HOLD, stroke_width=5)
+                alpha_arc = _axis_arc(ALPHA, A_R, C_HOLD)
                 tilt_line = always_redraw(lambda: DashedLine(
                     -1.6 * np.array([np.sin(_theta()), 0.0, np.cos(_theta())]),
                     1.6 * np.array([np.sin(_theta()), 0.0, np.cos(_theta())]),
-                    color=GREEN_B, stroke_width=4, dash_length=0.11))
-                theta_arc = always_redraw(lambda: _axis_arc(_theta(), T_R, GREEN_B))
+                    color=C_AUX, stroke_width=4, dash_length=0.11))
+                theta_arc = always_redraw(lambda: _axis_arc(_theta(), T_R, C_AUX))
 
                 # Built once and moved by an updater, never rebuilt. A label
                 # returned fresh from `always_redraw` is a different mobject
                 # every frame, so the one registered for fixed orientation is
                 # discarded immediately and the replacements render edge-on in
                 # the y = 0 plane -- which is what turned theta into a squiggle.
-                alpha_label = MathTex(r"\alpha", font_size=44, color=YELLOW)
+                alpha_label = MathTex(r"\alpha", font_size=44, color=C_HOLD)
                 alpha_label.move_to(_label_at(ALPHA, A_R))
-                theta_label = MathTex(r"\theta", font_size=44, color=GREEN_B)
+                theta_label = MathTex(r"\theta", font_size=44, color=C_AUX)
                 theta_label.move_to(_label_at(_theta(), T_R))
                 theta_label.add_updater(
                     lambda mob: mob.move_to(_label_at(_theta(), T_R)))
@@ -1323,13 +1385,13 @@ def _sphere_section_scene(plan: AnimationPlan) -> str:
                 title = _t("三维几何中的截面", font_size=38).to_edge(UP)
                 self.add_fixed_in_frame_mobjects(title)
                 axes = ThreeDAxes(x_length=5, y_length=5, z_length=4)
-                sphere = Sphere(radius=1.5, resolution=(24, 48)).set_opacity(0.35).set_color(BLUE)
+                sphere = Sphere(radius=1.5, resolution=(24, 48)).set_opacity(0.35).set_color(C_FLOW)
                 plane = Surface(
                     lambda u, v: axes.c2p(u, v, 0.55),
                     u_range=[-1.8, 1.8],
                     v_range=[-1.8, 1.8],
                     resolution=(2, 2),
-                ).set_opacity(0.45).set_color(GREEN)
+                ).set_opacity(0.45).set_color(C_DONE)
                 label = _t("平面截球得到圆形截面", font_size=28).to_edge(DOWN)
                 self.add_fixed_in_frame_mobjects(label)
 
@@ -1428,7 +1490,7 @@ def _cube_section_scene(plan: AnimationPlan) -> str:
                 section = __SECTION_CALL__
                 highlight_names = __POINT_NAMES__
                 highlights = VGroup(*[
-                    Dot3D(point=verts[n], color=RED, radius=0.07)
+                    Dot3D(point=verts[n], color=C_WARN, radius=0.07)
                     for n in highlight_names if n in verts
                 ])
 
@@ -1512,9 +1574,9 @@ def _three_views_scene(plan: AnimationPlan) -> str:
                 length_guide = DashedLine(
                     np.array([guide_x, front.get_top()[1], 0.0]),
                     np.array([guide_x, top.get_bottom()[1], 0.0]),
-                    color=GRAY, stroke_width=2, dash_length=0.12,
+                    color=C_DIM, stroke_width=2, dash_length=0.12,
                 )
-                length_label = _t("长对正", font_size=22, color=GRAY).next_to(
+                length_label = _t("长对正", font_size=22, color=C_DIM).next_to(
                     length_guide, RIGHT, buff=0.08,
                 )
 
@@ -1523,9 +1585,9 @@ def _three_views_scene(plan: AnimationPlan) -> str:
                 height_guide = DashedLine(
                     np.array([front.get_left()[0], guide_y, 0.0]),
                     np.array([side.get_right()[0], guide_y, 0.0]),
-                    color=GRAY, stroke_width=2, dash_length=0.12,
+                    color=C_DIM, stroke_width=2, dash_length=0.12,
                 )
-                height_label = _t("高平齐", font_size=22, color=GRAY).next_to(
+                height_label = _t("高平齐", font_size=22, color=C_DIM).next_to(
                     height_guide, UP, buff=0.05,
                 )
 
@@ -1641,14 +1703,14 @@ def _taylor_series_scene(plan: AnimationPlan) -> str:
                     MathTex(r"\pi", font_size=22).next_to(axes.c2p(PI, 0), DOWN, buff=0.1),
                     MathTex(r"2\pi", font_size=22).next_to(axes.c2p(2 * PI, 0), DOWN, buff=0.1),
                 )
-                target = axes.plot(lambda x: __TARGET_FN__, x_range=[-2 * PI, 2 * PI, 0.02], color=BLUE, stroke_width=6)
+                target = axes.plot(lambda x: __TARGET_FN__, x_range=[-2 * PI, 2 * PI, 0.02], color=C_FLOW, stroke_width=6)
                 # Hung below the title rather than above the axes. Anchored to
                 # the plot it rose with it when the axes moved onto the shared
                 # caption budget, and ran into the English title — which is wide
                 # enough to reach x=2.6 where the Chinese one is not. Anchoring
                 # to the thing it must stay clear of is what makes that hold in
                 # either language.
-                target_label = MathTex(r"__TARGET_LABEL__", font_size=32, color=BLUE).next_to(title, DOWN, buff=0.12).shift(RIGHT * 2.6)
+                target_label = MathTex(r"__TARGET_LABEL__", font_size=32, color=C_FLOW).next_to(title, DOWN, buff=0.12).shift(RIGHT * 2.6)
 
                 def clamp(y):
                     if not np.isfinite(y):
@@ -1661,21 +1723,21 @@ def _taylor_series_scene(plan: AnimationPlan) -> str:
                     axes.plot(
                         lambda x, fn=fn: clamp(fn(x)),
                         x_range=[-2 * PI, 2 * PI, 0.02],
-                        color=YELLOW,
+                        color=C_HOLD,
                         stroke_width=5,
                         use_smoothing=False,
                     )
                     for fn, _, _ in approximations
                 ]
-                formula = MathTex(approximations[0][1], font_size=34, color=YELLOW).to_corner(DL).shift(UP * 0.75)
-                note = _t(approximations[0][2], font_size=28, color=YELLOW).to_edge(DOWN)
+                formula = MathTex(approximations[0][1], font_size=34, color=C_HOLD).to_corner(DL).shift(UP * 0.75)
+                note = _t(approximations[0][2], font_size=28, color=C_HOLD).to_edge(DOWN)
                 neighborhood = NumberLine(
                     x_range=[-1.2, 1.2, 0.6],
                     length=2.7,
-                    color=GREEN,
+                    color=C_DONE,
                     include_ticks=False,
                 ).move_to(axes.c2p(0, -1.65))
-                neighborhood_label = _t("先在 0 附近最准确", font_size=24, color=GREEN).next_to(neighborhood, DOWN, buff=0.08)
+                neighborhood_label = _t("先在 0 附近最准确", font_size=24, color=C_DONE).next_to(neighborhood, DOWN, buff=0.08)
 
                 _beat(self, "b01", Write(title), Create(axes), FadeIn(x_labels))
                 _beat(self, "b02", Create(target), Write(target_label), run_time=2)
@@ -1686,8 +1748,8 @@ def _taylor_series_scene(plan: AnimationPlan) -> str:
                 current_formula = formula
                 current_note = note
                 for i in range(1, len(approximations)):
-                    new_formula = MathTex(approximations[i][1], font_size=34, color=YELLOW).to_corner(DL).shift(UP * 0.75)
-                    new_note = _t(approximations[i][2], font_size=28, color=YELLOW).to_edge(DOWN)
+                    new_formula = MathTex(approximations[i][1], font_size=34, color=C_HOLD).to_corner(DL).shift(UP * 0.75)
+                    new_note = _t(approximations[i][2], font_size=28, color=C_HOLD).to_edge(DOWN)
                     # One beat per added order: the narration steps through the
                     # polynomials one at a time, so the picture does too. A run
                     # whose narration is shorter than the term list simply falls
@@ -1706,9 +1768,9 @@ def _taylor_series_scene(plan: AnimationPlan) -> str:
                 final_formula = MathTex(
                     r"__FINAL_FORMULA__",
                     font_size=34,
-                    color=GREEN,
+                    color=C_DONE,
                 ).to_edge(DOWN)
-                conclusion = _t("更多项会把逼近范围继续向外推开", font_size=28, color=GREEN).next_to(final_formula, UP, buff=0.15)
+                conclusion = _t("更多项会把逼近范围继续向外推开", font_size=28, color=C_DONE).next_to(final_formula, UP, buff=0.15)
                 _beat(
                     self, "b%02d" % (4 + len(approximations)),
                     # The neighbourhood label goes with the note. It explains the
@@ -1779,7 +1841,7 @@ def _derivative_tangent_scene(plan: AnimationPlan) -> str:
                     y_length=PLOT_Y_LENGTH,
                     tips=False,
                 ).shift(PLOT_SHIFT).add_coordinates()
-                curve = axes.plot(safe_f, x_range=[x_min, x_max, 0.02], color=BLUE, use_smoothing=False)
+                curve = axes.plot(safe_f, x_range=[x_min, x_max, 0.02], color=C_FLOW, use_smoothing=False)
 
                 x0 = 1.0
                 h = ValueTracker(1.45)
@@ -1790,21 +1852,21 @@ def _derivative_tangent_scene(plan: AnimationPlan) -> str:
                         yv = 0
                     return axes.c2p(xv, yv)
 
-                p_dot = Dot(point_at(x0), color=YELLOW, radius=0.075)
-                p_label = _t("x", font_size=24, color=YELLOW).next_to(p_dot, DOWN, buff=0.1)
-                q_dot = always_redraw(lambda: Dot(point_at(x0 + h.get_value()), color=RED, radius=0.07))
-                q_label = always_redraw(lambda: _t("x+h", font_size=24, color=RED).next_to(q_dot, UP, buff=0.1))
+                p_dot = Dot(point_at(x0), color=C_HOLD, radius=0.075)
+                p_label = _t("x", font_size=24, color=C_HOLD).next_to(p_dot, DOWN, buff=0.1)
+                q_dot = always_redraw(lambda: Dot(point_at(x0 + h.get_value()), color=C_WARN, radius=0.07))
+                q_label = always_redraw(lambda: _t("x+h", font_size=24, color=C_WARN).next_to(q_dot, UP, buff=0.1))
                 secant = always_redraw(
-                    lambda: Line(point_at(x0), point_at(x0 + h.get_value()), color=YELLOW, stroke_width=6).set_length(4.2)
+                    lambda: Line(point_at(x0), point_at(x0 + h.get_value()), color=C_HOLD, stroke_width=6).set_length(4.2)
                 )
                 tangent = Line(
                     axes.c2p(x0 - 1.7, safe_f(x0) - 1.7 * slope_at(x0)),
                     axes.c2p(x0 + 1.7, safe_f(x0) + 1.7 * slope_at(x0)),
-                    color=GREEN,
+                    color=C_DONE,
                     stroke_width=6,
                 )
-                secant_label = MathTex(r"\frac{\Delta y}{\Delta x}", font_size=34, color=YELLOW).to_corner(DL).shift(UP * 0.55)
-                derivative_label = MathTex(r"\frac{dy}{dx}=f'(x)", font_size=38, color=GREEN).to_edge(DOWN)
+                secant_label = MathTex(r"\frac{\Delta y}{\Delta x}", font_size=34, color=C_HOLD).to_corner(DL).shift(UP * 0.55)
+                derivative_label = MathTex(r"\frac{dy}{dx}=f'(x)", font_size=38, color=C_DONE).to_edge(DOWN)
                 conclusion = _t("两点靠近时，割线斜率逼近切线斜率", font_size=28).next_to(derivative_label, UP, buff=0.18)
 
                 _beat(self, "b01", Write(title), Create(axes))
@@ -1848,7 +1910,7 @@ def _riemann_integral_scene(plan: AnimationPlan) -> str:
                         x1 = x0 + dx
                         xm = x0 + dx / 2
                         y = safe_f(xm)
-                        color = interpolate_color(BLUE, GREEN, i / max(n - 1, 1))
+                        color = interpolate_color(C_FLOW, C_DONE, i / max(n - 1, 1))
                         rect = Polygon(
                             axes.c2p(x0, 0),
                             axes.c2p(x1, 0),
@@ -1875,20 +1937,20 @@ def _riemann_integral_scene(plan: AnimationPlan) -> str:
                     y_length=PLOT_Y_LENGTH,
                     tips=False,
                 ).shift(PLOT_SHIFT).add_coordinates()
-                curve = axes.plot(safe_f, x_range=[-2.3, 2.35, 0.02], color=BLUE, use_smoothing=False)
+                curve = axes.plot(safe_f, x_range=[-2.3, 2.35, 0.02], color=C_FLOW, use_smoothing=False)
                 coarse = rectangles(6)
                 fine = rectangles(24)
-                brace_line = Line(axes.c2p(-2.0, -0.35), axes.c2p(2.2, -0.35), color=GREEN)
-                brace = Brace(brace_line, direction=DOWN, color=GREEN)
+                brace_line = Line(axes.c2p(-2.0, -0.35), axes.c2p(2.2, -0.35), color=C_DONE)
+                brace = Brace(brace_line, direction=DOWN, color=C_DONE)
                 # Beside the brace, not under it. The brace already hangs below
                 # the plot, so a label under *that* lands in the caption band —
                 # it used to overlap the integral, and once the plot was raised
                 # it overlapped the conclusion instead. The brace spans the
                 # rectangles and stops well short of the right edge, so there is
                 # room next to it and none beneath.
-                dx_label = MathTex(r"\Delta x \to 0", font_size=32, color=GREEN).next_to(brace, RIGHT, buff=0.15)
-                sum_label = MathTex(r"\sum f(x_i)\Delta x", font_size=34, color=YELLOW).to_corner(DL).shift(UP * 0.6)
-                integral_label = MathTex(r"\int_a^b f(x)\,dx", font_size=40, color=GREEN).to_edge(DOWN)
+                dx_label = MathTex(r"\Delta x \to 0", font_size=32, color=C_DONE).next_to(brace, RIGHT, buff=0.15)
+                sum_label = MathTex(r"\sum f(x_i)\Delta x", font_size=34, color=C_HOLD).to_corner(DL).shift(UP * 0.6)
+                integral_label = MathTex(r"\int_a^b f(x)\,dx", font_size=40, color=C_DONE).to_edge(DOWN)
                 conclusion = _t("矩形越细，总面积越接近曲线下方的面积", font_size=28).next_to(integral_label, UP, buff=0.18)
 
                 # One beat per narrated step. With measured narration these run
@@ -1957,19 +2019,19 @@ def _ftc_accumulation_scene(plan: AnimationPlan) -> str:
                     y_length=3.6,
                     tips=False,
                 ).shift(RIGHT * 3.05 + DOWN * 0.25)
-                f_curve = left_axes.plot(safe_f, x_range=[-2.0, 2.25, 0.02], color=BLUE, use_smoothing=False)
+                f_curve = left_axes.plot(safe_f, x_range=[-2.0, 2.25, 0.02], color=C_FLOW, use_smoothing=False)
                 f_title = VGroup(
                     MathTex(r"f(x)=", font_size=28),
                     MathTex(r"__LATEX__", font_size=28),
                 ).arrange(RIGHT, buff=0.06).next_to(left_axes, UP, buff=0.22)
-                F_title = MathTex(r"F(x)=\int_a^x f(t)\,dt", font_size=30, color=GREEN).next_to(right_axes, UP, buff=0.22)
+                F_title = MathTex(r"F(x)=\int_a^x f(t)\,dt", font_size=30, color=C_DONE).next_to(right_axes, UP, buff=0.22)
 
                 x_tracker = ValueTracker(-1.8)
                 area = always_redraw(
                     lambda: left_axes.get_area(
                         f_curve,
                         x_range=[-1.8, x_tracker.get_value()],
-                        color=GREEN,
+                        color=C_DONE,
                         opacity=0.45,
                     )
                 )
@@ -1977,28 +2039,28 @@ def _ftc_accumulation_scene(plan: AnimationPlan) -> str:
                     lambda: Line(
                         left_axes.c2p(x_tracker.get_value(), 0),
                         left_axes.c2p(x_tracker.get_value(), safe_f(x_tracker.get_value())),
-                        color=YELLOW,
+                        color=C_HOLD,
                         stroke_width=5,
                     )
                 )
                 moving_dot = always_redraw(
                     lambda: Dot(
                         right_axes.c2p(x_tracker.get_value(), accum(x_tracker.get_value())),
-                        color=RED,
+                        color=C_WARN,
                         radius=0.06,
                     )
                 )
-                F_trace = TracedPath(moving_dot.get_center, stroke_color=GREEN, stroke_width=5, dissipating_time=None)
+                F_trace = TracedPath(moving_dot.get_center, stroke_color=C_DONE, stroke_width=5, dissipating_time=None)
                 guide = always_redraw(
                     lambda: DashedLine(
                         left_axes.c2p(x_tracker.get_value(), safe_f(x_tracker.get_value())),
                         right_axes.c2p(x_tracker.get_value(), accum(x_tracker.get_value())),
-                        color=YELLOW,
+                        color=C_HOLD,
                         stroke_width=2,
                         dash_length=0.12,
                     )
                 )
-                equation = MathTex(r"F'(x)=f(x)", font_size=42, color=GREEN).to_edge(DOWN)
+                equation = MathTex(r"F'(x)=f(x)", font_size=42, color=C_DONE).to_edge(DOWN)
                 conclusion = _t("面积函数的瞬时变化率，等于当前高度 f(x)", font_size=28).next_to(equation, UP, buff=0.16)
 
                 _beat(self, "b01", Write(title))
@@ -2197,13 +2259,13 @@ def _tangent_shift_scene(plan: AnimationPlan) -> str:
 
                 line_plot = axes.plot(lambda x: safe(line_f, x),
                                       x_range=[X_MIN, X_MAX, 0.02],
-                                      color=YELLOW, use_smoothing=False)
+                                      color=C_HOLD, use_smoothing=False)
                 # Plotted once at a = 0 and translated afterwards. The curve only
                 # ever moves vertically, so re-plotting it per frame would buy
                 # nothing and cost the whole render.
                 curve_plot = axes.plot(lambda x: safe(curve_f, x),
                                        x_range=[X_MIN, X_MAX, 0.02],
-                                       color=BLUE, use_smoothing=False)
+                                       color=C_FLOW, use_smoothing=False)
                 # One unit of `a` in screen space, measured off the axes rather
                 # than assumed, and the curve's home position captured before
                 # anything moves it. Both are needed by the updater below, so
@@ -2215,8 +2277,8 @@ def _tangent_shift_scene(plan: AnimationPlan) -> str:
                 curve_plot.add_updater(
                     lambda m: m.move_to(home + unit_up * a_tracker.get_value()))
 
-                dots = VGroup(Dot(color=GREEN_B, radius=0.075),
-                              Dot(color=GREEN_B, radius=0.075))
+                dots = VGroup(Dot(color=C_AUX, radius=0.075),
+                              Dot(color=C_AUX, radius=0.075))
 
                 def place_dots(mob):
                     a = a_tracker.get_value()
@@ -2236,7 +2298,7 @@ def _tangent_shift_scene(plan: AnimationPlan) -> str:
                 if xs0:
                     touch_x = float(np.mean(xs0))
                 touch = Dot(axes.c2p(touch_x, safe(line_f, touch_x)),
-                            color=RED, radius=0.09)
+                            color=C_WARN, radius=0.09)
                 # Formatted here, not by a build-time helper: this source runs
                 # standalone, so anything it names has to exist inside it.
                 def _num(v):
@@ -2244,7 +2306,7 @@ def _tangent_shift_scene(plan: AnimationPlan) -> str:
 
                 touch_label = MathTex(
                     r"(%s,\ %s)" % (_num(touch_x), _num(safe(line_f, touch_x))),
-                    font_size=32, color=RED,
+                    font_size=32, color=C_WARN,
                 ).next_to(touch, RIGHT, buff=0.18)
 
                 PROBLEM_STEPS = __PROBLEM_STEPS__
@@ -2349,11 +2411,11 @@ def _tangent_shift_scene(plan: AnimationPlan) -> str:
                 # the caption, which reads as a rendering fault rather than as
                 # the function going negative.
                 ratio_plot = ratio_axes.plot(ratio, x_range=[X_MIN + 0.8, X_MAX, 0.02],
-                                             color=YELLOW, use_smoothing=False)
-                peak = Dot(ratio_axes.c2p(touch_x, 1.0), color=RED, radius=0.09)
+                                             color=C_HOLD, use_smoothing=False)
+                peak = Dot(ratio_axes.c2p(touch_x, 1.0), color=C_WARN, radius=0.09)
                 one_line = DashedLine(
                     ratio_axes.c2p(X_MIN + 0.8, 1.0), ratio_axes.c2p(X_MAX, 1.0),
-                    color=GREY_B, stroke_width=2, dash_length=0.12)
+                    color=C_MUTED, stroke_width=2, dash_length=0.12)
 
                 show(5)
                 _beat(self, "b06",
@@ -2433,7 +2495,7 @@ def _function_scene(plan: AnimationPlan) -> str:
                     y_length=5.5,
                     tips=False,
                 ).add_coordinates()
-                curve = axes.plot(safe_f, x_range=[x_min, x_max, 0.02], color=BLUE, use_smoothing=False)
+                curve = axes.plot(safe_f, x_range=[x_min, x_max, 0.02], color=C_FLOW, use_smoothing=False)
                 title = VGroup(
                     _t("函数", font_size=34),
                     MathTex(r"y = __LATEX__", font_size=34),
@@ -2443,7 +2505,7 @@ def _function_scene(plan: AnimationPlan) -> str:
                 markers = VGroup()
                 y0 = safe_f(0.0)
                 if np.isfinite(y0) and y_min <= y0 <= y_max:
-                    markers.add(Dot(axes.c2p(0, y0), color=YELLOW))
+                    markers.add(Dot(axes.c2p(0, y0), color=C_HOLD))
 
                 roots = []
                 for (xa, ya), (xb, yb) in zip(samples, samples[1:]):
@@ -2456,7 +2518,7 @@ def _function_scene(plan: AnimationPlan) -> str:
                     if all(abs(root - r) > 0.05 for r in roots):
                         roots.append(root)
                 for root in roots[:8]:
-                    markers.add(Dot(axes.c2p(root, 0), color=RED))
+                    markers.add(Dot(axes.c2p(root, 0), color=C_WARN))
 
                 note = _t("红点：零点    黄点：y 轴截距", font_size=26).to_edge(DOWN)
 

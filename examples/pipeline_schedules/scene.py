@@ -29,7 +29,6 @@ from manim import (
     FadeIn, FadeOut, GrowFromEdge, Write,
     AnimationGroup, Scene, VGroup,
     Line, Rectangle, Text,
-    BLACK, GREY_B, GREY_D, WHITE,
 )
 
 import sys
@@ -38,17 +37,20 @@ from pathlib import Path
 # The layout check lives one directory up, shared by every example. Python puts
 # this file's directory on the path, not examples/, so it needs saying.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from _layout import assert_readable
+from _layout import STYLE as S, assert_readable
 
 P, M = 4, 6                      # pipeline stages, microbatches
 
-INK = "#0d1117"
-FWD = "#4aa8ff"                  # forward pass
-BWD = "#f2b45b"                  # backward pass
-IDLE = "#1c2534"                 # bubble
-MEM = "#E5533D"                  # stashed activations
-DIM = "#5a6885"
-GOOD = "#4CAF50"
+# What the style's roles mean *here*. The aliases are the point: `S.hold` is the
+# counterpart to `S.flow` in any scene, and in this one the counterpart to a
+# forward pass is a backward one. Naming it twice — once for the style, once for
+# the mechanism — is what lets the theme change without the scene changing.
+FWD = S.flow                     # forward pass
+BWD = S.hold                     # backward pass
+IDLE = S.inert                   # bubble
+MEM = S.warn                     # stashed activations
+DIM = S.dim
+GOOD = S.done
 
 COL = 0.60                       # time-slot width
 ROW = 0.40                       # stage-row height
@@ -149,9 +151,9 @@ class PipelineSchedules(Scene):
     """Two Gantt charts filling in step by step, with a memory gauge each."""
 
     def construct(self) -> None:
-        self.camera.background_color = INK
+        self.camera.background_color = S.ink
 
-        title = Text("GPipe vs 1F1B", font_size=36, color=WHITE, weight="BOLD")
+        title = Text("GPipe vs 1F1B", font_size=36, color=S.fg, weight="BOLD")
         title.to_edge(UP, buff=0.22)
         sub = Text(f"{P} stages · {M} microbatches · one cell = one cycle",
                    font_size=19, color=DIM).next_to(title, DOWN, buff=0.10)
@@ -176,10 +178,10 @@ class PipelineSchedules(Scene):
             # The bubble swatch is the deck's own empty-cell colour, so it
             # needs a visible edge or it reads as a gap in the legend.
             swatch = Rectangle(width=0.24, height=0.24,
-                               stroke_color=GREY_D if color == IDLE else color,
-                               stroke_width=2,
-                               fill_color=color, fill_opacity=0.55)
-            row.add(VGroup(swatch, Text(caption, font_size=16, color=GREY_B)
+                               stroke_color=S.rule if color == IDLE else color,
+                               stroke_width=S.width.mark,
+                               fill_color=color, fill_opacity=S.opacity.panel)
+            row.add(VGroup(swatch, Text(caption, font_size=16, color=S.muted)
                            .next_to(swatch, RIGHT, buff=0.11)))
         return row.arrange(RIGHT, buff=0.62)
 
@@ -189,7 +191,7 @@ class PipelineSchedules(Scene):
         cells: dict[tuple[int, int], Rectangle] = {}
         frame = VGroup()
 
-        label = Text(caption, font_size=18, color=WHITE, weight="BOLD")
+        label = Text(caption, font_size=18, color=S.fg, weight="BOLD")
         label.move_to([left + 0.9, y + ROW * P / 2 + 0.30, 0]).align_to(
             [left, 0, 0], LEFT)
         frame.add(label)
@@ -201,8 +203,8 @@ class PipelineSchedules(Scene):
             frame.add(tag)
             for c in range(MAKESPAN):
                 cell = Rectangle(width=COL * 0.92, height=ROW * 0.82,
-                                 stroke_color=GREY_D, stroke_width=0.8,
-                                 fill_color=BLACK, fill_opacity=0.55)
+                                 stroke_color=S.rule, stroke_width=S.width.hairline,
+                                 fill_color=S.well, fill_opacity=S.opacity.panel)
                 cell.move_to([left + (c + 0.5) * COL, row_y, 0])
                 cells[(p, c)] = cell
                 frame.add(cell)
@@ -211,7 +213,7 @@ class PipelineSchedules(Scene):
         # against the same time axis rather than against a remembered number.
         gauge_y = y - ROW * P / 2 - 0.16
         base = Line([left, gauge_y, 0], [left + COL * MAKESPAN, gauge_y, 0],
-                    stroke_color=GREY_D, stroke_width=1.2)
+                    stroke_color=S.rule, stroke_width=S.width.rule)
         frame.add(base)
         return {"frame": frame, "cells": cells, "left": left,
                 "gauge_y": gauge_y, "bars": {}}
@@ -231,8 +233,8 @@ class PipelineSchedules(Scene):
                         continue
                     cell = chart["cells"][(p, cycle)]
                     color = FWD if kind == "F" else BWD
-                    filled = cell.copy().set_fill(color, 0.85).set_stroke(color, 1.2)
-                    tag = Text(f"{kind}{m}", font_size=13, color=BLACK,
+                    filled = cell.copy().set_fill(color, S.opacity.solid).set_stroke(color, S.width.rule)
+                    tag = Text(f"{kind}{m}", font_size=S.size.tiny, color=S.on_fill,
                                weight="BOLD").move_to(cell.get_center())
                     anims.append(cell.animate.become(filled))
                     anims.append(FadeIn(tag, run_time=0.25))

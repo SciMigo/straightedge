@@ -33,6 +33,9 @@ from .planner import build_plan, plan_from_template
 from .preconditions import Violation, blocking, validate
 from .qc import Box, Finding, boxes_from_scene, check, frame_from_scene, worst_severity
 from .renderer import RenderResult, render_scene, write_scene
+from .style import (
+    DATAFLOW, PAPER, TEXTBOOK, THEME_NAMES, THEMES, Style, theme,
+)
 from .templates import SCENE_CLASS_NAME, scene_code_for
 
 __all__ = [
@@ -75,6 +78,14 @@ __all__ = [
     "worst_severity",
     "Box",
     "Finding",
+    # Style — named visual roles, so one scene can be drawn more than one way
+    "Style",
+    "theme",
+    "THEMES",
+    "THEME_NAMES",
+    "DATAFLOW",
+    "TEXTBOOK",
+    "PAPER",
     # Frame and language
     "ASPECTS",
     "LANDSCAPE",
