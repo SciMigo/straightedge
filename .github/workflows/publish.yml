@@ -3,28 +3,30 @@ name: publish
 # Publishes to PyPI on a version tag, via Trusted Publishing: PyPI verifies a
 # short-lived OIDC token minted by this workflow instead of a stored API token,
 # so there is no long-lived secret in the repo to leak or rotate. The trust is
-# pinned on PyPI's side to (owner, repo, workflow filename, environment), so
-# renaming *this file* breaks the publish until the PyPI record is updated to
-# match. The registered environment is currently "(Any)", which accepts the
-# `pypi` environment named below; narrowing it there to `pypi` would mean only
-# runs in that environment can publish, which is worth doing once this is green.
+# pinned on PyPI's side to (owner, repo, workflow filename, environment) — all
+# four of which must match the registered record, so renaming *this file* or the
+# `pypi` environment below breaks releases until that record is updated to match.
 #
-# A tag push always goes to real PyPI. A manual run defaults to TestPyPI, so
-# there is a way to exercise this end to end — including the artifact handoff
-# between the two jobs — without burning a version number that can never be
-# reused. TestPyPI is a separate instance with its own trusted-publisher
-# registry, so it needs its own pending-publisher record (same owner/repo and
-# workflow, environment `testpypi`); the PyPI one does not carry over.
+# A tag push always publishes to real PyPI. A manual run defaults to `dryrun`:
+# it builds, checks the metadata, and verifies the artifact handoff between the
+# two jobs, then stops without uploading. That makes the release path repeatable
+# without burning a version number, which can never be reused once published.
+#
+# `testpypi` is offered for a full rehearsal including the upload, but TestPyPI
+# is a separate instance with its own trusted-publisher registry — it needs its
+# own pending-publisher record (same owner/repo/workflow, environment
+# `testpypi`) and the PyPI one does not carry over. Without that record the
+# upload fails with `invalid-publisher`.
 on:
   push:
     tags: ["v*"]
   workflow_dispatch:
     inputs:
       target:
-        description: "Index to publish to"
+        description: "dryrun builds and verifies without uploading"
         type: choice
-        default: testpypi
-        options: [testpypi, pypi]
+        default: dryrun
+        options: [dryrun, testpypi, pypi]
 
 permissions:
   contents: read
@@ -100,10 +102,10 @@ jobs:
     # Named on the index's pending-publisher record, and the hook for a
     # required-reviewer rule in repo settings if you ever want a human to
     # approve the push. A tag always means real PyPI; a manual run uses the
-    # chosen target, defaulting to TestPyPI.
+    # chosen target.
     environment:
       name: ${{ startsWith(github.ref, 'refs/tags/') && 'pypi' || inputs.target }}
-      url: ${{ startsWith(github.ref, 'refs/tags/') && 'https://pypi.org/project/straightedge/' || 'https://test.pypi.org/project/straightedge/' }}
+      url: ${{ startsWith(github.ref, 'refs/tags/') && 'https://pypi.org/project/straightedge/' || '' }}
 
     permissions:
       # The whole point: mint the OIDC token the index checks. Without this the
@@ -131,9 +133,13 @@ jobs:
           fi
           echo "handoff verified — bytes identical"
 
+      - name: Dry run — stopping before the upload
+        if: inputs.target == 'dryrun'
+        run: echo "::notice::built, checked, and handoff verified; no upload attempted"
+
       - uses: pypa/gh-action-pypi-publish@release/v1
         # No `password:` — the action detects the OIDC token from the
         # `id-token: write` permission above and exchanges it with the index.
-        # `repository-url` is left at its default (real PyPI) for a tag.
+        if: inputs.target != 'dryrun'
         with:
           repository-url: ${{ (startsWith(github.ref, 'refs/tags/') || inputs.target == 'pypi') && 'https://upload.pypi.org/legacy/' || 'https://test.pypi.org/legacy/' }}
