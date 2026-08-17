@@ -616,3 +616,23 @@ footer p {
   text-decoration-color: rgba(112, 214, 209, 0.4);
   text-underline-offset: 0.2em;
 }
+
+/* Header navigation. The section anchors are useful on a wide screen and pure
+   clutter on a phone, where the page is a short scroll anyway — so they drop
+   out below the tablet breakpoint and the destination links (Writeups, PyPI,
+   GitHub) stay, since those are the ones that leave the page. */
+.header-links {
+  flex-wrap: wrap;
+  gap: 0.6rem 1.1rem;
+  justify-content: flex-end;
+}
+
+.nav-secondary {
+  color: var(--muted);
+}
+
+@media (max-width: 56rem) {
+  .nav-secondary {
+    display: none;
+  }
+}

@@ -4,6 +4,11 @@ Straightedge is an open-source Python library for generating deterministic,
 machine-checkable SVG diagrams and Manim animations — from structured data,
 formulas, templates, or a natural-language prompt.
 
+[![PyPI](https://img.shields.io/pypi/v/straightedge.svg)](https://pypi.org/project/straightedge/)
+[![Python versions](https://img.shields.io/pypi/pyversions/straightedge.svg)](https://pypi.org/project/straightedge/)
+[![License](https://img.shields.io/pypi/l/straightedge.svg)](https://github.com/SciMigo/straightedge/blob/main/LICENSE)
+[![Tests](https://github.com/SciMigo/straightedge/actions/workflows/tests.yml/badge.svg)](https://github.com/SciMigo/straightedge/actions/workflows/tests.yml)
+
 <p align="center">
   <a href="https://scimigo.github.io/straightedge/#figures"><img src="https://raw.githubusercontent.com/SciMigo/straightedge/main/site/assets/svg/architecture.svg" width="48%" alt="A visual pipeline architecture diagram"></a>
   <a href="https://scimigo.github.io/straightedge/#figures"><img src="https://raw.githubusercontent.com/SciMigo/straightedge/main/site/assets/svg/binary-tree.svg" width="48%" alt="A binary-tree traversal diagram"></a>
@@ -29,16 +34,23 @@ defects.
 
 ## Install
 
-From a checkout:
-
 ```bash
-python3 -m pip install -e .
+pip install straightedge
 ```
 
-SVG figures use only the Python standard library. To build and render animations:
+That is the figure lane, which uses only the Python standard library and pulls in
+nothing else. The other lanes are extras:
 
 ```bash
-python3 -m pip install -e '.[render]'
+pip install 'straightedge[render]'   # Manim animation → MP4
+pip install 'straightedge[mcp]'      # MCP server, for driving it from an agent
+pip install 'straightedge[stt]'      # optional speech-to-text adapter
+```
+
+From a checkout, for development:
+
+```bash
+python3 -m pip install -e '.[dev]'
 ```
 
 ## Make an SVG figure
@@ -172,7 +184,9 @@ API. See [`docs/agent-design.md`](https://github.com/SciMigo/straightedge/blob/m
 > sandbox.** An allowlist over an AST is not a security boundary. **Run the agent
 > lane in a container or VM whenever the prompt or the model is untrusted.** The
 > deterministic template lane (`render`, `--template`) and the figure lane do not
-> execute model output and carry no such caveat.
+> execute model output and carry no such caveat. See
+> [`SECURITY.md`](https://github.com/SciMigo/straightedge/blob/main/SECURITY.md)
+> for what is in scope and how to report an escape privately.
 
 ```bash
 export OPENAI_API_KEY="..."
@@ -219,6 +233,14 @@ The gallery is a static GitHub Pages site under
 <https://scimigo.github.io/straightedge/>. It intentionally
 keeps the library-generated visuals separate from the hand-written, assertion-
 backed examples.
+
+| | |
+|---|---|
+| Contributing | [`CONTRIBUTING.md`](https://github.com/SciMigo/straightedge/blob/main/CONTRIBUTING.md) — how to add a template, and what a new one has to prove |
+| Security | [`SECURITY.md`](https://github.com/SciMigo/straightedge/blob/main/SECURITY.md) — scope, and private disclosure for a sandbox escape |
+| Release notes | [`CHANGELOG.md`](https://github.com/SciMigo/straightedge/blob/main/CHANGELOG.md) |
+| Agent workflow | [`SKILL.md`](https://github.com/SciMigo/straightedge/blob/main/SKILL.md) and [`examples/agent_loop.py`](https://github.com/SciMigo/straightedge/blob/main/examples/agent_loop.py) — the render → read findings → repair loop, documented and runnable |
+| Design notes | [`docs/`](https://github.com/SciMigo/straightedge/tree/main/docs) — agent interface, narration timing, QC sweep |
 
 ## Related open-source work
 
