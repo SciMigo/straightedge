@@ -8,10 +8,23 @@ name: publish
 # match. The registered environment is currently "(Any)", which accepts the
 # `pypi` environment named below; narrowing it there to `pypi` would mean only
 # runs in that environment can publish, which is worth doing once this is green.
+#
+# A tag push always goes to real PyPI. A manual run defaults to TestPyPI, so
+# there is a way to exercise this end to end — including the artifact handoff
+# between the two jobs — without burning a version number that can never be
+# reused. TestPyPI is a separate instance with its own trusted-publisher
+# registry, so it needs its own pending-publisher record (same owner/repo and
+# workflow, environment `testpypi`); the PyPI one does not carry over.
 on:
   push:
     tags: ["v*"]
   workflow_dispatch:
+    inputs:
+      target:
+        description: "Index to publish to"
+        type: choice
+        default: testpypi
+        options: [testpypi, pypi]
 
 permissions:
   contents: read
@@ -27,6 +40,9 @@ jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+
+    outputs:
+      sha256: ${{ steps.checksums.outputs.sha256 }}
 
     steps:
       - uses: actions/checkout@v7
@@ -47,7 +63,9 @@ jobs:
 
       - name: Verify the tag matches the packaged version
         # A tag that disagrees with `version` in pyproject.toml would publish
-        # something no one can find by the name they tagged.
+        # something no one can find by the name they tagged. Only a tag push
+        # has a version to check; a manual run is building from a branch.
+        if: startsWith(github.ref, 'refs/tags/')
         run: |
           tag="${GITHUB_REF_NAME#v}"
           built=$(ls dist/*.tar.gz | sed -E 's/.*-([0-9][^-]*)\.tar\.gz/\1/')
@@ -56,6 +74,18 @@ jobs:
             exit 1
           fi
           echo "tag and package agree on $built"
+
+      - name: Record checksums
+        # Passed to the publish job as an output rather than written into
+        # `dist/`, because the publish action uploads everything in that
+        # directory and would choke on a file that is not a distribution.
+        id: checksums
+        run: |
+          sums=$(cd dist && sha256sum -- * | sort)
+          echo "$sums"
+          echo "sha256<<EOF" >> "$GITHUB_OUTPUT"
+          echo "$sums" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
 
       - uses: actions/upload-artifact@v7
         with:
@@ -67,15 +97,16 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
-    # Named on PyPI's pending-publisher record. It is also the hook for a
-    # required-reviewer rule in repo settings, if you ever want a human to
-    # approve the push to PyPI.
+    # Named on the index's pending-publisher record, and the hook for a
+    # required-reviewer rule in repo settings if you ever want a human to
+    # approve the push. A tag always means real PyPI; a manual run uses the
+    # chosen target, defaulting to TestPyPI.
     environment:
-      name: pypi
-      url: https://pypi.org/project/straightedge/
+      name: ${{ startsWith(github.ref, 'refs/tags/') && 'pypi' || inputs.target }}
+      url: ${{ startsWith(github.ref, 'refs/tags/') && 'https://pypi.org/project/straightedge/' || 'https://test.pypi.org/project/straightedge/' }}
 
     permissions:
-      # The whole point: mint the OIDC token PyPI checks. Without this the
+      # The whole point: mint the OIDC token the index checks. Without this the
       # publish fails closed rather than falling back to a password.
       id-token: write
 
@@ -85,6 +116,24 @@ jobs:
           name: dist
           path: dist/
 
+      - name: Verify the artifacts survived the handoff
+        # upload-artifact and download-artifact are on different majors (v7 and
+        # v8). They are meant to interoperate, but "meant to" is not evidence,
+        # and a corrupted or re-encoded distribution would otherwise be caught
+        # by nobody until it was already on the index.
+        run: |
+          echo "expected:"; echo "${{ needs.build.outputs.sha256 }}"
+          actual=$(cd dist && sha256sum -- * | sort)
+          echo "actual:"; echo "$actual"
+          if [ "$actual" != "${{ needs.build.outputs.sha256 }}" ]; then
+            echo "::error::artifacts changed between the build and publish jobs"
+            exit 1
+          fi
+          echo "handoff verified — bytes identical"
+
       - uses: pypa/gh-action-pypi-publish@release/v1
         # No `password:` — the action detects the OIDC token from the
-        # `id-token: write` permission above and exchanges it with PyPI.
+        # `id-token: write` permission above and exchanges it with the index.
+        # `repository-url` is left at its default (real PyPI) for a tag.
+        with:
+          repository-url: ${{ (startsWith(github.ref, 'refs/tags/') || inputs.target == 'pypi') && 'https://upload.pypi.org/legacy/' || 'https://test.pypi.org/legacy/' }}
