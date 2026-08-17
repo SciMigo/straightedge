@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "straightedge"
-version = "0.1.0"
+version = "0.2.0"
 description = "Generate deterministic, machine-checkable SVG diagrams and Manim animations from structured data, templates, or a prompt"
 readme = "README.md"
 requires-python = ">=3.10"
