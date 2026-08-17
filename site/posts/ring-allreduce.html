@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#090d14">
+    <meta name="description" content="A ring all-reduce moves 2(N-1)/N times the buffer per rank — under 2D at every ring size, 1.5D at four ranks and 1.97D at sixty-four. Adding ranks does not cost bytes. What grows is the number of serial round trips.">
+    <meta property="og:title" content="Ring all-reduce: the bytes per rank don't grow">
+    <meta property="og:description" content="Executed chunk by chunk, four ranks, every send counted. The bandwidth is bounded no matter how large the ring gets; the latency is not.">
+    <meta property="og:image" content="https://scimigo.github.io/straightedge/assets/posters/ring-allreduce.jpg">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://scimigo.github.io/straightedge/posts/ring-allreduce.html">
+    <link rel="canonical" href="https://scimigo.github.io/straightedge/posts/ring-allreduce.html">
+    <meta name="twitter:card" content="player">
+    <meta name="twitter:title" content="Ring all-reduce visualization: why bytes per rank don't grow">
+    <meta name="twitter:description" content="Executed chunk by chunk, four ranks, every send counted. Bandwidth-optimal by construction; the cost that grows is round trips.">
+    <meta name="twitter:image" content="https://scimigo.github.io/straightedge/assets/posters/ring-allreduce.jpg">
+    <title>Ring all-reduce visualization: why bytes per rank don't grow</title>
+    <link rel="stylesheet" href="../styles.css">
+    <link rel="stylesheet" href="post.css">
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "TechArticle",
+      "headline": "Ring all-reduce: the bytes per rank don't grow",
+      "description": "A ring all-reduce moves 2(N-1)/N times the buffer per rank, which is under 2D at every ring size. Adding ranks does not cost bandwidth; it costs serial round trips.",
+      "url": "https://scimigo.github.io/straightedge/posts/ring-allreduce.html",
+      "image": "https://scimigo.github.io/straightedge/assets/posters/ring-allreduce.jpg",
+      "author": { "@type": "Organization", "name": "SciMigo" },
+      "publisher": { "@type": "Organization", "name": "Straightedge" },
+      "about": ["Ring all-reduce", "Collective communication", "Data parallelism", "Distributed training", "Bandwidth optimality"],
+      "isPartOf": { "@type": "WebSite", "name": "Straightedge", "url": "https://scimigo.github.io/straightedge/" }
+    }
+    </script>
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="wordmark" href="../index.html" aria-label="Straightedge, back to the gallery">
+        <span class="wordmark-mark" aria-hidden="true"></span>
+        <span>Straightedge</span>
+      </a>
+      <a class="repo-link" href="index.html">All writeups <span aria-hidden="true">↗</span></a>
+    </header>
+
+    <main class="post">
+      <div class="post-head">
+        <p class="post-kicker">Dataflow, executed · 03</p>
+        <h1>Ring all-reduce: the bytes per rank don't grow</h1>
+        <p class="standfirst">
+          The picture everyone draws is a circle with four boxes and arrows going
+          round, and it leaves you with the impression that all-reduce gets more
+          expensive as you add GPUs. Half of that is exactly backwards.
+        </p>
+        <p class="byline">
+          <span>4 ranks · 6 steps · every send counted from the run</span>
+          <span>Re-renders from
+            <code>examples/ring_allreduce/scene.py</code></span>
+        </p>
+      </div>
+
+      <figure class="post-figure">
+        <video controls playsinline preload="metadata"
+               poster="../assets/posters/ring-allreduce.jpg"
+               aria-label="Four ranks arranged in a ring exchanging chunks, each rank's chunks darkening as they accumulate partial sums and then turning green as the finished sum propagates back around">
+          <source src="../assets/mp4/ring-allreduce.mp4" type="video/mp4">
+          Your browser does not support embedded video.
+        </video>
+        <figcaption>
+          <span>Each rank holds four chunks. A chunk <strong>darkens</strong> as
+            it accumulates partial sums on its way round, and turns
+            <strong>green</strong> once it holds the true total — then the greens
+            propagate, one hop per step, until every rank has all four.</span>
+        </figcaption>
+      </figure>
+
+      <div class="post-body">
+        <div class="claim">
+          <p>
+            <strong>Per rank, a ring all-reduce moves
+            <code>2(N&minus;1)/N</code> times the buffer.</strong> That is under
+            <code>2D</code> for every ring size there has ever been — 1.5D at four
+            ranks, 1.97D at sixty-four — and it never reaches 2D. Adding ranks
+            does not cost bytes.
+          </p>
+        </div>
+
+        <p>
+          It is <em>bandwidth-optimal</em>, and no arrangement of sends can do
+          better: every rank must at minimum ship its data out once and take the
+          answer back once. The ring hits that floor almost exactly, and the
+          <code>2(N&minus;1)/N</code> approaches 2 from below as the ring grows,
+          which is the whole trick — the fraction gets closer to the bound but
+          never crosses it.
+        </p>
+
+        <h2>What the circle diagram hides</h2>
+        <p>
+          A static circle with arrows draws the <em>topology</em> and hides the
+          <em>schedule</em>. It has no time axis, so it cannot show you the one
+          thing that makes the algorithm work: which chunk each rank sends on each
+          step, chosen so that what arrives is always the chunk the receiver is
+          itself accumulating. Get that rotation wrong and the picture looks
+          identical while the answer is garbage.
+        </p>
+        <p>
+          The exchange runs in two phases of <code>N&minus;1</code> steps each.
+          <strong>Reduce-scatter</strong> sends partial sums round until each rank
+          owns exactly one finished chunk — rank <em>r</em> ends up holding the
+          complete total for chunk <em>r</em> and nobody else's.
+          <strong>All-gather</strong> then walks those finished chunks round the
+          same ring until everyone has all of them. Six steps at four ranks, and
+          each is strictly serial: nothing in step 4 can start before step 3
+          lands.
+        </p>
+
+        <h2>The cost that doesn't grow, and the one that does</h2>
+        <p>
+          The useful contrast is the naive alternative: if every rank simply sent
+          its whole buffer to every peer, each would move <code>(N&minus;1)D</code>.
+          Three times the buffer at four ranks, sixty-three times at sixty-four.
+          <em>That</em> is the cost that explodes, and avoiding it is the entire
+          reason the ring exists.
+        </p>
+
+        <div class="results">
+          <table>
+            <thead>
+              <tr><th>Quantity</th><th>Rule</th><th>N = 4</th><th>N = 64</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Ring bytes per rank</td><td><code>2(N&minus;1)/N</code></td><td class="n same">1.50D</td><td class="n same">1.97D</td></tr>
+              <tr><td>Naive bytes per rank</td><td><code>N&minus;1</code></td><td class="n diff">3D</td><td class="n diff">63D</td></tr>
+              <tr><td>Serial steps</td><td><code>2(N&minus;1)</code></td><td class="n">6</td><td class="n diff">126</td></tr>
+              <tr><td>Chunk-sends in the run</td><td><code>N &times; 2(N&minus;1)</code></td><td class="n">24</td><td class="n">—</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p>
+          Read the last two rows together and the real trade shows up. Bandwidth
+          per rank is flat — 1.50D to 1.97D across a sixteen-fold increase in ring
+          size. Round trips go from 6 to 126. A big ring is not a bandwidth
+          problem; it is a latency problem, and that is why hierarchical and
+          tree-shaped collectives exist at all. They spend bandwidth to buy back
+          depth.
+        </p>
+
+        <h2>Nothing here is drawn</h2>
+        <p>
+          The exchange is executed before a frame is placed, and the module
+          refuses to import unless every rank finishes holding the true elementwise
+          sum — not merely the rank the camera happens to follow. The byte counts
+          are then counted from the send log rather than printed from the formula,
+          so a broken schedule cannot quietly agree with the arithmetic on screen,
+          and the closed form is checked against every ring size from 2 to 64.
+        </p>
+<pre><code>git clone https://github.com/SciMigo/straightedge
+cd straightedge &amp;&amp; python3 -m pip install -e '.[render]'
+cd examples/ring_allreduce &amp;&amp; manim -qm scene.py RingAllReduce</code></pre>
+        <p>
+          Change the number of ranks or what each contributes and the chunk
+          rotation, the colours, the counter and the totals all follow. The one
+          thing you cannot do is make it show a rank finishing with the wrong sum.
+        </p>
+
+        <h2>A note on what the picture had to lose</h2>
+        <p>
+          Four ranks is small enough to read and too small to make the point. The
+          interesting regime is the one you cannot animate: at sixty-four ranks
+          the per-rank traffic has barely moved while the step count has grown
+          twenty-one-fold, and that divergence is the actual result. A four-rank
+          ring shows you the mechanism honestly and the asymptotics not at all,
+          which is why the table above exists and why it is checked to 64 rather
+          than to 4. Worth stating rather than hiding: a simplification you cannot
+          see is indistinguishable from an error.
+        </p>
+      </div>
+
+      <nav class="series-nav" aria-label="Series navigation">
+        <span>
+          <span class="muted">Previous</span>
+          <a href="systolic-skew.html">Why the systolic array feeds itself diagonally</a>
+        </span>
+        <span class="next">
+          <span class="muted">Next</span>
+          Interleaved pipelines: the bubble that does move
+        </span>
+      </nav>
+    </main>
+  </body>
+</html>

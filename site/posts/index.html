@@ -81,15 +81,15 @@
           </p>
           <span class="tag">Systolic dataflow</span>
         </li>
-        <li class="pending">
-          <h2>Ring all-reduce: the bytes per rank don't grow</h2>
+        <li>
+          <h2><a href="ring-allreduce.html">Ring all-reduce: the bytes per rank don't grow</a></h2>
           <p>
             Reduce-scatter then all-gather, executed chunk by chunk. Each rank
             sends under 2D regardless of ring size; what grows with the ring is
             the number of serial hops, which is a latency story rather than a
             bandwidth one.
           </p>
-          <span class="tag">Planned</span>
+          <span class="tag">Collectives</span>
         </li>
         <li class="pending">
           <h2>Interleaved pipelines: the bubble that does move</h2>
