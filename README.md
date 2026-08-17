@@ -1,6 +1,8 @@
 # Straightedge
 
-Checked SVG figures and Manim animations for technical explanations.
+Straightedge is an open-source Python library for generating deterministic,
+machine-checkable SVG diagrams and Manim animations — from structured data,
+formulas, templates, or a natural-language prompt.
 
 <p align="center">
   <a href="https://scimigo.github.io/straightedge/#figures"><img src="https://raw.githubusercontent.com/SciMigo/straightedge/main/site/assets/svg/architecture.svg" width="48%" alt="A visual pipeline architecture diagram"></a>

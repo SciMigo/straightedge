@@ -471,3 +471,148 @@ footer p {
   align-items: center;
   gap: 1.25rem;
 }
+
+/* Prose sections — the definition, the "why geometry" grid, and the FAQ. These
+   carry the page's semantic weight for search and answer engines, so they are
+   real text at a readable measure rather than another card grid. Headings step
+   down from the hero's scale instead of competing with the gallery's display
+   type. */
+.hero-tagline {
+  max-width: 43rem;
+  margin: 1rem 0 1.4rem;
+  color: var(--cyan);
+  font-size: clamp(1.05rem, 2.2vw, 1.5rem);
+  letter-spacing: -0.02em;
+}
+
+.prose-section {
+  padding: 4.5rem 0 0;
+  border-top: 1px solid var(--line);
+  margin-top: 4.5rem;
+}
+
+.prose-section h2 {
+  margin: 0 0 1.6rem;
+  font-size: clamp(1.7rem, 3.4vw, 2.7rem);
+  line-height: 1.08;
+  letter-spacing: -0.04em;
+}
+
+.prose-section p {
+  max-width: 44rem;
+  margin: 0 0 1.15rem;
+  color: var(--muted);
+  font-size: 1.02rem;
+  line-height: 1.72;
+}
+
+.prose-section p strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.prose-section .lede {
+  color: var(--ink);
+  font-size: clamp(1.08rem, 1.9vw, 1.28rem);
+  line-height: 1.6;
+}
+
+.why-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  gap: 1.5rem 2.2rem;
+  margin-top: 0.5rem;
+}
+
+.why-item h3 {
+  margin: 0 0 0.5rem;
+  font-size: 1.02rem;
+  letter-spacing: -0.01em;
+}
+
+.why-item h3::before {
+  content: "";
+  display: block;
+  width: 1.6rem;
+  height: 2px;
+  margin-bottom: 0.85rem;
+  background: var(--cyan);
+}
+
+.why-item p {
+  margin: 0;
+  font-size: 0.95rem;
+  line-height: 1.62;
+}
+
+.faq-item {
+  padding: 1.5rem 0;
+  border-top: 1px solid var(--line);
+  max-width: 48rem;
+}
+
+.faq-item:first-of-type {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.faq-item h3 {
+  margin: 0 0 0.6rem;
+  font-size: 1.06rem;
+  line-height: 1.35;
+  letter-spacing: -0.015em;
+}
+
+.faq-item p {
+  margin: 0;
+}
+
+.faq-item em {
+  color: var(--ink);
+  font-style: italic;
+}
+
+/* Install block. The site had no install instruction at all before the package
+   was on PyPI, which made the gallery a dead end for anyone who wanted to use
+   it. */
+.install {
+  max-width: 44rem;
+  margin: 2rem 0 0;
+  padding: 1.4rem 1.5rem;
+  border: 1px solid var(--line);
+  border-radius: 0.6rem;
+  background: var(--panel);
+}
+
+.install-label {
+  margin: 0 0 0.6rem !important;
+  color: var(--quiet);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.install > code {
+  display: block;
+  font-size: 1.02rem;
+  color: var(--cyan);
+  overflow-x: auto;
+}
+
+.install-note {
+  margin: 0.9rem 0 0 !important;
+  font-size: 0.9rem !important;
+  line-height: 1.6 !important;
+}
+
+.install-note code {
+  color: var(--ink);
+  font-size: 0.86rem;
+}
+
+.prose-section a {
+  color: var(--cyan);
+  text-decoration-color: rgba(112, 214, 209, 0.4);
+  text-underline-offset: 0.2em;
+}

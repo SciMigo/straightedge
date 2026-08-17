@@ -4,14 +4,98 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#090d14">
-    <meta name="description" content="Straightedge renders deterministic SVG figures and Manim animations from structured descriptions, with checks before delivery.">
-    <meta property="og:title" content="Straightedge — checked visual gallery">
-    <meta property="og:description" content="Dependency-free SVG figures, prompt-driven animations, and assertion-backed simulations.">
+    <meta name="description" content="Straightedge is an open-source Python library that generates deterministic SVG diagrams and Manim animations from structured data, formulas, templates, or prompts — and exposes the geometry so agents can check the result.">
+    <link rel="canonical" href="https://scimigo.github.io/straightedge/">
+    <meta property="og:title" content="Straightedge — Python SVG Diagram &amp; Manim Animation Generator">
+    <meta property="og:description" content="Generate deterministic, machine-checkable SVG diagrams and Manim animations from Python. 35 dependency-free templates, and geometry an AI agent can inspect before accepting a visual.">
     <meta property="og:image" content="https://scimigo.github.io/straightedge/assets/posters/unit-circle-sine.jpg">
+    <meta property="og:image:alt" content="A point on the unit circle tracing one period of a sine curve">
     <meta property="og:type" content="website">
+    <meta property="og:site_name" content="Straightedge">
     <meta property="og:url" content="https://scimigo.github.io/straightedge/">
-    <title>Straightedge — checked visual gallery</title>
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Straightedge — Python SVG Diagram &amp; Manim Animation Generator">
+    <meta name="twitter:description" content="Generate deterministic, machine-checkable SVG diagrams and Manim animations from Python.">
+    <meta name="twitter:image" content="https://scimigo.github.io/straightedge/assets/posters/unit-circle-sine.jpg">
+    <title>Straightedge — Python SVG Diagram &amp; Manim Animation Generator</title>
     <link rel="stylesheet" href="styles.css">
+
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "SoftwareSourceCode",
+          "@id": "https://scimigo.github.io/straightedge/#software",
+          "name": "Straightedge",
+          "description": "An open-source Python library for generating deterministic, machine-checkable SVG diagrams and Manim animations from structured data, formulas, templates, or natural-language prompts.",
+          "url": "https://scimigo.github.io/straightedge/",
+          "codeRepository": "https://github.com/SciMigo/straightedge",
+          "programmingLanguage": "Python",
+          "runtimePlatform": "Python 3.10+",
+          "license": "https://opensource.org/licenses/MIT",
+          "author": { "@type": "Organization", "name": "SciMigo" },
+          "keywords": "SVG diagram generation, Manim animation, programmatic diagrams, deterministic rendering, AI agents, technical diagrams, math animation, data visualization"
+        },
+        {
+          "@type": "SoftwareApplication",
+          "name": "Straightedge",
+          "applicationCategory": "DeveloperApplication",
+          "operatingSystem": "Linux, macOS, Windows",
+          "url": "https://scimigo.github.io/straightedge/",
+          "downloadUrl": "https://pypi.org/project/straightedge/",
+          "softwareVersion": "0.1.0",
+          "softwareRequirements": "Python 3.10 or newer; no runtime dependencies for the SVG lane",
+          "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }
+        },
+        {
+          "@type": "FAQPage",
+          "mainEntity": [
+            {
+              "@type": "Question",
+              "name": "What is Straightedge?",
+              "acceptedAnswer": { "@type": "Answer", "text": "Straightedge is an open-source Python library for generating deterministic SVG diagrams and Manim animations from structured data, formulas, templates, or natural-language prompts. It exposes the underlying geometry of what it drew, so an application or an AI agent can detect overlaps, clipping, out-of-frame curves, and missing content before accepting the visual." }
+            },
+            {
+              "@type": "Question",
+              "name": "How is Straightedge different from Mermaid or Graphviz?",
+              "acceptedAnswer": { "@type": "Answer", "text": "Mermaid and Graphviz turn a text description into a layout, and both are excellent at that. Straightedge covers a wider set of figure types than graph layout — Riemann sums, unit circles, Gantt charts, heatmaps, T-accounts, call stacks — and it returns the geometry it produced alongside the SVG, so the caller can check the drawing rather than trusting it. It also renders Manim video from the same structured input, which neither Mermaid nor Graphviz does." }
+            },
+            {
+              "@type": "Question",
+              "name": "How is Straightedge different from generating a diagram with an image model?",
+              "acceptedAnswer": { "@type": "Answer", "text": "An image model returns pixels, so the same prompt gives a different picture each time and nothing in the output states where anything is. Straightedge is deterministic — the same structured input produces the same geometry — and because the output is constructed rather than sampled, labels are the text you supplied instead of an approximation of letters. The geometry is inspectable, so defects are reportable rather than a matter of opinion." }
+            },
+            {
+              "@type": "Question",
+              "name": "Can an AI agent use Straightedge?",
+              "acceptedAnswer": { "@type": "Answer", "text": "Yes, and that is the case it is designed for. An agent can enumerate the template catalog and its parameter contracts, render a figure, read back structured findings about what came out wrong, and repair its input. An optional MCP server exposes the library over the Model Context Protocol, and the errors distinguish a refusal from a failure so an agent can tell 'I will not draw that' from 'something broke'." }
+            },
+            {
+              "@type": "Question",
+              "name": "Does Straightedge require a browser or a network connection?",
+              "acceptedAnswer": { "@type": "Answer", "text": "No. The SVG lane is pure Python standard library with zero runtime dependencies — no browser, no headless Chrome, no network call, no rendering service. Manim, Whisper, and the MCP SDK live behind optional extras, so a caller who only wants figures installs nothing extra." }
+            },
+            {
+              "@type": "Question",
+              "name": "Can Straightedge generate Manim animations from natural language?",
+              "acceptedAnswer": { "@type": "Answer", "text": "Yes. A prompt is planned into a structured spec, matched against the deterministic template set where one fits, and otherwise handed to an LLM writer, reviewer, and bounded repair loop that emits a Manim scene. When the model path fails, it degrades to a deterministic template rather than returning nothing." }
+            },
+            {
+              "@type": "Question",
+              "name": "Can Straightedge validate a generated diagram?",
+              "acceptedAnswer": { "@type": "Answer", "text": "Yes, at three separate moments, because each catches what the others cannot. Preconditions run before anything is drawn and refuse a plan that would render beautifully while answering a different question. QC reads the built scene and reports what is empty, clipped, off-frame, or printed on top of something else. A label check catches on-screen text that survived translation untranslated." }
+            },
+            {
+              "@type": "Question",
+              "name": "Does Straightedge execute LLM-generated code?",
+              "acceptedAnswer": { "@type": "Answer", "text": "Only in the optional prompt-driven agent lane, and never in the deterministic template lane, which executes no model output at all. When the agent lane runs, generated scenes are screened by an AST allowlist that blocks imports and interpreter escapes. That screen is defence in depth rather than a sandbox, so untrusted input should be run in an isolated environment." }
+            }
+          ]
+        }
+      ]
+    }
+    </script>
   </head>
   <body>
     <header class="site-header">
@@ -27,17 +111,90 @@
 
     <main id="top">
       <section class="hero" aria-labelledby="hero-title">
-        <p class="eyebrow">Structured description → checked visual</p>
-        <h1 id="hero-title">Figures and animations that show their work.</h1>
+        <p class="eyebrow">Python library · deterministic SVG and Manim · built for AI agents</p>
+        <h1 id="hero-title">Generate checked SVG diagrams and Manim animations.</h1>
+        <p class="hero-tagline">Figures and animations that show their work.</p>
         <p class="hero-copy">
-          Straightedge turns structured intent into deterministic SVG figures or
-          Manim scenes, then exposes the geometry needed to catch visible defects
-          before a visual reaches a lecture, document, or product.
+          Straightedge is an open-source Python library that turns structured data,
+          formulas, templates, or a natural-language prompt into a deterministic SVG
+          figure or Manim scene — then exposes the underlying geometry, so an
+          application or an AI agent can catch overlaps, clipping, and missing
+          content before accepting the result.
         </p>
         <div class="hero-proof" aria-label="Gallery contents">
           <div><strong>35</strong><span>dependency-free SVG templates</span></div>
           <div><strong>7</strong><span>playable animation examples</span></div>
           <div><strong>0</strong><span>runtime dependencies for figures</span></div>
+        </div>
+      </section>
+
+      <section class="prose-section" aria-labelledby="what-heading" id="what-is-straightedge">
+        <h2 id="what-heading">What is Straightedge?</h2>
+        <p class="lede">
+          Straightedge is an open-source Python library for generating deterministic
+          SVG diagrams and Manim animations from structured data, formulas,
+          templates, or natural-language prompts. Unlike screenshot- or image-based
+          generation, Straightedge exposes the underlying geometry so applications
+          and AI agents can detect overlaps, clipping, missing content, and other
+          visible defects before accepting a visual.
+        </p>
+        <p>
+          The premise is that <strong>a visual can render successfully and still be
+          wrong</strong>. A curve can leave the frame, a label can land on a formula,
+          a chart can come out empty, and nothing in a successful render says so. An
+          LLM writing figure code is working blind for exactly this reason: it emits
+          code, the code runs, and no signal comes back. Straightedge is the part
+          that can tell it what came out — which is why the same design that makes
+          the output trustworthy for a person makes it usable by an agent.
+        </p>
+        <p>
+          Two independent lanes share one spec. A structured dictionary becomes an
+          <a href="#figures">SVG string</a> using nothing but the Python standard
+          library. The same intent, sent down the video lane, becomes a
+          <a href="#prompt-heading">Manim scene</a> rendered to MP4. Neither lane
+          needs a browser or a rendering service, and the figure lane has no runtime
+          dependencies at all.
+        </p>
+        <div class="install">
+          <p class="install-label">Install</p>
+          <code>pip install straightedge</code>
+          <p class="install-note">
+            Figures only, no dependencies. Add <code>straightedge[render]</code> for
+            the Manim video lane, or <code>straightedge[mcp]</code> for the
+            Model Context Protocol server. On
+            <a href="https://pypi.org/project/straightedge/">PyPI</a> and
+            <a href="https://github.com/SciMigo/straightedge">GitHub</a>.
+          </p>
+        </div>
+      </section>
+
+      <section class="prose-section" aria-labelledby="why-heading" id="why-geometry">
+        <h2 id="why-heading">Why generate visuals as geometry instead of images?</h2>
+        <div class="why-grid">
+          <div class="why-item">
+            <h3>Deterministic output</h3>
+            <p>The same structured input produces the same geometry, every run. No sampling, no seed, no drift between a draft and the version that ships.</p>
+          </div>
+          <div class="why-item">
+            <h3>Machine-checkable</h3>
+            <p>Agents inspect bounds, positions, overlaps, and structured findings instead of guessing whether an image looks right.</p>
+          </div>
+          <div class="why-item">
+            <h3>Real text, not drawn letters</h3>
+            <p>Labels are the strings you supplied — selectable, searchable, and translatable, rather than an image model's impression of characters.</p>
+          </div>
+          <div class="why-item">
+            <h3>Native SVG, no service</h3>
+            <p>35 figure templates render from the standard library alone: no browser, no headless Chrome, no network call, no API key.</p>
+          </div>
+          <div class="why-item">
+            <h3>Animation when it earns it</h3>
+            <p>The same workflow produces Manim scenes for explanations where motion carries the argument, not just a static frame.</p>
+          </div>
+          <div class="why-item">
+            <h3>Designed for agent loops</h3>
+            <p>A planner or LLM generates structured intent, renders it, reads the validation findings, and repairs its own input.</p>
+          </div>
         </div>
       </section>
 
@@ -246,6 +403,104 @@
               <p class="claim"><span>Asserted claim</span> Every rank receives the true elementwise sum; counted bytes stay below 2D while serial hops grow.</p>
             </div>
           </article>
+        </div>
+      </section>
+
+      <section class="prose-section" aria-labelledby="faq-heading" id="faq">
+        <h2 id="faq-heading">Questions</h2>
+
+        <div class="faq-item">
+          <h3>What is Straightedge?</h3>
+          <p>
+            An open-source Python library for generating deterministic SVG diagrams
+            and Manim animations from structured data, formulas, templates, or
+            natural-language prompts. It exposes the underlying geometry of what it
+            drew, so an application or an AI agent can detect overlaps, clipping,
+            out-of-frame curves, and missing content before accepting the visual.
+          </p>
+        </div>
+
+        <div class="faq-item">
+          <h3>How is Straightedge different from Mermaid or Graphviz?</h3>
+          <p>
+            Mermaid and Graphviz turn a text description into a layout, and both are
+            excellent at that. Straightedge covers a wider set of figure types than
+            graph layout — Riemann sums, unit circles, Gantt charts, heatmaps,
+            T-accounts, call stacks — and it returns the geometry it produced
+            alongside the SVG, so the caller can check the drawing rather than trust
+            it. It also renders Manim video from the same structured input, which
+            neither Mermaid nor Graphviz does.
+          </p>
+        </div>
+
+        <div class="faq-item">
+          <h3>How is Straightedge different from generating a diagram with an image model?</h3>
+          <p>
+            An image model returns pixels, so the same prompt gives a different
+            picture each time and nothing in the output states where anything is.
+            Straightedge is deterministic — the same structured input produces the
+            same geometry — and because the output is constructed rather than
+            sampled, labels are the text you supplied instead of an approximation of
+            letters. The geometry is inspectable, so defects are reportable rather
+            than a matter of opinion.
+          </p>
+        </div>
+
+        <div class="faq-item">
+          <h3>Can an AI agent use Straightedge?</h3>
+          <p>
+            Yes, and that is the case it is designed for. An agent can enumerate the
+            template catalog and its parameter contracts, render a figure, read back
+            structured findings about what came out wrong, and repair its input. An
+            optional MCP server exposes the library over the Model Context Protocol,
+            and the errors distinguish a refusal from a failure, so an agent can tell
+            <em>I will not draw that</em> from <em>something broke</em>.
+          </p>
+        </div>
+
+        <div class="faq-item">
+          <h3>Does Straightedge require a browser or a network connection?</h3>
+          <p>
+            No. The SVG lane is pure Python standard library with zero runtime
+            dependencies — no browser, no headless Chrome, no network call, no
+            rendering service. Manim, Whisper, and the MCP SDK live behind optional
+            extras, so a caller who only wants figures installs nothing extra.
+          </p>
+        </div>
+
+        <div class="faq-item">
+          <h3>Can Straightedge generate Manim animations from natural language?</h3>
+          <p>
+            Yes. A prompt is planned into a structured spec, matched against the
+            deterministic template set where one fits, and otherwise handed to an LLM
+            writer, reviewer, and bounded repair loop that emits a Manim scene. When
+            the model path fails, it degrades to a deterministic template rather than
+            returning nothing.
+          </p>
+        </div>
+
+        <div class="faq-item">
+          <h3>Can Straightedge validate a generated diagram?</h3>
+          <p>
+            Yes, at three separate moments, because each catches what the others
+            cannot. Preconditions run before anything is drawn and refuse a plan that
+            would render beautifully while answering a different question. QC reads
+            the built scene and reports what is empty, clipped, off-frame, or printed
+            on top of something else. A label check catches on-screen text that
+            survived translation untranslated.
+          </p>
+        </div>
+
+        <div class="faq-item">
+          <h3>Does Straightedge execute LLM-generated code?</h3>
+          <p>
+            Only in the optional prompt-driven agent lane, and never in the
+            deterministic template lane, which executes no model output at all. When
+            the agent lane runs, generated scenes are screened by an AST allowlist
+            that blocks imports and interpreter escapes. That screen is defence in
+            depth rather than a sandbox, so untrusted input should be run in an
+            isolated environment.
+          </p>
         </div>
       </section>
 

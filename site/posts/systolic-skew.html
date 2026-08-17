@@ -10,8 +10,26 @@
     <meta property="og:image" content="https://scimigo.github.io/straightedge/assets/posters/systolic-array.jpg">
     <meta property="og:type" content="article">
     <meta property="og:url" content="https://scimigo.github.io/straightedge/posts/systolic-skew.html">
+    <link rel="canonical" href="https://scimigo.github.io/straightedge/posts/systolic-skew.html">
     <meta name="twitter:card" content="player">
-    <title>Why the systolic array feeds itself diagonally</title>
+    <meta name="twitter:title" content="Systolic array matrix multiplication: why it feeds itself diagonally">
+    <meta name="twitter:description" content="A weight-stationary matrix unit executed cycle by cycle: the skew is forced by the schedule, and each weight is read once instead of once per output.">
+    <meta name="twitter:image" content="https://scimigo.github.io/straightedge/assets/posters/systolic-array.jpg">
+    <title>Systolic array matrix multiplication: why it feeds itself diagonally</title>
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "TechArticle",
+      "headline": "Systolic array matrix multiplication: why it feeds itself diagonally",
+      "description": "Entries entering a systolic array on cycle t are exactly the anti-diagonal m + k = t, because that is the only arrival time at which a multiply meets the running sum it belongs to.",
+      "url": "https://scimigo.github.io/straightedge/posts/systolic-skew.html",
+      "image": "https://scimigo.github.io/straightedge/assets/posters/systolic-array.jpg",
+      "author": { "@type": "Organization", "name": "SciMigo" },
+      "publisher": { "@type": "Organization", "name": "Straightedge" },
+      "about": ["Systolic array", "Matrix multiplication", "Hardware accelerators", "Dataflow architecture"],
+      "isPartOf": { "@type": "WebSite", "name": "Straightedge", "url": "https://scimigo.github.io/straightedge/" }
+    }
+    </script>
     <link rel="stylesheet" href="../styles.css">
     <link rel="stylesheet" href="post.css">
   </head>
