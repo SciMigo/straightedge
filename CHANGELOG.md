@@ -27,6 +27,15 @@ unchanged unless a theme is asked for.
   covering the token vocabulary and why generated scenes resolve a theme at
   generation time while hand-written scenes import it.
 
+### Fixed
+- The MCP server advertised `version="0.1"` to connected clients, hardcoded and
+  already stale through the whole 0.1.x line. The version is now written once as
+  `straightedge.__version__`; `pyproject.toml` derives its own from that
+  attribute and the server reads it, so a release bump cannot be applied by
+  halves. Regression-tested, including a check that no module reintroduces a
+  second copy — which runs without the `mcp` extra, unlike the server test it
+  backs up.
+
 ### Changed
 - The package summary no longer scopes the project to lectures. It now reads
   "Generate deterministic, machine-checkable SVG diagrams and Manim animations

@@ -19,6 +19,13 @@ Three checks run at three different moments, and they catch different things:
     After generation. Did every on-screen label survive translation?
 """
 
+#: The one place the version is written. ``pyproject.toml`` declares its version
+#: dynamically from this attribute rather than restating it, so the packaged
+#: metadata and anything reading it at runtime — the MCP server advertises it to
+#: clients — cannot drift apart. Kept a plain literal because setuptools reads it
+#: statically, without importing the package at build time.
+__version__ = "0.2.0"
+
 from .aspect import ASPECTS, LANDSCAPE, VERTICAL
 from .catalog import Template, list_templates
 from .errors import (
@@ -39,6 +46,7 @@ from .style import (
 from .templates import SCENE_CLASS_NAME, scene_code_for
 
 __all__ = [
+    "__version__",
     # Discovery
     "list_templates",
     "Template",
