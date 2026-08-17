@@ -6,6 +6,23 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-08-17
+
+A metadata and documentation release. No change to any packaged module, so
+`0.1.0` remains functionally identical and does not need replacing.
+
+### Changed
+- The package summary no longer scopes the project to lectures. It now reads
+  "Generate deterministic, machine-checkable SVG diagrams and Manim animations
+  from structured data, templates, or a prompt", matching the wording used on
+  the README and the gallery — three descriptions of the same library made it
+  harder to place, for readers and for search alike.
+- README links and image sources are absolute. They resolved on GitHub but the
+  four hero images are relative paths, which PyPI does not rewrite, so the
+  project page rendered them as broken images.
+
+## [0.1.0] - 2026-08-17
+
 The first public release. Everything below is new relative to the project's
 private history as `math-voice`.
 
