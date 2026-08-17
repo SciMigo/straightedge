@@ -557,8 +557,10 @@ def _fmt_num(value: float) -> str:
 
 # Embedded in the generated scene preamble. Tests ``ast.parse`` this string
 # directly to catch syntax errors without needing manim installed. Symbols
-# referenced (Prism/Polyhedron/VGroup/MathTex/BLUE/WHITE/np) all come from
-# ``from manim import *`` in the surrounding preamble.
+# referenced (Prism/Polyhedron/VGroup/MathTex/np) come from ``from manim import *``
+# in the surrounding preamble. The ``C_*`` colours come from the palette that
+# preamble emits above this block — see ``templates._palette_source`` — which is
+# why a themed render reaches the 3D helpers too instead of stopping at 2D.
 SOLID_HELPERS_SRC = r'''
 def _subscriptify(name):
     import re as _re
@@ -592,8 +594,8 @@ def make_box(width=3.0, depth=2.0, height=2.0, name="ABCD-A1B1C1D1"):
     up = np.array([0.0, 0.0, height])
     coords = [a, b, c, d, a + up, b + up, c + up, d + up]
     mobj = Prism(dimensions=[width, depth, height])
-    mobj.set_fill(BLUE, opacity=0.18)
-    mobj.set_stroke(BLUE, width=2)
+    mobj.set_fill(C_FLOW, opacity=0.18)
+    mobj.set_stroke(C_FLOW, width=2)
     return mobj, dict(zip(names, coords))
 
 
@@ -622,8 +624,8 @@ def make_regular_prism(n_sides=4, radius=1.0, height=2.0, name="ABCD-A1B1C1D1"):
     ]
     faces = [list(range(n_sides)), list(range(n_sides, 2 * n_sides)), *side_faces]
     mobj = Polyhedron(vertex_coords=coords, faces_list=faces)
-    mobj.set_fill(BLUE, opacity=0.18)
-    mobj.set_stroke(BLUE, width=2)
+    mobj.set_fill(C_FLOW, opacity=0.18)
+    mobj.set_stroke(C_FLOW, width=2)
     return mobj, dict(zip(names, coords))
 
 
@@ -646,8 +648,8 @@ def make_regular_pyramid(n_sides=4, radius=1.0, height=2.0, name="P-ABCD"):
     side_faces = [[i, (i + 1) % n_sides, apex_idx] for i in range(n_sides)]
     faces = [list(range(n_sides)), *side_faces]
     mobj = Polyhedron(vertex_coords=coords, faces_list=faces)
-    mobj.set_fill(BLUE, opacity=0.18)
-    mobj.set_stroke(BLUE, width=2)
+    mobj.set_fill(C_FLOW, opacity=0.18)
+    mobj.set_stroke(C_FLOW, width=2)
     verts = dict(zip(base_names, base_pts))
     verts[apex_name] = apex_pt
     return mobj, verts
@@ -673,8 +675,8 @@ def make_tetrahedron(side=2.0, name="ABCD"):
     coords = base_pts + [apex_pt]
     faces = [[0, 1, 2], [0, 1, 3], [1, 2, 3], [2, 0, 3]]
     mobj = Polyhedron(vertex_coords=coords, faces_list=faces)
-    mobj.set_fill(BLUE, opacity=0.18)
-    mobj.set_stroke(BLUE, width=2)
+    mobj.set_fill(C_FLOW, opacity=0.18)
+    mobj.set_stroke(C_FLOW, width=2)
     verts = dict(zip(base_names, base_pts))
     verts[apex_name] = apex_pt
     return mobj, verts
@@ -686,8 +688,8 @@ def make_cylinder(radius=1.0, height=2.0, name="O-O1"):
     bottom_name = parts[0] if parts and parts[0] else "O"
     top_name = parts[1] if len(parts) > 1 and parts[1] else "O1"
     mobj = Cylinder(radius=radius, height=height)
-    mobj.set_fill(BLUE, opacity=0.18)
-    mobj.set_stroke(BLUE, width=2)
+    mobj.set_fill(C_FLOW, opacity=0.18)
+    mobj.set_stroke(C_FLOW, width=2)
     verts = {
         bottom_name: np.array([0.0, 0.0, -height / 2]),
         top_name: np.array([0.0, 0.0, +height / 2]),
@@ -704,8 +706,8 @@ def make_cone(radius=1.0, height=2.0, name="P-O"):
     # shifting by +height/2 centers it (apex at +h/2, base at -h/2).
     mobj = Cone(base_radius=radius, height=height, direction=OUT, show_base=True)
     mobj.shift(OUT * height / 2)
-    mobj.set_fill(BLUE, opacity=0.18)
-    mobj.set_stroke(BLUE, width=2)
+    mobj.set_fill(C_FLOW, opacity=0.18)
+    mobj.set_stroke(C_FLOW, width=2)
     verts = {
         apex_name: np.array([0.0, 0.0, +height / 2]),
         base_name: np.array([0.0, 0.0, -height / 2]),
@@ -713,7 +715,7 @@ def make_cone(radius=1.0, height=2.0, name="P-O"):
     return mobj, verts
 
 
-def cube_section(verts, point_names, color=YELLOW, opacity=0.45):
+def cube_section(verts, point_names, color=C_HOLD, opacity=0.45):
     """Polygon where a plane (through >=3 named cube vertices) cuts the cube.
 
     ``verts`` must be the dict returned by ``make_cube``/``make_box`` (8 entries
@@ -784,7 +786,7 @@ def cube_section(verts, point_names, color=YELLOW, opacity=0.45):
     return Polygon(*ordered, color=color, fill_opacity=opacity, stroke_width=3)
 
 
-def label_vertices(verts, font_size=28, offset=0.35, color=WHITE):
+def label_vertices(verts, font_size=28, offset=0.35, color=C_FG):
     """A VGroup of MathTex vertex labels, each pushed outward from the centroid.
 
     Scenes typically pass each child through ``add_fixed_orientation_mobjects``
@@ -802,7 +804,7 @@ def label_vertices(verts, font_size=28, offset=0.35, color=WHITE):
     return labels
 
 
-def three_views(kind, params, color=BLUE, stroke=3):
+def three_views(kind, params, color=C_FLOW, stroke=3):
     """Return (front, side, top) 2D outline mobjects for textbook 三视图.
 
     front = 正视图 (view along -y onto xz),  side = 侧视图 (along -x onto yz),

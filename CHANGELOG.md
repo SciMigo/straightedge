@@ -6,6 +6,19 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- A style layer (`straightedge.style`) naming colours, stroke widths, and fill
+  opacities by **visual role** rather than by what they happen to depict, so one
+  scene can be drawn more than one way. Three themes ship: `textbook` (Manim's
+  own palette, the default), `paper` (light, for print and slides), and
+  `dataflow` (the dark look the `examples/` scenes use). Select one with
+  `--style` on the CLI, or `theme("paper")` from Python.
+- `examples/tensor_parallel`: tensor parallelism given the same treatment as the
+  other dataflow examples — simulated, asserted, and only then animated.
+- [`docs/styling.md`](https://github.com/SciMigo/straightedge/blob/main/docs/styling.md),
+  covering the token vocabulary and why generated scenes resolve a theme at
+  generation time while hand-written scenes import it.
+
 ### Changed
 - The package summary no longer scopes the project to lectures. It now reads
   "Generate deterministic, machine-checkable SVG diagrams and Manim animations

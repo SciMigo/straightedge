@@ -9,6 +9,7 @@ from .aspect import LANDSCAPE, output_dir_name, resolution_for
 from .fonts import DEFAULT_CJK_FONT
 from .labels import DEFAULT_LANGUAGE
 from .models import AnimationPlan
+from .style import TEXTBOOK, Style
 from .templates import SCENE_CLASS_NAME, scene_code_for
 
 # Manim quality flag (-q{x}) -> the resolution folder name Manim writes under.
@@ -32,6 +33,7 @@ def write_scene(
     language: str = DEFAULT_LANGUAGE,
     qc_sidecar: Path | None = None,
     name: str = "scene",
+    style: Style = TEXTBOOK,
 ) -> Path:
     """Write the scene Manim will render.
 
@@ -46,6 +48,12 @@ def write_scene(
     cut needs both — see :mod:`straightedge.aspect`.
 
     ``language`` sets the on-screen labels — see :mod:`straightedge.labels`.
+
+    ``style`` picks the palette — see :mod:`straightedge.style`. Threaded here
+    for the same reason ``beat_seconds`` is: this is the only writer, so a
+    parameter missing from it is a feature only reachable by callers willing to
+    render the source themselves. The default is Manim's own palette, which is
+    what every existing render already used.
 
     ``qc_sidecar`` asks the scene to record its extents there as it finishes, so
     the caller can run :func:`straightedge.qc.check_sidecar` once Manim exits.
@@ -62,7 +70,7 @@ def write_scene(
     output_dir.mkdir(parents=True, exist_ok=True)
     scene_path = output_dir / f"{name}.py"
     scene_path.write_text(
-        scene_code_for(plan, font=font, beat_seconds=beat_seconds,
+        scene_code_for(plan, font=font, beat_seconds=beat_seconds, style=style,
                        aspect=aspect, language=language,
                        qc_sidecar=str(qc_sidecar.resolve()) if qc_sidecar else None) + "\n",
         encoding="utf-8",
