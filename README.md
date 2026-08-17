@@ -3,12 +3,12 @@
 Checked SVG figures and Manim animations for technical explanations.
 
 <p align="center">
-  <a href="https://scimigo.github.io/straightedge/#figures"><img src="site/assets/svg/architecture.svg" width="48%" alt="A visual pipeline architecture diagram"></a>
-  <a href="https://scimigo.github.io/straightedge/#figures"><img src="site/assets/svg/binary-tree.svg" width="48%" alt="A binary-tree traversal diagram"></a>
+  <a href="https://scimigo.github.io/straightedge/#figures"><img src="https://raw.githubusercontent.com/SciMigo/straightedge/main/site/assets/svg/architecture.svg" width="48%" alt="A visual pipeline architecture diagram"></a>
+  <a href="https://scimigo.github.io/straightedge/#figures"><img src="https://raw.githubusercontent.com/SciMigo/straightedge/main/site/assets/svg/binary-tree.svg" width="48%" alt="A binary-tree traversal diagram"></a>
 </p>
 <p align="center">
-  <a href="https://scimigo.github.io/straightedge/#prompt-heading"><img src="site/assets/gif/derivative-tangent.gif" width="48%" alt="A secant line converging to the tangent of a parabola"></a>
-  <a href="https://scimigo.github.io/straightedge/#prompt-heading"><img src="site/assets/gif/unit-circle-sine.gif" width="48%" alt="A point on the unit circle tracing a sine curve"></a>
+  <a href="https://scimigo.github.io/straightedge/#prompt-heading"><img src="https://raw.githubusercontent.com/SciMigo/straightedge/main/site/assets/gif/derivative-tangent.gif" width="48%" alt="A secant line converging to the tangent of a parabola"></a>
+  <a href="https://scimigo.github.io/straightedge/#prompt-heading"><img src="https://raw.githubusercontent.com/SciMigo/straightedge/main/site/assets/gif/unit-circle-sine.gif" width="48%" alt="A point on the unit circle tracing a sine curve"></a>
 </p>
 <p align="center"><a href="https://scimigo.github.io/straightedge/">Explore all figures and videos →</a></p>
 
@@ -155,14 +155,14 @@ Straightedge does not synthesise speech — durations arrive as data, so the sam
 scene renders identically from a cloud TTS clip, a local model, or a human
 recording, offline and without an API key. A step with no measurement keeps the
 timing it was written with. See
-[`docs/narration-timing.md`](docs/narration-timing.md) for the walkthrough, the
+[`docs/narration-timing.md`](https://github.com/SciMigo/straightedge/blob/main/docs/narration-timing.md) for the walkthrough, the
 two pacing helpers, and the silent failure worth knowing about.
 
 ## Prompt-driven scenes
 
 For concepts outside the deterministic templates, `straightedge/agent/` provides
 a writer, reviewer, executor, and bounded repair loop against an OpenAI-compatible
-API. See [`docs/agent-design.md`](docs/agent-design.md) for the design.
+API. See [`docs/agent-design.md`](https://github.com/SciMigo/straightedge/blob/main/docs/agent-design.md) for the design.
 
 > **⚠️ This lane runs model-written Python.** The generated scene is
 > syntax-checked, scanned for disallowed imports and interpreter escapes,
@@ -212,7 +212,9 @@ python3 -m pip install -e '.[dev]'
 python3 -m pytest -q
 ```
 
-The gallery is a static GitHub Pages site under [`site/`](site/). It intentionally
+The gallery is a static GitHub Pages site under
+[`site/`](https://github.com/SciMigo/straightedge/tree/main/site), published at
+<https://scimigo.github.io/straightedge/>. It intentionally
 keeps the library-generated visuals separate from the hand-written, assertion-
 backed examples.
 
@@ -228,4 +230,4 @@ backed examples.
 
 ## License
 
-[MIT](LICENSE)
+[MIT](https://github.com/SciMigo/straightedge/blob/main/LICENSE)

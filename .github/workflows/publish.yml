@@ -1,0 +1,90 @@
+name: publish
+
+# Publishes to PyPI on a version tag, via Trusted Publishing: PyPI verifies a
+# short-lived OIDC token minted by this workflow instead of a stored API token,
+# so there is no long-lived secret in the repo to leak or rotate. The trust is
+# pinned on PyPI's side to (owner, repo, workflow filename, environment), so
+# renaming *this file* breaks the publish until the PyPI record is updated to
+# match. The registered environment is currently "(Any)", which accepts the
+# `pypi` environment named below; narrowing it there to `pypi` would mean only
+# runs in that environment can publish, which is worth doing once this is green.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Two tags pushed together must not race for the same version slot.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  # Build once and hand the exact artifacts to the publish job. Rebuilding in
+  # the publishing job would mean shipping bytes no test ever saw.
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build sdist and wheel
+        run: |
+          python -m pip install --upgrade pip build twine
+          python -m build
+
+      - name: Check metadata renders
+        # Catches a README that PyPI would reject *before* the upload burns the
+        # version number — a released version can never be re-uploaded.
+        run: python -m twine check dist/*
+
+      - name: Verify the tag matches the packaged version
+        # A tag that disagrees with `version` in pyproject.toml would publish
+        # something no one can find by the name they tagged.
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          built=$(ls dist/*.tar.gz | sed -E 's/.*-([0-9][^-]*)\.tar\.gz/\1/')
+          if [ "$tag" != "$built" ]; then
+            echo "::error::tag $GITHUB_REF_NAME does not match packaged version $built"
+            exit 1
+          fi
+          echo "tag and package agree on $built"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    # Named on PyPI's pending-publisher record. It is also the hook for a
+    # required-reviewer rule in repo settings, if you ever want a human to
+    # approve the push to PyPI.
+    environment:
+      name: pypi
+      url: https://pypi.org/project/straightedge/
+
+    permissions:
+      # The whole point: mint the OIDC token PyPI checks. Without this the
+      # publish fails closed rather than falling back to a password.
+      id-token: write
+
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        # No `password:` — the action detects the OIDC token from the
+        # `id-token: write` permission above and exchanges it with PyPI.
