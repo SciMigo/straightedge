@@ -16,33 +16,24 @@ concurrency:
 
 jobs:
   deploy:
-    # Pages cannot be enabled here yet: SciMigo is a Free org and the repo is
-    # private, and "if the account that owns the repository uses GitHub Free or
-    # GitHub Free for organizations, the repository must be public". So
-    # configure-pages gets a 404 and every merge to main lands a red X that
-    # nobody can act on. Skip rather than fail — and read the visibility off the
-    # event, so this arms itself the moment the repo is flipped public instead
-    # of leaving a workflow edit to remember on release day.
-    #
-    # Note there is no private-preview option to reach for in the meantime:
-    # publishing from a private repo on Pro or Team still produces a public
-    # site, and access-controlled Pages needs GitHub Enterprise Cloud.
-    if: github.event.repository.visibility == 'public'
+    # Publishes the gallery in `site/` to https://scimigo.github.io/straightedge/.
+    # Pages is configured to build from Actions rather than from a branch, so
+    # this workflow is the only thing that updates the site.
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/configure-pages@v5
+      - uses: actions/configure-pages@v6
 
       - name: Upload gallery
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v5
         with:
           path: site
 
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
