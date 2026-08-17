@@ -1,0 +1,48 @@
+name: Bug report
+description: Something rendered wrong, failed, or behaved unexpectedly
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Not for security issues — a sandbox escape or expression-evaluation
+        escape goes through a private advisory, not here. See SECURITY.md.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you ran, and what came out.
+      placeholder: |
+        $ straightedge render --template conic/ellipse_foci --qc
+        …
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+  - type: input
+    id: repro
+    attributes:
+      label: Minimal command or code that reproduces it
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: straightedge version and how installed
+      placeholder: "0.1.0, pip install straightedge[render]"
+    validations:
+      required: true
+  - type: input
+    id: env
+    attributes:
+      label: Python and Manim versions
+      placeholder: "Python 3.12, Manim 0.21.0 (render lane only)"
+  - type: textarea
+    id: qc
+    attributes:
+      label: QC findings, if a render looked wrong
+      description: The output of `--qc`, if relevant. Findings carry the defect's coordinates.

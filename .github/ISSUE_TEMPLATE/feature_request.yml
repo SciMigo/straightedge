@@ -1,0 +1,30 @@
+name: Feature request
+description: A new template, a new check, or a change to the library
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to draw or do
+      description: The figure or workflow you want, and why the library can't do it today.
+    validations:
+      required: true
+  - type: dropdown
+    id: kind
+    attributes:
+      label: What kind of request
+      options:
+        - A new animation concept (Manim → MP4)
+        - A new figure template (Python → SVG)
+        - A new or better visual check (qc)
+        - Something about the agent / CLI / MCP surface
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: shape
+    attributes:
+      label: What it should look like
+      description: >-
+        For a template, the claim it should show and how you'd invoke it. For a
+        check, the defect it should catch.

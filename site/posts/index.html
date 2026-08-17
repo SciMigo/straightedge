@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#090d14">
+    <meta name="description" content="Short technical writeups on how data actually moves through accelerators and clusters — each one a simulation you can run, animated from the simulation rather than illustrated beside it.">
+    <meta property="og:title" content="Dataflow, executed">
+    <meta property="og:description" content="Systolic arrays, pipeline schedules, collectives — simulated, measured, and animated from the measurement.">
+    <meta property="og:image" content="https://scimigo.github.io/straightedge/assets/posters/systolic-array.jpg">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://scimigo.github.io/straightedge/posts/">
+    <title>Dataflow, executed</title>
+    <link rel="stylesheet" href="../styles.css">
+    <link rel="stylesheet" href="post.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="wordmark" href="../index.html" aria-label="Straightedge, back to the gallery">
+        <span class="wordmark-mark" aria-hidden="true"></span>
+        <span>Straightedge</span>
+      </a>
+      <a class="repo-link" href="https://github.com/SciMigo/straightedge">View on GitHub <span aria-hidden="true">↗</span></a>
+    </header>
+
+    <main class="post">
+      <div class="post-head">
+        <p class="post-kicker">Series</p>
+        <h1>Dataflow, executed</h1>
+        <p class="standfirst">
+          How data actually moves through an accelerator and across a cluster —
+          the mechanisms everyone draws as a static grid with arrows, and nobody
+          runs. Each post is a simulation you can execute, animated from the
+          simulation rather than illustrated beside it.
+        </p>
+        <p class="byline">
+          <span>Every claim on screen is asserted in the code that draws it</span>
+          <span>Scenes live in
+            <code>examples/</code> and re-render from source</span>
+        </p>
+      </div>
+
+      <div class="post-body">
+        <p>
+          A diagram of a systolic array can have the wrong schedule and look
+          perfect. A Gantt chart of GPipe can put a backward pass one cycle early
+          and nobody will notice, because nothing in the drawing is checked
+          against anything. These posts take the opposite approach: the mechanism
+          is simulated first, the picture is a consequence of the simulation, and
+          the numbers on screen are counted from the run rather than typed in. A
+          scene whose claim stops being true fails to render.
+        </p>
+      </div>
+
+      <ol class="post-list">
+        <li>
+          <h2><a href="pipeline-bubble.html">The pipeline bubble 1F1B doesn't fix</a></h2>
+          <p>
+            GPipe and 1F1B finish on the same cycle and idle for the same number
+            of stage-slots. What 1F1B buys is activation memory — 23 sets against
+            6 — which is the number that decides whether a model fits.
+          </p>
+          <span class="tag">Pipeline parallelism</span>
+        </li>
+        <li>
+          <h2><a href="systolic-skew.html">Why the systolic array feeds itself diagonally</a></h2>
+          <p>
+            The skew is not a convention. Entries entering on cycle <em>t</em>
+            are exactly the anti-diagonal, because that is the only arrival time
+            at which a multiply meets the running sum it belongs to — and each
+            weight is then read from SRAM once instead of once per output.
+          </p>
+          <span class="tag">Systolic dataflow</span>
+        </li>
+        <li class="pending">
+          <h2>Ring all-reduce: the bytes per rank don't grow</h2>
+          <p>
+            Reduce-scatter then all-gather, executed chunk by chunk. Each rank
+            sends under 2D regardless of ring size; what grows with the ring is
+            the number of serial hops, which is a latency story rather than a
+            bandwidth one.
+          </p>
+          <span class="tag">Planned</span>
+        </li>
+        <li class="pending">
+          <h2>Interleaved pipelines: the bubble that does move</h2>
+          <p>
+            Splitting each device's layers into several non-contiguous chunks
+            genuinely shrinks the bubble, and pays for it in cross-device
+            traffic. Same treatment: simulated, measured, animated.
+          </p>
+          <span class="tag">Planned</span>
+        </li>
+      </ol>
+
+      <nav class="series-nav" aria-label="Site navigation">
+        <span>
+          <span class="muted">Gallery</span>
+          <a href="../index.html">Figures and animations</a>
+        </span>
+        <span class="next">
+          <span class="muted">Source</span>
+          <a href="https://github.com/SciMigo/straightedge">SciMigo/straightedge</a>
+        </span>
+      </nav>
+    </main>
+  </body>
+</html>

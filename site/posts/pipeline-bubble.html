@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#090d14">
+    <meta name="description" content="GPipe and 1F1B finish on the same cycle and idle for the same number of stage-slots. What 1F1B changes is activation memory — 23 sets against 6 — and that is the trade that decides whether a model fits.">
+    <meta property="og:title" content="The pipeline bubble 1F1B doesn't fix">
+    <meta property="og:description" content="Both schedules, simulated and executed cycle by cycle. Same makespan, same bubble, a quarter of the memory.">
+    <meta property="og:image" content="https://scimigo.github.io/straightedge/assets/posters/pipeline-schedules.jpg">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://scimigo.github.io/straightedge/posts/pipeline-bubble.html">
+    <meta name="twitter:card" content="player">
+    <title>The pipeline bubble 1F1B doesn't fix</title>
+    <link rel="stylesheet" href="../styles.css">
+    <link rel="stylesheet" href="post.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="wordmark" href="../index.html" aria-label="Straightedge, back to the gallery">
+        <span class="wordmark-mark" aria-hidden="true"></span>
+        <span>Straightedge</span>
+      </a>
+      <a class="repo-link" href="index.html">All writeups <span aria-hidden="true">↗</span></a>
+    </header>
+
+    <main class="post">
+      <div class="post-head">
+        <p class="post-kicker">Dataflow, executed · 01</p>
+        <h1>The pipeline bubble 1F1B doesn't fix</h1>
+        <p class="standfirst">
+          Both schedules finish on the same cycle and idle for exactly the same
+          number of stage-slots. What 1F1B buys is memory — and that is the
+          number that decides whether a model fits on the cluster you have.
+        </p>
+        <p class="byline">
+          <span>4 stages · 6 microbatches · simulated, not drawn</span>
+          <span>Every figure re-renders from
+            <code>examples/pipeline_schedules/scene.py</code></span>
+        </p>
+      </div>
+
+      <figure class="post-figure">
+        <video controls playsinline preload="metadata"
+               poster="../assets/posters/pipeline-schedules.jpg"
+               aria-label="GPipe and 1F1B pipeline schedules filling in cycle by cycle, with an activation-memory gauge under each">
+          <source src="../assets/mp4/pipeline-schedules.mp4" type="video/mp4">
+          Your browser does not support embedded video.
+        </video>
+        <figcaption>
+          <span>Top: GPipe. Bottom: 1F1B. The red gauge under each chart is the
+            number of activation sets the cluster is holding at that cycle,
+            drawn on one shared scale.</span>
+        </figcaption>
+      </figure>
+
+      <div class="post-body">
+        <div class="claim">
+          <p>
+            <strong>1F1B does not shrink the pipeline bubble.</strong> Watch the
+            two charts reach the right edge together. Then watch the two gauges.
+          </p>
+        </div>
+
+        <p>
+          The usual sentence about 1F1B is that it reduces the bubble. It is
+          repeated in blog posts, in slide decks, and in the framing of most
+          diagrams of the two schedules — and it is wrong in a way that matters,
+          because it points at the wrong reason to adopt it.
+        </p>
+
+        <h2>What the simulation measures</h2>
+        <p>
+          Neither chart above is drawn by hand. Every operation is placed at the
+          first cycle its dependencies allow: forward <code>m</code> on stage
+          <code>p</code> waits for forward <code>m</code> on stage
+          <code>p-1</code>; backward <code>m</code> waits for backward
+          <code>m</code> on stage <code>p+1</code>, or for its own forward if it
+          is on the last stage. The <em>only</em> difference between the two runs
+          is the order each stage is told to work through its own queue.
+        </p>
+
+        <div class="results">
+          <table>
+            <thead>
+              <tr><th>Measured</th><th>GPipe</th><th>1F1B</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Makespan</td><td class="n same">15 cycles</td><td class="n same">15 cycles</td></tr>
+              <tr><td>Idle stage-slots (the bubble)</td><td class="n same">12</td><td class="n same">12</td></tr>
+              <tr><td>Activation sets held at the peak</td><td class="n diff">23</td><td class="n diff">6</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h2>Why the bubble cannot move</h2>
+        <p>
+          The bubble is the cost of filling and draining a pipeline, and it is
+          fixed by the shape of the dependency graph rather than by the order
+          work is issued. The last stage cannot start until the first forward has
+          walked all the way down to it; the first stage cannot finish until the
+          last backward has walked all the way back up. That round trip is
+          <code>P-1</code> stages of latency at each end, against
+          <code>M</code> microbatches of useful work — the familiar
+          <code>(P-1)/M</code>.
+        </p>
+        <p>
+          1F1B reorders operations <em>within</em> a stage. Reordering a queue
+          cannot shorten the critical path through a graph it does not change, so
+          the finish time is identical. The animation makes this checkable rather
+          than assertable: if you can find a cycle where one chart is ahead of the
+          other, the claim is false.
+        </p>
+
+        <h2>Why the memory does move</h2>
+        <p>
+          A forward pass has to keep its activations until the matching backward
+          consumes them. That interval — forward finishes, backward begins — is
+          the entire story, and the two schedules stretch it very differently.
+        </p>
+        <p>
+          GPipe runs <strong>every</strong> forward before <strong>any</strong>
+          backward, so microbatch 0's activations sit in memory while all five
+          later forwards run. At the peak the cluster is holding almost every
+          microbatch's activations at once. 1F1B starts backwards the moment the
+          pipeline is full, so each stage carries roughly <code>P</code> sets
+          instead of <code>M</code>, and the gauge stays flat instead of climbing
+          to a hump.
+        </p>
+
+        <h2>The trade this actually decides</h2>
+        <p>
+          Here is why the "1F1B shrinks the bubble" framing is worse than merely
+          inaccurate. The bubble is <code>(P-1)/M</code>, so the lever you reach
+          for is <strong>more microbatches</strong>. Under GPipe, every microbatch
+          you add to shrink the bubble also adds a set of activations to the peak.
+          The two goals fight.
+        </p>
+        <p>
+          1F1B decouples them. Its peak is set by the pipeline depth, not the
+          microbatch count, so you can raise <code>M</code> until the bubble is
+          negligible and the memory high-water mark does not follow. That is the
+          reason to adopt it, and it is invisible in a diagram that draws only the
+          boxes and not what is being held while the boxes run.
+        </p>
+
+        <h2>So what does shrink the bubble?</h2>
+        <p>
+          Splitting each device's work into several non-contiguous chunks of
+          layers — the interleaved schedule in Megatron-LM — genuinely does, at
+          the cost of more cross-device traffic. That is the next post in this
+          series, and it gets the same treatment: simulated, measured, and
+          animated from the simulation rather than illustrated alongside it.
+        </p>
+
+        <h2>Run it yourself</h2>
+        <p>
+          The scene refuses to render if its own claim stops being true. The
+          makespans are asserted equal at import time, so an edit that made 1F1B
+          finish earlier would raise instead of producing a convincing video of
+          something false.
+        </p>
+<pre><code>git clone https://github.com/SciMigo/straightedge
+cd straightedge &amp;&amp; python3 -m pip install -e '.[render]'
+cd examples/pipeline_schedules &amp;&amp; manim -qm scene.py PipelineSchedules</code></pre>
+        <p>
+          Change <code>P</code> and <code>M</code> at the top of the file and the
+          charts, the gauges, and the numbers in the closing line all follow —
+          they are read from the simulation, not typed into the scene.
+        </p>
+      </div>
+
+      <nav class="series-nav" aria-label="Series navigation">
+        <span>
+          <span class="muted">Series</span>
+          <a href="index.html">Dataflow, executed</a>
+        </span>
+        <span class="next">
+          <span class="muted">Next</span>
+          <a href="systolic-skew.html">Why the systolic array feeds itself diagonally</a>
+        </span>
+      </nav>
+    </main>
+  </body>
+</html>

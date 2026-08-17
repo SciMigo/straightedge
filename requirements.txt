@@ -1,0 +1,7 @@
+# Convenience install for full local dev + rendering + STT.
+# The core package itself has NO required runtime deps; everything below is an
+# optional extra declared in pyproject.toml (the single source of truth).
+#
+#   pip install -r requirements.txt
+#
+.[render,stt,dev]

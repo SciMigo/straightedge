@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#090d14">
+    <meta name="description" content="The diagonal in a systolic array is not a drawing convention. Entries entering on cycle t are exactly the anti-diagonal m + k = t, because that is the only arrival time at which a multiply meets the running sum it belongs to.">
+    <meta property="og:title" content="Why the systolic array feeds itself diagonally">
+    <meta property="og:description" content="A weight-stationary matrix unit executed cycle by cycle: the skew is forced by the schedule, and each weight is read once instead of once per output.">
+    <meta property="og:image" content="https://scimigo.github.io/straightedge/assets/posters/systolic-array.jpg">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://scimigo.github.io/straightedge/posts/systolic-skew.html">
+    <meta name="twitter:card" content="player">
+    <title>Why the systolic array feeds itself diagonally</title>
+    <link rel="stylesheet" href="../styles.css">
+    <link rel="stylesheet" href="post.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="wordmark" href="../index.html" aria-label="Straightedge, back to the gallery">
+        <span class="wordmark-mark" aria-hidden="true"></span>
+        <span>Straightedge</span>
+      </a>
+      <a class="repo-link" href="index.html">All writeups <span aria-hidden="true">↗</span></a>
+    </header>
+
+    <main class="post">
+      <div class="post-head">
+        <p class="post-kicker">Dataflow, executed · 02</p>
+        <h1>Why the systolic array feeds itself diagonally</h1>
+        <p class="standfirst">
+          Every explainer draws numbers entering a grid on a diagonal and moves
+          on. The diagonal is not a convention someone chose — it is the only
+          arrival schedule that works, and you can watch it fall out of the
+          timing rules.
+        </p>
+        <p class="byline">
+          <span>3 &times; 3 weight-stationary array · one cell per cycle</span>
+          <span>Re-renders from
+            <code>examples/systolic_array/scene.py</code></span>
+        </p>
+      </div>
+
+      <figure class="post-figure">
+        <video controls playsinline preload="metadata"
+               poster="../assets/posters/systolic-array.jpg"
+               aria-label="A weight-stationary systolic array computing a matrix product cycle by cycle, with the input matrix on the left dimming as entries are consumed and the result matrix filling on the right">
+          <source src="../assets/mp4/systolic-array.mp4" type="video/mp4">
+          Your browser does not support embedded video.
+        </video>
+        <figcaption>
+          <span><strong>A</strong> streams in from the left, and each entry dims
+            as it is consumed. <strong>B</strong> is loaded into the cells once
+            and never moves. <strong>Y</strong> fills in on the right as each sum
+            falls out of the bottom of its column.</span>
+        </figcaption>
+      </figure>
+
+      <div class="post-body">
+        <div class="claim">
+          <p>
+            <strong>Watch the left-hand matrix, not the array.</strong> The
+            entries that leave on cycle <em>t</em> are exactly the anti-diagonal
+            <code>m + k = t</code>. The staircase sweeping across A <em>is</em>
+            the skew.
+          </p>
+        </div>
+
+        <p>
+          That is the part usually left as an illustration. A grid appears, values
+          slide in on a diagonal, and the viewer is expected to accept the shape.
+          But the shape is forced, and seeing where the values come from is what
+          makes it obvious — which is why the input matrix is on screen at all.
+        </p>
+
+        <h2>The three rules that produce it</h2>
+        <p>
+          Take <code>Y = A · B</code> with <code>A</code> streaming and
+          <code>B</code> stationary. The processing element at row <code>k</code>,
+          column <code>j</code> holds the weight <code>B[k][j]</code> for the
+          whole run. Two things then move, in different directions:
+        </p>
+        <p>
+          Activations travel <strong>rightwards</strong>, one cell per cycle, so
+          <code>A[m][k]</code> entering row <code>k</code> reaches column
+          <code>j</code> at cycle <code>m + k + j</code>. Partial sums travel
+          <strong>downwards</strong>, one cell per cycle, so the running total for
+          output <code>Y[m][j]</code> is at row <code>k</code> at the same cycle
+          <code>m + k + j</code>.
+        </p>
+        <p>
+          Those two expressions are equal on purpose. The multiply at
+          <code>PE(k, j)</code> only produces a correct result if the activation
+          and the running sum that belong together arrive on the same cycle, and
+          the only way to arrange that is to launch row <code>k</code> of the
+          stream <code>k</code> cycles late. Skew row 0 by anything, or launch the
+          rows together, and every multiply meets the wrong partial sum. The
+          diagonal is not aesthetic; it is a rendezvous condition.
+        </p>
+
+        <h2>What the array actually buys</h2>
+        <p>
+          The second thing a static diagram cannot show is why anyone builds this.
+          A naive matrix multiply re-reads a weight for every output it
+          contributes to: <code>M &times; K &times; N</code> reads, 27 for the
+          product in the video. The array reads each weight <em>once</em> —
+          <code>K &times; N</code>, so 9 — and then lets every activation in the
+          stream flow past it.
+        </p>
+
+        <div class="results">
+          <table>
+            <thead>
+              <tr><th>Quantity</th><th>Rule</th><th>In the video</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Weight reads from SRAM</td><td><code>K &times; N</code></td><td class="n same">9</td></tr>
+              <tr><td>Naive GEMM weight reads</td><td><code>M &times; K &times; N</code></td><td class="n diff">27</td></tr>
+              <tr><td>Activation arrives at PE(k, j)</td><td><code>m + k + j</code></td><td class="n">—</td></tr>
+              <tr><td>Output leaves column j</td><td><code>m + K + j</code></td><td class="n">—</td></tr>
+              <tr><td>Total cycles</td><td><code>M + K + N - 2</code>, plus drain</td><td class="n">8</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p>
+          The ratio is the point, not the constant: reads fall by a factor of
+          <code>M</code>, the length of the activation stream. That is why real
+          arrays are large and fed for a long time — a 256&times;256 unit
+          amortises its weight load across thousands of rows, and the memory
+          system stops being the thing that decides throughput.
+        </p>
+
+        <h2>Nothing here is drawn</h2>
+        <p>
+          Every tile in the animation is placed by the timing rules above, and
+          each output is asserted against <code>A @ B</code> as it leaves the
+          bottom of the array. A scene with the skew wrong does not render a
+          convincing picture of a broken schedule — it raises.
+        </p>
+<pre><code>git clone https://github.com/SciMigo/straightedge
+cd straightedge &amp;&amp; python3 -m pip install -e '.[render]'
+cd examples/systolic_array &amp;&amp; manim -qm scene.py SystolicArray</code></pre>
+        <p>
+          Change <code>A</code> or <code>B</code> at the top of the file and the
+          weights, the arrival times, the result matrix and the read counts all
+          follow. The one thing you cannot do is make it show an answer that is
+          not the product.
+        </p>
+
+        <h2>A note on what the picture had to lose</h2>
+        <p>
+          The array in the video has no self-loops, though a real weight-stationary
+          cell holds its weight across cycles and every accurate block diagram
+          shows that. At the size a reader actually watches this — a card in a
+          feed, 200 pixels wide — each extra stroke costs more legibility than the
+          fact is worth, and the arrows between cells are what make the picture
+          read as a systolic array at a glance. Worth stating rather than hiding:
+          a simplification you cannot see is indistinguishable from an error.
+        </p>
+      </div>
+
+      <nav class="series-nav" aria-label="Series navigation">
+        <span>
+          <span class="muted">Previous</span>
+          <a href="pipeline-bubble.html">The pipeline bubble 1F1B doesn't fix</a>
+        </span>
+        <span class="next">
+          <span class="muted">Next</span>
+          Ring all-reduce: the bytes per rank don't grow
+        </span>
+      </nav>
+    </main>
+  </body>
+</html>

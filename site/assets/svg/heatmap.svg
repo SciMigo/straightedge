@@ -1,0 +1,62 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="279" height="275" viewBox="0 0 279 275" class="diagram">
+<style>
+.diagram-point { fill: #666; }
+.diagram-point-visible { fill: #4CAF50; }
+.diagram-point-hidden { fill: #ccc; }
+.diagram-point-origin { fill: #2196F3; }
+.diagram-point-highlight { fill: #FF9800; }
+.diagram-ray { stroke: #999; stroke-width: 1; stroke-dasharray: 4,2; fill: none; }
+.diagram-axis { stroke: #333; stroke-width: 2; fill: none; }
+.diagram-grid { stroke: #eee; stroke-width: 1; fill: none; }
+.diagram-label { font-size: 12px; font-family: sans-serif; fill: #333; }
+.diagram-label-small { font-size: 10px; font-family: sans-serif; fill: #666; }
+
+.hm-title { font-size: 14px; font-family: sans-serif; fill: #333; font-weight: bold; }
+.hm-row-label { font-size: 11px; font-family: sans-serif; fill: #555; }
+.hm-col-label { font-size: 11px; font-family: sans-serif; fill: #555; }
+.hm-value { font-size: 10px; font-family: monospace; }
+.hm-caption { font-size: 11px; font-family: sans-serif; fill: #666; }
+</style>
+<text x="139.5" y="18" class="hm-title" text-anchor="middle">Attention weights</text>
+<text x="101.5" y="67" class="hm-col-label" text-anchor="middle">key 1</text>
+<text x="146.5" y="67" class="hm-col-label" text-anchor="middle">key 2</text>
+<text x="191.5" y="67" class="hm-col-label" text-anchor="middle">key 3</text>
+<text x="236.5" y="67" class="hm-col-label" text-anchor="middle">key 4</text>
+<text x="71" y="101.5" class="hm-row-label" text-anchor="end">query 1</text>
+<text x="71" y="146.5" class="hm-row-label" text-anchor="end">query 2</text>
+<text x="71" y="191.5" class="hm-row-label" text-anchor="end">query 3</text>
+<text x="71" y="236.5" class="hm-row-label" text-anchor="end">query 4</text>
+<rect x="79" y="75" width="45" height="45" fill="#fde725" stroke="#fff" stroke-width="1"/>
+<text x="101.5" y="101.5" class="hm-value" text-anchor="middle" fill="#fff">0.92</text>
+<rect x="124" y="75" width="45" height="45" fill="#400d58" stroke="#fff" stroke-width="1"/>
+<text x="146.5" y="101.5" class="hm-value" text-anchor="middle" fill="#333">0.05</text>
+<rect x="169" y="75" width="45" height="45" fill="#430455" stroke="#fff" stroke-width="1"/>
+<text x="191.5" y="101.5" class="hm-value" text-anchor="middle" fill="#333">0.02</text>
+<rect x="214" y="75" width="45" height="45" fill="#440154" stroke="#fff" stroke-width="1"/>
+<text x="236.5" y="101.5" class="hm-value" text-anchor="middle" fill="#333">0.01</text>
+<rect x="79" y="120" width="45" height="45" fill="#3b2361" stroke="#fff" stroke-width="1"/>
+<text x="101.5" y="146.5" class="hm-value" text-anchor="middle" fill="#333">0.12</text>
+<rect x="124" y="120" width="45" height="45" fill="#afc849" stroke="#fff" stroke-width="1"/>
+<text x="146.5" y="146.5" class="hm-value" text-anchor="middle" fill="#fff">0.76</text>
+<rect x="169" y="120" width="45" height="45" fill="#3d1a5d" stroke="#fff" stroke-width="1"/>
+<text x="191.5" y="146.5" class="hm-value" text-anchor="middle" fill="#333">0.09</text>
+<rect x="214" y="120" width="45" height="45" fill="#420756" stroke="#fff" stroke-width="1"/>
+<text x="236.5" y="146.5" class="hm-value" text-anchor="middle" fill="#333">0.03</text>
+<rect x="79" y="165" width="45" height="45" fill="#410a57" stroke="#fff" stroke-width="1"/>
+<text x="101.5" y="191.5" class="hm-value" text-anchor="middle" fill="#333">0.04</text>
+<rect x="124" y="165" width="45" height="45" fill="#34406c" stroke="#fff" stroke-width="1"/>
+<text x="146.5" y="191.5" class="hm-value" text-anchor="middle" fill="#333">0.21</text>
+<rect x="169" y="165" width="45" height="45" fill="#88b95b" stroke="#fff" stroke-width="1"/>
+<text x="191.5" y="191.5" class="hm-value" text-anchor="middle" fill="#fff">0.68</text>
+<rect x="214" y="165" width="45" height="45" fill="#3f135b" stroke="#fff" stroke-width="1"/>
+<text x="236.5" y="191.5" class="hm-value" text-anchor="middle" fill="#333">0.07</text>
+<rect x="79" y="210" width="45" height="45" fill="#430455" stroke="#fff" stroke-width="1"/>
+<text x="101.5" y="236.5" class="hm-value" text-anchor="middle" fill="#333">0.02</text>
+<rect x="124" y="210" width="45" height="45" fill="#40105a" stroke="#fff" stroke-width="1"/>
+<text x="146.5" y="236.5" class="hm-value" text-anchor="middle" fill="#333">0.06</text>
+<rect x="169" y="210" width="45" height="45" fill="#363668" stroke="#fff" stroke-width="1"/>
+<text x="191.5" y="236.5" class="hm-value" text-anchor="middle" fill="#333">0.18</text>
+<rect x="214" y="210" width="45" height="45" fill="#a5c44d" stroke="#fff" stroke-width="1"/>
+<text x="236.5" y="236.5" class="hm-value" text-anchor="middle" fill="#fff">0.74</text>
+<rect x="79" y="75" width="180" height="180" fill="none" stroke="#ccc" stroke-width="1"/>
+</svg>

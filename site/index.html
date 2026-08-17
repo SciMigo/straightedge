@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#090d14">
+    <meta name="description" content="Straightedge renders deterministic SVG figures and Manim animations from structured descriptions, with checks before delivery.">
+    <meta property="og:title" content="Straightedge — checked visual gallery">
+    <meta property="og:description" content="Dependency-free SVG figures, prompt-driven animations, and assertion-backed simulations.">
+    <meta property="og:image" content="https://scimigo.github.io/straightedge/assets/posters/unit-circle-sine.jpg">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://scimigo.github.io/straightedge/">
+    <title>Straightedge — checked visual gallery</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="wordmark" href="#top" aria-label="Straightedge gallery, back to top">
+        <span class="wordmark-mark" aria-hidden="true"></span>
+        <span>Straightedge</span>
+      </a>
+      <span class="header-links">
+        <a class="repo-link" href="posts/index.html">Writeups</a>
+        <a class="repo-link" href="https://github.com/SciMigo/straightedge">View on GitHub <span aria-hidden="true">↗</span></a>
+      </span>
+    </header>
+
+    <main id="top">
+      <section class="hero" aria-labelledby="hero-title">
+        <p class="eyebrow">Structured description → checked visual</p>
+        <h1 id="hero-title">Figures and animations that show their work.</h1>
+        <p class="hero-copy">
+          Straightedge turns structured intent into deterministic SVG figures or
+          Manim scenes, then exposes the geometry needed to catch visible defects
+          before a visual reaches a lecture, document, or product.
+        </p>
+        <div class="hero-proof" aria-label="Gallery contents">
+          <div><strong>35</strong><span>dependency-free SVG templates</span></div>
+          <div><strong>7</strong><span>playable animation examples</span></div>
+          <div><strong>0</strong><span>runtime dependencies for figures</span></div>
+        </div>
+      </section>
+
+      <section class="gallery-section" aria-labelledby="figures-heading" id="figures">
+        <div class="section-heading">
+          <div>
+            <p class="section-number">01 / Dependency-free SVG</p>
+            <h2 id="figures-heading">Figures for more than math.</h2>
+          </div>
+          <p>
+            A structured dictionary becomes an SVG string with no browser, network,
+            or rendering service. The same lane covers equations, data structures,
+            architecture, project plans, and business diagrams.
+          </p>
+        </div>
+
+        <div class="figure-grid">
+          <article class="figure-card figure-wide">
+            <div class="figure-stage"><img src="assets/svg/architecture.svg" alt="A checked visual pipeline architecture diagram"></div>
+            <div class="card-copy">
+              <p class="card-kicker">Systems · architecture_diagram</p>
+              <h3>Components, connections, and annotations</h3>
+              <p class="spec"><span>Structured hint</span> Services and stores are laid out from IDs; labelled edges are routed between them.</p>
+            </div>
+          </article>
+
+          <article class="figure-card">
+            <div class="figure-stage"><img src="assets/svg/riemann-sum.svg" alt="Midpoint Riemann sum with eight rectangles"></div>
+            <div class="card-copy">
+              <p class="card-kicker">Math · riemann_sum</p>
+              <h3>Area, sampled and annotated</h3>
+              <p class="spec"><span>Structured hint</span> <code>f(x)=x²</code>, eight midpoint rectangles, one marked sample.</p>
+            </div>
+          </article>
+
+          <article class="figure-card">
+            <div class="figure-stage"><img src="assets/svg/unit-circle.svg" alt="Unit circle with reference triangle and trigonometric values"></div>
+            <div class="card-copy">
+              <p class="card-kicker">Math · unit_circle</p>
+              <h3>One angle, four linked quantities</h3>
+              <p class="spec"><span>Structured hint</span> A 45° point with its reference triangle, sine, cosine, and tangent.</p>
+            </div>
+          </article>
+
+          <article class="figure-card">
+            <div class="figure-stage"><img src="assets/svg/binary-tree.svg" alt="Binary tree traversal with current and visited nodes"></div>
+            <div class="card-copy">
+              <p class="card-kicker">Data structures · binary_tree</p>
+              <h3>Traversal state is part of the picture</h3>
+              <p class="spec"><span>Structured hint</span> Nested nodes, a highlighted path, a pointer, and a root annotation.</p>
+            </div>
+          </article>
+
+          <article class="figure-card">
+            <div class="figure-stage"><img src="assets/svg/linked-list.svg" alt="Linked list with visited and current nodes"></div>
+            <div class="card-copy">
+              <p class="card-kicker">Data structures · linked_list</p>
+              <h3>Pointers without hand-drawn arrows</h3>
+              <p class="spec"><span>Structured hint</span> Four nodes, two visited states, and a named current pointer.</p>
+            </div>
+          </article>
+
+          <article class="figure-card">
+            <div class="figure-stage"><img src="assets/svg/heatmap.svg" alt="Four by four attention-weight heatmap"></div>
+            <div class="card-copy">
+              <p class="card-kicker">Data · heatmap</p>
+              <h3>Values carry their own color scale</h3>
+              <p class="spec"><span>Structured hint</span> A labelled attention matrix using a normalized viridis palette.</p>
+            </div>
+          </article>
+
+          <article class="figure-card">
+            <div class="figure-stage"><img src="assets/svg/gantt.svg" alt="Release-plan Gantt chart with critical tasks"></div>
+            <div class="card-copy">
+              <p class="card-kicker">Projects · gantt</p>
+              <h3>The critical work reads immediately</h3>
+              <p class="spec"><span>Structured hint</span> Start, duration, and critical status determine every bar.</p>
+            </div>
+          </article>
+
+          <article class="figure-card figure-wide">
+            <div class="figure-stage"><img src="assets/svg/flow-diagram.svg" alt="Plan, draw, check, and repair process diagram"></div>
+            <div class="card-copy">
+              <p class="card-kicker">Process · flow_diagram</p>
+              <h3>A render-and-repair loop</h3>
+              <p class="spec"><span>Structured hint</span> Labelled steps wrap without breaking words or overflowing the canvas.</p>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="gallery-section" aria-labelledby="prompt-heading">
+        <div class="section-heading">
+          <div>
+            <p class="section-number">02 / Manim animation</p>
+            <h2 id="prompt-heading">Animated from a prompt</h2>
+          </div>
+          <p>
+            These scenes are generated by Straightedge’s own planner and template
+            path. Each card keeps the input intent beside the result; the original
+            inputs here came through the optional Chinese teaching adapter.
+          </p>
+        </div>
+
+        <div class="gallery-grid">
+          <article class="scene-card">
+            <video controls playsinline preload="metadata" poster="assets/posters/derivative-tangent.jpg" aria-label="Derivative tangent animation">
+              <source src="assets/mp4/derivative-tangent.mp4" type="video/mp4">
+              Your browser does not support embedded video.
+            </video>
+            <div class="card-copy">
+              <p class="card-kicker">Calculus · tangent as a limit</p>
+              <h3>Secant becomes tangent</h3>
+              <p class="prompt"><span>Input intent</span> Show the derivative of <code>y=x²</code> by moving a secant toward its tangent and explaining the slope.</p>
+              <details class="source-input"><summary>Original input · Chinese adapter</summary><p lang="zh">“画 y=x² 的导数，用割线逼近切线并解释斜率”</p></details>
+            </div>
+          </article>
+
+          <article class="scene-card">
+            <video controls playsinline preload="metadata" poster="assets/posters/riemann-integral.jpg" aria-label="Riemann integral animation">
+              <source src="assets/mp4/riemann-integral.mp4" type="video/mp4">
+              Your browser does not support embedded video.
+            </video>
+            <div class="card-copy">
+              <p class="card-kicker">Calculus · area by refinement</p>
+              <h3>Rectangles converge on area</h3>
+              <p class="prompt"><span>Input intent</span> Show the integral area beneath <code>y=x²+1</code> using refining Riemann rectangles.</p>
+              <details class="source-input"><summary>Original input · Chinese adapter</summary><p lang="zh">“画 y=x²+1 的积分面积，用黎曼矩形展示”</p></details>
+            </div>
+          </article>
+
+          <article class="scene-card">
+            <video controls playsinline preload="metadata" poster="assets/posters/unit-circle-sine.jpg" aria-label="Unit circle generating a sine curve">
+              <source src="assets/mp4/unit-circle-sine.mp4" type="video/mp4">
+              Your browser does not support embedded video.
+            </video>
+            <div class="card-copy">
+              <p class="card-kicker">Trigonometry · linked representations</p>
+              <h3>A circle draws the sine wave</h3>
+              <p class="prompt"><span>Input intent</span> Synchronize a moving point on the unit circle with one full period of a sine graph.</p>
+              <details class="source-input"><summary>Original input · Chinese adapter</summary><p lang="zh">“用单位圆上的动点同步生成正弦函数图像，展示一个周期”</p></details>
+            </div>
+          </article>
+
+          <article class="scene-card">
+            <video controls playsinline preload="metadata" poster="assets/posters/ellipse-foci.jpg" aria-label="Ellipse focus-distance animation">
+              <source src="assets/mp4/ellipse-foci.mp4" type="video/mp4">
+              Your browser does not support embedded video.
+            </video>
+            <div class="card-copy">
+              <p class="card-kicker">Conics · invariant distance</p>
+              <h3>The focal sum stays fixed</h3>
+              <p class="prompt"><span>Input intent</span> Mark an ellipse’s two foci and show that a moving point keeps their distance sum constant.</p>
+              <details class="source-input"><summary>Original input · Chinese adapter</summary><p lang="zh">“画一个椭圆，标出两个焦点，展示动点到焦点的距离和保持不变”</p></details>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="gallery-section hand-section" aria-labelledby="hand-heading">
+        <div class="section-heading">
+          <div>
+            <p class="section-number">03 / Standalone examples</p>
+            <h2 id="hand-heading">Written by hand, kept honest by the checks</h2>
+          </div>
+          <p>
+            These dataflow examples do not use the prompt pipeline. They simulate
+            the mechanism, assert its central claim, and only then animate it.
+            <a href="posts/index.html">Read the writeups &rarr;</a>
+          </p>
+        </div>
+
+        <div class="gallery-grid gallery-grid-three">
+          <article class="scene-card claim-card">
+            <video controls playsinline preload="metadata" poster="assets/posters/systolic-array.jpg" aria-label="Weight-stationary systolic array animation">
+              <source src="assets/mp4/systolic-array.mp4" type="video/mp4">
+              Your browser does not support embedded video.
+            </video>
+            <div class="card-copy">
+              <p class="card-kicker">Systolic array</p>
+              <h3>Data moves; the weights stay</h3>
+              <p class="claim"><span>Asserted claim</span> Every emitted value equals <code>A @ B</code>, while the send log proves the reduction in weight reads.</p>
+            </div>
+          </article>
+
+          <article class="scene-card claim-card">
+            <video controls playsinline preload="metadata" poster="assets/posters/pipeline-schedules.jpg" aria-label="GPipe and 1F1B pipeline schedule comparison">
+              <source src="assets/mp4/pipeline-schedules.mp4" type="video/mp4">
+              Your browser does not support embedded video.
+            </video>
+            <div class="card-copy">
+              <p class="card-kicker">Pipeline parallelism</p>
+              <h3>Same bubble, less memory</h3>
+              <p class="claim"><span>Asserted claim</span> GPipe and 1F1B finish together, but the simulated peak activation count falls from 23 to 6.</p>
+            </div>
+          </article>
+
+          <article class="scene-card claim-card">
+            <video controls playsinline preload="metadata" poster="assets/posters/ring-allreduce.jpg" aria-label="Ring all-reduce animation">
+              <source src="assets/mp4/ring-allreduce.mp4" type="video/mp4">
+              Your browser does not support embedded video.
+            </video>
+            <div class="card-copy">
+              <p class="card-kicker">Data parallelism</p>
+              <h3>Under 2D, at every ring size</h3>
+              <p class="claim"><span>Asserted claim</span> Every rank receives the true elementwise sum; counted bytes stay below 2D while serial hops grow.</p>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="closing" aria-labelledby="closing-title">
+        <p class="eyebrow">Build the visual. Read the findings. Repair what is visible.</p>
+        <h2 id="closing-title">A library for visual agents that cannot see.</h2>
+        <a class="button" href="https://github.com/SciMigo/straightedge#make-an-svg-figure">Start with an SVG figure <span aria-hidden="true">→</span></a>
+      </section>
+    </main>
+
+    <footer>
+      <p>Straightedge is open source.</p>
+      <p>SVG from the standard library. Video rendered with Manim Community Edition.</p>
+    </footer>
+  </body>
+</html>

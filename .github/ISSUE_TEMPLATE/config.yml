@@ -1,0 +1,7 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/SciMigo/straightedge/security/advisories/new
+    about: >-
+      This project runs generated code and evaluates expressions. Report a
+      sandbox or expression escape privately here, never as a public issue.

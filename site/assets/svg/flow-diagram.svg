@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="850" height="147" viewBox="0 0 850 147" class="diagram flow-diagram">
+<style>
+.fd-title{font:600 19px 'Noto Sans SC',sans-serif;fill:#0f172a}
+.fd-box{fill:#ffffff;stroke:#d8dee6;stroke-width:1.4}
+.fd-bar{fill:#2f7d72}
+.fd-label{font:600 16px 'Noto Sans SC',sans-serif;fill:#1f2937}
+.fd-desc{font:13px 'Noto Sans SC',sans-serif;fill:#5b6573}
+.fd-edge{stroke:#2f7d72;stroke-width:2;fill:none}
+</style>
+<defs><marker id="flow-arrow" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L7,3 L0,6 Z" fill="#2f7d72"/></marker></defs>
+<text x="425.0" y="42" class="fd-title" text-anchor="middle">Render and repair loop</text>
+<path d="M190.0,90.5 L236.0,90.5" class="fd-edge" marker-end="url(#flow-arrow)"/>
+<path d="M402.0,90.5 L448.0,90.5" class="fd-edge" marker-end="url(#flow-arrow)"/>
+<path d="M614.0,90.5 L660.0,90.5" class="fd-edge" marker-end="url(#flow-arrow)"/>
+<g><rect x="24.0" y="58" width="166" height="65" rx="8" class="fd-box"/>
+<rect x="24.0" y="58" width="166" height="6" rx="3" class="fd-bar"/>
+<text x="107.0" y="90.0" class="fd-label" text-anchor="middle">Plan</text>
+<text x="107.0" y="112.0" class="fd-desc" text-anchor="middle">structured intent</text></g>
+<g><rect x="236.0" y="58" width="166" height="65" rx="8" class="fd-box"/>
+<rect x="236.0" y="58" width="166" height="6" rx="3" class="fd-bar"/>
+<text x="319.0" y="90.0" class="fd-label" text-anchor="middle">Draw</text>
+<text x="319.0" y="112.0" class="fd-desc" text-anchor="middle">SVG or Manim</text></g>
+<g><rect x="448.0" y="58" width="166" height="65" rx="8" class="fd-box"/>
+<rect x="448.0" y="58" width="166" height="6" rx="3" class="fd-bar"/>
+<text x="531.0" y="90.0" class="fd-label" text-anchor="middle">Check</text>
+<text x="531.0" y="112.0" class="fd-desc" text-anchor="middle">find visible defects</text></g>
+<g><rect x="660.0" y="58" width="166" height="65" rx="8" class="fd-box"/>
+<rect x="660.0" y="58" width="166" height="6" rx="3" class="fd-bar"/>
+<text x="743.0" y="90.0" class="fd-label" text-anchor="middle">Repair</text>
+<text x="743.0" y="112.0" class="fd-desc" text-anchor="middle">change the source</text></g>
+</svg>
