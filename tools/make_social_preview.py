@@ -20,13 +20,24 @@ Uploading is manual. The REST API exposes no endpoint for it:
 
     Settings -> General -> Social preview -> Edit -> Upload an image
 
-Requires `rsvg-convert` (librsvg) and Pillow.
+Requires `rsvg-convert` (librsvg), Pillow, and the **DejaVu** fonts.
+
+    Debian/Ubuntu   apt install librsvg2-bin fonts-dejavu-core
+    macOS           brew install librsvg && brew install --cask font-dejavu
+
+DejaVu specifically, not whatever the system happens to have. The card in the
+repository was drawn with it, and a run that quietly substituted Helvetica would
+produce a different card while reporting success -- the person regenerating it
+would have no way to tell. Substituting is therefore an error, not a fallback.
+Point `--font-dir` at a directory holding `DejaVuSans.ttf`, `DejaVuSans-Bold.ttf`
+and `DejaVuSansMono.ttf` if yours live somewhere unusual.
 
     python tools/make_social_preview.py
 """
 
 from __future__ import annotations
 
+import argparse
 import subprocess
 import sys
 from pathlib import Path
@@ -50,10 +61,48 @@ MUTED = (108, 117, 128)
 ACCENT = (33, 150, 243)
 RULE = (226, 230, 235)
 
-FONT_DIR = Path("/usr/share/fonts/truetype/dejavu")
-SANS = FONT_DIR / "DejaVuSans.ttf"
-SANS_BOLD = FONT_DIR / "DejaVuSans-Bold.ttf"
-MONO = FONT_DIR / "DejaVuSansMono.ttf"
+# Where DejaVu lands on the platforms anyone is likely to run this from. The
+# first hard-coded path was Debian's, which failed on macOS with an `apt`
+# instruction -- an error message that is wrong twice over.
+FONT_SEARCH_PATHS = (
+    Path("/usr/share/fonts/truetype/dejavu"),          # Debian, Ubuntu
+    Path("/usr/share/fonts/dejavu"),                   # Fedora, Arch
+    Path("/opt/homebrew/share/fonts"),                 # macOS, Apple silicon
+    Path("/usr/local/share/fonts"),                    # macOS, Intel
+    Path.home() / "Library" / "Fonts",                 # macOS, per-user
+    Path("C:/Windows/Fonts"),                          # Windows
+)
+
+FONT_FILES = ("DejaVuSans.ttf", "DejaVuSans-Bold.ttf", "DejaVuSansMono.ttf")
+
+INSTALL_HINT = {
+    "linux": "apt install fonts-dejavu-core   (or dnf install dejavu-sans-fonts)",
+    "darwin": "brew install --cask font-dejavu",
+    "win32": "download DejaVu from https://dejavu-fonts.github.io/ and install it",
+}
+
+
+def find_font_dir(override: Path | None = None) -> Path:
+    """Locate a directory holding all three DejaVu faces.
+
+    Returns the first complete match. A partial match is skipped rather than
+    used: three faces from two directories is how a card ends up mixing
+    typefaces, which is harder to notice than an outright failure.
+    """
+    candidates = (override,) if override else FONT_SEARCH_PATHS
+    for directory in candidates:
+        if directory and all((directory / name).exists() for name in FONT_FILES):
+            return directory
+
+    hint = INSTALL_HINT.get(sys.platform, INSTALL_HINT["linux"])
+    searched = "\n  ".join(str(c) for c in candidates if c)
+    raise SystemExit(
+        "DejaVu fonts not found. The committed card was drawn with them, and "
+        "substituting another family would silently produce a different card.\n"
+        f"  {hint}\n"
+        f"Searched:\n  {searched}\n"
+        "Or pass --font-dir /path/to/fonts"
+    )
 
 # The figures are drawn in dark strokes on transparency: they are meant for a
 # light page, and would vanish on a dark card.
@@ -83,7 +132,7 @@ def rasterise(name: str, height: int) -> Image.Image:
     return Image.open(io.BytesIO(png)).convert("RGBA")
 
 
-def build() -> Image.Image:
+def build(font_dir: Path) -> Image.Image:
     card = Image.new("RGB", (W, H), BG)
     draw = ImageDraw.Draw(card)
 
@@ -98,9 +147,9 @@ def build() -> Image.Image:
             raise SystemExit(f"{name} overflows the bottom: {y + figure.height} > {H - MARGIN}")
         card.paste(figure, (x, y), figure)
 
-    title = ImageFont.truetype(str(SANS_BOLD), 74)
-    tag = ImageFont.truetype(str(SANS), 30)
-    meta = ImageFont.truetype(str(MONO), 22)
+    title = ImageFont.truetype(str(font_dir / "DejaVuSans-Bold.ttf"), 74)
+    tag = ImageFont.truetype(str(font_dir / "DejaVuSans.ttf"), 30)
+    meta = ImageFont.truetype(str(font_dir / "DejaVuSansMono.ttf"), 22)
 
     x = 84
     draw.text((x, 138), "Straightedge", font=title, fill=INK)
@@ -115,13 +164,22 @@ def build() -> Image.Image:
     return card
 
 
-def main() -> int:
-    if not SANS.exists():
-        raise SystemExit(f"missing font: {SANS} (apt install fonts-dejavu-core)")
-    card = build()
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument(
+        "--font-dir",
+        type=Path,
+        default=None,
+        help="directory holding the three DejaVu faces, if not in a standard location",
+    )
+    args = parser.parse_args(argv)
+
+    font_dir = find_font_dir(args.font_dir)
+    card = build(font_dir)
     OUT.parent.mkdir(parents=True, exist_ok=True)
     card.save(OUT, "PNG", optimize=True)
     print(f"{OUT.relative_to(ROOT)}  {card.size[0]}x{card.size[1]}  {OUT.stat().st_size // 1024}K")
+    print(f"fonts:  {font_dir}")
     print("upload: Settings -> General -> Social preview -> Edit")
     return 0
 
