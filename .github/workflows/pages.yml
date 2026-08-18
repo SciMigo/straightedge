@@ -29,6 +29,13 @@ jobs:
 
       - uses: actions/configure-pages@v6
 
+      # `tests.yml` runs this too, but both workflows fire on the same push to
+      # main and run in parallel — so the deploy could publish a stale feed
+      # before the test failed. Checking here as well is what makes the two
+      # orderings equivalent. Pure stdlib, so it needs no setup step.
+      - name: The Atom feed matches the posts
+        run: python3 tools/build_blog_feed.py --check
+
       - name: Upload gallery
         uses: actions/upload-pages-artifact@v5
         with:

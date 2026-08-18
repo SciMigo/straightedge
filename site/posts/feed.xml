@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>Straightedge blog</title>
+  <subtitle>Mechanisms simulated, asserted, and animated from the simulation.</subtitle>
+  <link href="https://scimigo.github.io/straightedge/posts/feed.xml" rel="self"/>
+  <link href="https://scimigo.github.io/straightedge/posts/"/>
+  <id>https://scimigo.github.io/straightedge/posts/</id>
+  <updated>2026-08-18T00:00:00Z</updated>
+  <author><name>SciMigo</name></author>
+  <entry>
+    <title>Matrix multiplication, four ways</title>
+    <link href="https://scimigo.github.io/straightedge/posts/matrix-product-four-ways.html"/>
+    <id>https://scimigo.github.io/straightedge/posts/matrix-product-four-ways.html</id>
+    <updated>2026-08-18T00:00:00Z</updated>
+    <summary>AB is taught as a rule for filling in entries. Three other readings of the same product — by column, by row, and as a sum of rank-1 terms — explain what a matrix product is for, and two of them are what a systolic array and tensor parallelism already execute.</summary>
+  </entry>
+  <entry>
+    <title>Why the systolic array feeds itself diagonally</title>
+    <link href="https://scimigo.github.io/straightedge/posts/systolic-skew.html"/>
+    <id>https://scimigo.github.io/straightedge/posts/systolic-skew.html</id>
+    <updated>2026-08-17T00:00:00Z</updated>
+    <summary>The diagonal in a systolic array is not a drawing convention. Entries entering on cycle t are exactly the anti-diagonal m + k = t, because that is the only arrival time at which a multiply meets the running sum it belongs to.</summary>
+  </entry>
+  <entry>
+    <title>Ring all-reduce: the bytes per rank don&#x27;t grow</title>
+    <link href="https://scimigo.github.io/straightedge/posts/ring-allreduce.html"/>
+    <id>https://scimigo.github.io/straightedge/posts/ring-allreduce.html</id>
+    <updated>2026-08-17T00:00:00Z</updated>
+    <summary>A ring all-reduce moves 2(N-1)/N times the buffer per rank — under 2D at every ring size, 1.5D at four ranks and 1.97D at sixty-four. Adding ranks does not cost bytes. What grows is the number of serial round trips.</summary>
+  </entry>
+  <entry>
+    <title>The pipeline bubble 1F1B doesn&#x27;t fix</title>
+    <link href="https://scimigo.github.io/straightedge/posts/pipeline-bubble.html"/>
+    <id>https://scimigo.github.io/straightedge/posts/pipeline-bubble.html</id>
+    <updated>2026-08-17T00:00:00Z</updated>
+    <summary>GPipe and 1F1B finish on the same cycle and idle for the same number of stage-slots. What 1F1B changes is activation memory — 23 sets against 6 — and that is the trade that decides whether a model fits.</summary>
+  </entry>
+</feed>
