@@ -2559,27 +2559,111 @@ def _function_scene(plan: AnimationPlan) -> str:
 
 
 
-def _fit_plane_reach(matrix, half_w: float, half_h: float,
-                     base_x: float = 6.0, base_y: float = 4.0) -> tuple[float, float]:
-    """Half-extents for a plane whose image under ``matrix`` fits the frame.
+#: Largest grid, in plane units. A cap rather than a fixed size: the grid is
+#: extended to fill the frame at whatever scale the content needs, and this
+#: stops a heavily shrunk scene from drawing two hundred lines to do it.
+_PLANE_RANGE_MAX = (12.0, 8.0)
 
-    The corner of a rectangle maps furthest, and for a linear map the extreme
-    image coordinate is ``a*|m00| + b*|m01|`` horizontally (and the analogous
-    sum vertically), so one scale factor on the base extents is enough. Never
-    scales *up*: a small matrix should not blow the grid past the frame in the
-    other direction.
+#: Half the frame, in scene units.
+_FRAME_HALF = (7.11, 4.0)
+
+#: How far the dashed eigenlines run, in plane units. Short enough to stay
+#: inside the grid, and deliberately excluded from the transform.
+_EIG_REACH = 3.0
+
+#: Smallest scale worth rendering, applied to the *content*: at 0.2 a unit
+#: square is a fifth of a scene unit and the grid behind it cannot be drawn
+#: coarsely enough to stay legible. Permissive by design — 10I still draws, at
+#: 0.4 — and it is the genuinely hopeless maps (50I, at 0.08) that are refused.
+_MIN_PLANE_SCALE = 0.2
+
+
+def _fit_plane_scale(matrix, vectors, *, want_det: bool = False,
+                     eig_reach: float = 0.0,
+                     frame: tuple[float, float] = _FRAME_HALF) -> float:
+    """Scene units per plane unit, so that *everything drawn* fits the frame.
+
+    The earlier version of this sized only the grid, and could not have done
+    more: ``NumberPlane`` keeps a unit size of one scene unit per plane unit
+    whatever range it is given, so shrinking the range shrank the grid and left
+    the arrows exactly where they were. Under ``10I`` the vector ``(1, 0)`` is
+    drawn at scene ``(1, 0)`` and ``ApplyMatrix`` sends it to ``(10, 0)`` —
+    outside a 7.11 half-frame, with a grid that "fits" underneath it.
+
+    Setting the plane's ``x_length``/``y_length`` instead makes the unit size
+    itself the free variable, and every mark placed through ``c2p`` — arrows,
+    labels, the unit square, the span, the eigenlines — scales with the grid
+    because they are all positioned in plane coordinates. ``ApplyMatrix`` acts
+    linearly on scene coordinates about the origin, so a point at ``s·v`` lands
+    at ``s·(Mv)`` and the same single scale covers the image too.
+
+    Returns 1.0 when nothing needs shrinking, and never scales *up*: a gentle
+    matrix should not be magnified to fill the frame.
     """
     (m00, m01), (m10, m11) = matrix
-    span_x = base_x * abs(m00) + base_y * abs(m01)
-    span_y = base_x * abs(m10) + base_y * abs(m11)
+
+    def image(px: float, py: float) -> tuple[float, float]:
+        return (m00 * px + m01 * py, m10 * px + m11 * py)
+
+    # The *content*, in plane coordinates, before and after the map — and
+    # pointedly not the grid. Including the grid's corner made it the thing
+    # that set the scale, because it is what maps furthest, and shrank the
+    # subject to a smudge in the middle to keep a background texture on screen.
+    # A coordinate plane running past the edge is what a plane does; a vector
+    # running past the edge is a bug. Only the second is fitted here.
+    points: list[tuple[float, float]] = [(abs(vx), abs(vy)) for vx, vy in vectors]
+    if want_det:
+        points.append((1.0, 1.0))          # the unit square's far corner
+    need_x = max(abs(px) for px, _ in points)
+    need_y = max(abs(py) for _, py in points)
+    for px, py in points:
+        ix, iy = image(px, py)
+        need_x, need_y = max(need_x, abs(ix)), max(need_y, abs(iy))
+
+    # Eigenlines are drawn but deliberately not transformed, so only their own
+    # extent counts.
+    need_x = max(need_x, eig_reach)
+    need_y = max(need_y, eig_reach)
+
+    scale = 1.0
+    if need_x > 0:
+        scale = min(scale, frame[0] / need_x)
+    if need_y > 0:
+        scale = min(scale, frame[1] / need_y)
+    # Truncated, never rounded. `round` can go *up* — 7.11/6.0 rounded to four
+    # places put a drawing 0.0004 units outside the frame it had just been
+    # solved to fit, which is a guarantee broken by its own tidying.
+    return math.floor(scale * 10000) / 10000
+
+
+def _plane_range(scale: float, matrix,
+                 frame: tuple[float, float] = _FRAME_HALF) -> tuple[float, float]:
+    """Grid extent in plane units, so the grid's *image* also stays in frame.
+
+    Two constraints, not one. :func:`_fit_plane_scale` sizes the content, and
+    this sizes the grid under it — because a grid drawn out to the frame edge
+    and then sheared runs past it, and ``qc`` reports every overflowing grid
+    line as an error. Letting that through would undo the fix this builder was
+    written for, which is recorded in the changelog: 11.8 units outside a 14.2
+    unit frame.
+
+    Starts from the range that exactly fills the frame at ``scale`` and shrinks
+    it until its image fits, which is the same solve the first version of this
+    did — the corner of a rectangle maps furthest, so one factor is enough.
+    """
+    (m00, m01), (m10, m11) = matrix
+    target_x, target_y = frame[0] / scale, frame[1] / scale
+
+    span_x = target_x * abs(m00) + target_y * abs(m01)
+    span_y = target_x * abs(m10) + target_y * abs(m11)
     t = 1.0
     if span_x > 0:
-        t = min(t, half_w / span_x)
+        t = min(t, target_x / span_x)
     if span_y > 0:
-        t = min(t, half_h / span_y)
-    # Below this the grid has too few lines to read as a grid at all.
-    t = max(t, 0.18)
-    return (round(base_x * t, 3), round(base_y * t, 3))
+        t = min(t, target_y / span_y)
+
+    return (min(_PLANE_RANGE_MAX[0], round(target_x * t, 3)),
+            min(_PLANE_RANGE_MAX[1], round(target_y * t, 3)))
 
 
 class _BeatKeys:
@@ -2643,18 +2727,25 @@ def _linear_algebra_scene(plan: AnimationPlan) -> str:
     lines.append("class GeneratedScene(Scene):")
     lines.append("    def construct(self):")
     lines.append("        M = [[%r, %r], [%r, %r]]" % (m00, m01, m10, m11))
-    # Size the plane so its *image* under M fits the frame, not the plane
-    # itself. A grid drawn to a fixed +/-6 and then stretched by a matrix with
-    # a large eigenvalue runs many units past the edge — QC measured 11.8 — and
-    # the transformed picture, the one the lesson is about, is the half that
-    # leaves the screen. Solving for the image instead keeps the whole
-    # animation inside the frame for any matrix, which is why this is computed
-    # rather than tuned.
-    half_w, half_h = 7.11, 4.0
-    x_reach, y_reach = _fit_plane_reach(matrix, half_w, half_h)
+    # Scale the whole drawing so its *image* under M fits the frame — grid,
+    # arrows, labels, unit square and span together, because they are all
+    # placed in plane coordinates and therefore all follow the plane's unit
+    # size. Sizing only the grid, as this did before, left the arrows at their
+    # literal scene coordinates: under 10I the vector (1, 0) was drawn one
+    # scene unit long, sent to (10, 0) by ApplyMatrix, and left the frame under
+    # a grid that "fitted" — and at any scale it meant a 1-unit arrow spanning
+    # several grid squares, which misstates the vector it is drawing.
+    scale = _fit_plane_scale(matrix, vectors, want_det=want_det,
+                             eig_reach=_EIG_REACH if pairs else 0.0)
+    range_x, range_y = _plane_range(scale, matrix)
     lines.append("        plane = NumberPlane(")
     lines.append("            x_range=[%r, %r, 1], y_range=[%r, %r, 1],"
-                 % (-x_reach, x_reach, -y_reach, y_reach))
+                 % (-range_x, range_x, -range_y, range_y))
+    # The scale lives here, not in the range. NumberPlane's unit size is one
+    # scene unit per plane unit unless x_length says otherwise, so this is the
+    # single knob that moves the grid and everything placed on it together.
+    lines.append("            x_length=%r, y_length=%r,"
+                 % (round(2 * range_x * scale, 4), round(2 * range_y * scale, 4)))
     lines.append("            background_line_style={\"stroke_color\": C_RULE, \"stroke_width\": 1,")
     lines.append("                                   \"stroke_opacity\": 0.5},")
     lines.append("        )")
@@ -2678,29 +2769,69 @@ def _linear_algebra_scene(plan: AnimationPlan) -> str:
             # arrowhead and the unit square instead of sitting under them.
             nx, ny = -vy, vx
             n = (nx * nx + ny * ny) ** 0.5 or 1.0
+            off = 0.42 / scale
             lines.append("        tags.add(_t(%r, font_size=26, color=%s)"
                          ".move_to(plane.c2p(%r, %r)))"
                          % (labels[i], colour,
-                            vx * 1.06 + nx / n * 0.42, vy * 1.06 + ny / n * 0.42))
+                            round(vx * 1.06 + nx / n * off, 4),
+                            round(vy * 1.06 + ny / n * off, 4)))
             lines.append("        tags[-1].add_background_rectangle(opacity=0.85)")
     lines.append("        _beat(self, " + beat.next() + ", *[GrowArrow(a) for a in arrows], "
                  "*[Write(t) for t in tags])")
 
     # Span: a line for one dimension, the whole plane for two. Drawn from the
     # computed dimension, so two parallel vectors do not get a plane.
+    # Whether the span drawing is carried through the map below. A line's image
+    # is the line through Mv, so it has to move; the plane's image is the plane
+    # and the origin's image is the origin, so those must not — shearing the
+    # "whole plane" rectangle into a parallelogram would draw a subspace that
+    # is not what the span became.
+    span_moves = False
+
+    # Captions all sit at the bottom, and each used to claim the edge for
+    # itself: with span and determinant both on, `qc` measured the area line
+    # 87% covered by the span note. `_stack` hands out the next free slot.
+    bottom: list[str] = []
+
+    def _stack(name: str) -> str:
+        placement = (".to_edge(DOWN)" if not bottom
+                     else ".next_to(%s, UP, buff=0.30)" % bottom[-1])
+        bottom.append(name)
+        return placement
+
     if want_span:
-        if span_dim <= 1:
-            vx, vy = vectors[0]
+        if span_dim == 0:
+            # Every vector given is the zero vector. Its span is {0} — a point,
+            # not a line. The old code took the `<= 1` branch, drew a Line from
+            # the origin to the origin, and captioned a zero-length mark "the
+            # span is a line: these vectors are parallel".
+            lines.append("        span = Dot(plane.c2p(0, 0), color=C_DEEP, radius=0.12)")
+            note = "the span of the zero vector is just the origin"
+        elif span_dim == 1:
+            vx, vy = next(v for v in vectors if (v[0] or v[1]))
+            # Run to the edge of the grid, not to a fixed multiple of the
+            # vector. A short vector used to give a stub that did not look like
+            # a whole subspace, and a long one a line six times past the grid
+            # that dragged the entire drawing's scale down with it.
+            norm = (vx * vx + vy * vy) ** 0.5
+            ux, uy = vx / norm, vy / norm
+            reach = min(range_x / abs(ux) if ux else 1e9,
+                        range_y / abs(uy) if uy else 1e9)
             lines.append("        span = Line(plane.c2p(%r, %r), plane.c2p(%r, %r), "
                          "color=C_DEEP, stroke_width=6)"
-                         % (-6 * vx, -6 * vy, 6 * vx, 6 * vy))
-            note = "the span is a line: these vectors are parallel"
+                         % (round(-reach * ux, 4), round(-reach * uy, 4),
+                            round(reach * ux, 4), round(reach * uy, 4)))
+            note = ("the span is a line: these vectors are parallel"
+                    if len(vectors) > 1 else "the span is a line")
+            span_moves = True
         else:
-            lines.append("        span = Rectangle(width=12, height=8, color=C_DEEP, "
-                         "fill_opacity=0.18, stroke_width=0)")
+            lines.append("        span = Rectangle(width=%r, height=%r, color=C_DEEP, "
+                         "fill_opacity=0.18, stroke_width=0)"
+                         % (round(2 * range_x * scale, 4),
+                            round(2 * range_y * scale, 4)))
             note = "the span is the whole plane"
-        lines.append("        span_note = _t(%r, font_size=24, color=C_DEEP)"
-                     ".to_edge(DOWN)" % note)
+        lines.append("        span_note = _t(%r, font_size=24, color=C_DEEP)%s"
+                     % (note, _stack("span_note")))
         lines.append("        span_note.add_background_rectangle(opacity=0.85)")
         lines.append("        _beat(self, %s, FadeIn(span), Write(span_note))" % beat.next())
 
@@ -2717,7 +2848,6 @@ def _linear_algebra_scene(plan: AnimationPlan) -> str:
     # the honest picture is one that does not move; feeding it to ApplyMatrix
     # instead redraws the same line lambda times longer, which pushed it several
     # units outside the frame and told the viewer the direction had changed.
-    _EIG_REACH = 3.0
     for j, (lam, (ex, ey)) in enumerate(pairs):
         lines.append("        eig%d = DashedLine(plane.c2p(%r, %r), plane.c2p(%r, %r), "
                      "color=C_WARN, stroke_width=4)"
@@ -2729,8 +2859,8 @@ def _linear_algebra_scene(plan: AnimationPlan) -> str:
         lines.append("        eiglab%d = MathTex(r\"\\lambda = %s\", font_size=30, "
                      "color=C_WARN).move_to(plane.c2p(%r, %r))"
                      % (j, ("%.2f" % lam).rstrip("0").rstrip("."),
-                        _EIG_REACH * ex * 0.97 - ey * 0.78,
-                        _EIG_REACH * ey * 0.97 + ex * 0.78))
+                        round(_EIG_REACH * ex * 0.97 - ey * 0.78 / scale, 4),
+                        round(_EIG_REACH * ey * 0.97 + ex * 0.78 / scale, 4)))
         lines.append("        eiglab%d.add_background_rectangle(opacity=0.85)" % j)
         lines.append("        _beat(self, %s, Create(eig%d), Write(eiglab%d))"
                      % (beat.next(), j, j))
@@ -2740,26 +2870,48 @@ def _linear_algebra_scene(plan: AnimationPlan) -> str:
         movers = ["plane", "arrows"]
         if want_det:
             movers.append("square")
+        if span_moves:
+            movers.append("span")
         # `eig*` is absent on purpose — see _EIG_REACH above.
         lines.append("        moving = VGroup(%s)" % ", ".join(movers))
+
+        # The tags are *moved*, not transformed. They were in neither group
+        # before, so a labelled u sat at the old arrow's tip while the arrow
+        # left — which is the landing-page example. Feeding them to ApplyMatrix
+        # instead would shear the letterforms, so the label would arrive in the
+        # right place unreadable. Their destinations are computed here, from
+        # the same matrix, and are correct because ApplyMatrix acts linearly on
+        # scene coordinates about the origin: the point that ends up where the
+        # image of v belongs is exactly ``c2p(Mv)`` on the untransformed plane.
+        tag_moves = []
+        for i, (vx, vy) in enumerate(vectors):
+            if i >= len(labels):
+                break
+            tx, ty = m00 * vx + m01 * vy, m10 * vx + m11 * vy
+            nx, ny = -ty, tx
+            n = (nx * nx + ny * ny) ** 0.5 or 1.0
+            off = 0.42 / scale
+            tag_moves.append(
+                "tags[%d].animate.move_to(plane.c2p(%r, %r))"
+                % (i, round(tx * 1.06 + nx / n * off, 4),
+                   round(ty * 1.06 + ny / n * off, 4)))
+
         lines.append("        _beat_stretch(self, " + beat.next() + ", "
-                     "ApplyMatrix(M, moving), run_time=3)")
+                     "ApplyMatrix(M, moving)"
+                     + ("".join(", " + move for move in tag_moves))
+                     + ", run_time=3)")
         if want_det:
             area = abs(det)
-            lines.append("        area = _t(%r, font_size=28, color=C_WARM).to_edge(DOWN)"
-                         % ("area x %s  (det = %s)"
-                            % (("%.2f" % area).rstrip("0").rstrip("."),
-                               ("%.2f" % det).rstrip("0").rstrip("."))))
+            caption = ("area x %s  (det = %s)"
+                       % (("%.2f" % area).rstrip("0").rstrip("."),
+                          ("%.2f" % det).rstrip("0").rstrip(".")))
+            lines.append("        area = _t(%r, font_size=28, color=C_WARM)%s"
+                         % (caption, _stack("area")))
             lines.append("        area.add_background_rectangle(opacity=0.85)")
             lines.append("        _beat(self, %s, Write(area))" % beat.next())
         if pairs:
-            # Both captions sit at the bottom; the second must clear the
-            # first or the determinant line is drawn over by this one.
-            # A 0.15 gap put the two captions inside each other's backdrops, so
-            # the upper one shipped half painted over. Clear the whole line.
-            place = ".next_to(area, UP, buff=0.42)" if want_det else ".to_edge(DOWN)"
             lines.append("        held = _t(%r, font_size=24, color=C_WARN)%s"
-                         % ("the dashed directions did not turn", place))
+                         % ("the dashed directions did not turn", _stack("held")))
             lines.append("        held.add_background_rectangle(opacity=0.85)")
             lines.append("        _beat(self, %s, Write(held))" % beat.next())
 

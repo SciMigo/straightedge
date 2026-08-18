@@ -52,7 +52,9 @@ from straightedge.linalg import (
     coerce_vectors,
     determinant,
     eigenpairs,
+    is_vector_list,
     shape,
+    span_dimension,
 )
 from straightedge.models import AnimationPlan, Topic
 from straightedge.solids3d import Concept3D
@@ -295,7 +297,17 @@ def _linear_map_is_drawable(plan: AnimationPlan) -> list[Violation]:
     matrix = coerce_matrix(raw_matrix)
 
     raw_vectors = plan.parameters.get("vectors")
-    if raw_vectors is not None:
+    if raw_vectors is not None and not is_vector_list(raw_vectors):
+        # Not a list of vectors at all. Reported separately from "some entries
+        # were dropped", because the two are different mistakes and the counts
+        # below cannot describe this one: a string iterates, so it used to
+        # produce no violation and render the stock pair, and a bare number
+        # raised TypeError from inside the check itself.
+        out.append(Violation(
+            concept, "vectors",
+            f"expected a list of [x, y] pairs, got {raw_vectors!r}; the scene "
+            "would draw its own stock pair instead"))
+    elif raw_vectors is not None:
         kept = coerce_vectors(raw_vectors)
         dropped = _countable(raw_vectors) - len(kept)
         if dropped > 0:
@@ -312,6 +324,37 @@ def _linear_map_is_drawable(plan: AnimationPlan) -> list[Violation]:
                 concept, "labels",
                 f"{_countable(labels)} labels for {len(kept)} drawable vectors; "
                 "the extras are not drawn", severity="warn"))
+
+    if plan.parameters.get("show_span"):
+        # ``show_span`` was supported, documented and changelogged, and no check
+        # read it — so ``list_templates`` published five parameters for a
+        # six-parameter concept and the feature was invisible to every caller
+        # that trusts the catalog. The check is real as well as load-bearing:
+        # the span of nothing but zero vectors is a point, and a lesson that
+        # asked to see a subspace is unlikely to have meant that one.
+        if span_dimension(coerce_vectors(plan.parameters.get("vectors"))) == 0:
+            out.append(Violation(
+                concept, "show_span",
+                "no non-zero vectors to span, so the subspace drawn is {0}, the "
+                "origin alone", severity="warn"))
+
+    # Everything is scaled together to fit the frame, so a violent matrix does
+    # not overflow — it shrinks, and past a point the whole drawing is a
+    # thumbnail nobody can read. That is the honest place to refuse: the
+    # picture would be correct and useless.
+    from straightedge.templates import _MIN_PLANE_SCALE, _fit_plane_scale
+
+    drawn = coerce_vectors(plan.parameters.get("vectors")) or [(1.0, 0.0), (0.0, 1.0)]
+    fit = _fit_plane_scale(matrix, drawn,
+                           want_det=bool(plan.parameters.get("show_determinant")),
+                           eig_reach=3.0 if plan.parameters.get("show_eigenvectors") else 0.0)
+    if fit < _MIN_PLANE_SCALE:
+        out.append(Violation(
+            concept, "matrix",
+            f"this map is too violent to draw with these vectors: everything "
+            f"would be scaled to {fit:.3f} of its size to stay in frame, which "
+            "is smaller than the grid can be read at. Use a gentler matrix, or "
+            "shorter vectors"))
 
     if plan.parameters.get("show_eigenvectors") and not eigenpairs(matrix):
         out.append(Violation(

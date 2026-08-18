@@ -5,6 +5,7 @@ be tested without starting Manim — which is the point of computing it there.
 """
 
 import ast
+import math
 import re
 
 import pytest
@@ -25,7 +26,9 @@ from straightedge.linalg import (
     steps_for,
 )
 from straightedge.models import Topic
-from straightedge.templates import _fit_plane_reach, _matmul_layout
+from straightedge.templates import (
+    _EIG_REACH, _FRAME_HALF, _fit_plane_scale, _matmul_layout,
+)
 
 
 # ------------------------------------------------------------------ the maths
@@ -51,12 +54,24 @@ def test_a_rotation_reports_no_real_eigenvectors():
     assert eigenpairs([[0, -1], [1, 0]]) == []
 
 
-def test_a_repeated_eigenvalue_lists_its_direction_once():
-    # 2I scales everything by 2. Reporting two "different" eigenvectors for one
-    # eigenvalue would draw two lines where the maths has one eigenspace basis.
-    pairs = eigenpairs([[2, 0], [0, 2]])
-    assert len(pairs) == 1
-    assert pairs[0][0] == pytest.approx(2.0)
+def test_a_repeated_eigenvalue_lists_a_direction_per_dimension_of_its_eigenspace():
+    """This test used to assert the opposite, and the assertion was wrong.
+
+    It read "2I scales everything by 2, so reporting two eigenvectors would
+    draw two lines where the maths has one eigenspace basis" — but the
+    eigenspace of 2I *is* the whole plane, and a basis for it has two vectors.
+    Deduplicating them left one dashed line on screen, which says the other
+    directions turn. Both cases are checked here so the distinction cannot be
+    collapsed again: a scalar matrix has a 2-D eigenspace, a defective one has
+    a 1-D eigenspace for the same repeated eigenvalue.
+    """
+    scalar = eigenpairs([[2, 0], [0, 2]])
+    assert len(scalar) == 2
+    assert [lam for lam, _ in scalar] == pytest.approx([2.0, 2.0])
+
+    defective = eigenpairs([[2, 1], [0, 2]])          # one eigenvector only
+    assert len(defective) == 1
+    assert defective[0][0] == pytest.approx(2.0)
 
 
 def test_a_singular_matrix_has_a_zero_eigenvalue_and_zero_determinant():
@@ -137,7 +152,10 @@ def test_labels_past_the_last_vector_are_reported():
 
 
 def test_a_singular_determinant_is_a_warning_not_a_refusal():
-    found = _violations(matrix=[[1, 2], [2, 4]], show_determinant=True)
+    # [[1, 2], [0.5, 1]] rather than [[1, 2], [2, 4]]: both are singular, but
+    # the second stretches the grid corner to (14, 28) and is refused for being
+    # unreadable, which is a different finding from the one under test.
+    found = _violations(matrix=[[1, 2], [0.5, 1]], show_determinant=True)
     assert [v.param for v in found] == ["show_determinant"]
     assert blocking(found) == []
 
@@ -147,7 +165,8 @@ def test_the_catalog_reports_the_parameters_this_concept_is_driven_by():
     entry = next(t for t in list_templates()
                  if t.id == ConceptLinAlg.LINEAR_MAP)
     assert set(entry.params) == {
-        "matrix", "vectors", "labels", "show_eigenvectors", "show_determinant"}
+        "matrix", "vectors", "labels",
+        "show_eigenvectors", "show_determinant", "show_span"}
 
 
 # ------------------------------------------------------------------ the scene
@@ -220,20 +239,84 @@ def test_the_determinant_caption_states_the_computed_area():
 # ----------------------------------------------------------------- the frame
 
 
-def test_the_plane_is_sized_so_its_image_fits_the_frame():
-    """Fitting the image, not the grid, is what keeps a big map on screen."""
-    half_w, half_h = 7.11, 4.0
-    for matrix in ([[3, 1], [0, 2]], [[5, 0], [0, 5]], [[1, 0], [0, 1]],
-                   [[0, -1], [1, 0]]):
-        x, y = _fit_plane_reach(matrix, half_w, half_h)
+def _fits(matrix, vectors, **kw):
+    """Scene half-extents of the drawn *content*, at the scale chosen for it.
+
+    The grid is excluded on purpose, and that is the design rather than a gap
+    in the check: a coordinate plane running past the frame edge is what a
+    plane does, while a vector running past it is a bug. Fitting the grid too
+    made it set the scale — it is what maps furthest — and shrank the subject
+    to a smudge to keep a background texture on screen.
+    """
+    scale = _fit_plane_scale(matrix, vectors, **kw)
+    (m00, m01), (m10, m11) = coerce_matrix(matrix)
+    pts = [(abs(a), abs(b)) for a, b in vectors]
+    if kw.get("want_det"):
+        pts.append((1.0, 1.0))
+    ex = ey = 0.0
+    for px, py in pts:
+        for qx, qy in ((px, py), (m00 * px + m01 * py, m10 * px + m11 * py)):
+            ex, ey = max(ex, abs(qx) * scale), max(ey, abs(qy) * scale)
+    if kw.get("eig_reach"):
+        ex = max(ex, kw["eig_reach"] * scale)
+        ey = max(ey, kw["eig_reach"] * scale)
+    return ex, ey
+
+
+def test_everything_drawn_fits_the_frame_not_just_the_grid():
+    """The guarantee now covers the arrows, which it never did before.
+
+    NumberPlane's unit size is one scene unit per plane unit whatever range it
+    is given, so sizing the grid alone left a vector at its literal coordinates:
+    under 10I, `(1, 0)` was drawn one scene unit long and ApplyMatrix sent it to
+    `(10, 0)`, outside a 7.11 half-frame, under a grid that "fitted".
+    """
+    for matrix in ([[10, 0], [0, 10]], [[50, 0], [0, 50]], [[2, 1], [1, 2]],
+                   [[3, 1], [0, 2]], [[1, 0], [0, 1]], [[0, -1], [1, 0]]):
+        for vectors in ([(1.0, 0.0), (0.0, 1.0)], [(3.0, 1.0), (1.0, 2.0)]):
+            ex, ey = _fits(matrix, vectors, want_det=True, eig_reach=_EIG_REACH)
+            assert ex <= _FRAME_HALF[0] + 1e-6, (matrix, vectors, ex)
+            assert ey <= _FRAME_HALF[1] + 1e-6, (matrix, vectors, ey)
+
+
+def test_a_gentle_map_is_not_magnified_to_fill_the_frame():
+    assert _fit_plane_scale([[1, 0], [0, 1]], [(3.0, 1.0), (1.0, 2.0)]) == 1.0
+    assert _fit_plane_scale([[0.1, 0], [0, 0.1]], [(1.0, 0.0)]) == 1.0
+
+
+def test_the_grids_own_image_stays_in_frame_too():
+    """Two constraints, not one — and the second is what `qc` polices.
+
+    The content sets the scale, but a grid drawn out to the frame edge and then
+    sheared runs past it, and every overflowing grid line is a `qc` error. That
+    was the defect this builder was written to fix in the first place.
+    """
+    from straightedge.templates import _plane_range
+
+    for matrix in ([[1, 0], [0, 1]], [[2, 1], [1, 2]], [[3, 1], [0, 2]],
+                   [[10, 0], [0, 10]], [[1, 2], [0.5, 1]], [[0, -1], [1, 0]]):
+        vectors = [(1.0, 0.0), (0.0, 1.0)]
+        scale = _fit_plane_scale(matrix, vectors, want_det=True)
+        rx, ry = _plane_range(scale, coerce_matrix(matrix))
         (m00, m01), (m10, m11) = coerce_matrix(matrix)
-        assert x * abs(m00) + y * abs(m01) <= half_w + 1e-6
-        assert x * abs(m10) + y * abs(m11) <= half_h + 1e-6
+        assert (rx * abs(m00) + ry * abs(m01)) * scale <= _FRAME_HALF[0] + 1e-3, matrix
+        assert (rx * abs(m10) + ry * abs(m11)) * scale <= _FRAME_HALF[1] + 1e-3, matrix
 
 
-def test_a_small_matrix_does_not_inflate_the_grid():
-    # Scaling *up* to fill the frame would push a gentle map off the edges.
-    assert _fit_plane_reach([[0.1, 0], [0, 0.1]], 7.11, 4.0) == (6.0, 4.0)
+def test_an_untransformed_grid_still_fills_the_frame():
+    from straightedge.templates import _plane_range
+
+    assert _plane_range(1.0, ((1.0, 0.0), (0.0, 1.0))) == pytest.approx(_FRAME_HALF)
+
+
+def test_a_violent_map_still_draws_rather_than_being_refused_outright():
+    """10I fits once the grid stops setting the scale; 50I still does not."""
+    from straightedge.templates import _MIN_PLANE_SCALE
+
+    assert _fit_plane_scale([[10, 0], [0, 10]], [(1.0, 0.0), (0.0, 1.0)],
+                            want_det=True) >= _MIN_PLANE_SCALE
+    assert _fit_plane_scale([[50, 0], [0, 50]], [(1.0, 0.0), (0.0, 1.0)],
+                            want_det=True) < _MIN_PLANE_SCALE
 
 
 # ------------------------------------------------------- the matrix product
@@ -452,3 +535,116 @@ def test_a_product_past_the_cap_shrinks_rather_than_overflowing():
     """
     assert _matmul_layout(MAX_DIM, MAX_DIM, MAX_DIM)[0] < _matmul_layout(2, 2, 2)[0]
     assert _matmul_layout(6, 6, 6)[0] < _matmul_layout(MAX_DIM, MAX_DIM, MAX_DIM)[0]
+
+
+# ------------------------------------------------- review findings on PR #2
+#
+# Six issues, all reproduced before being fixed. Each test below fails against
+# the code as it was reviewed.
+
+
+def test_labels_follow_their_vectors_through_the_map():
+    """P1. `tags` was in neither the moving group nor any reposition.
+
+    A labelled u sat at the *old* arrow's tip while the arrow left — and the
+    landing-page asset is exactly this case: labels plus a non-identity matrix.
+    """
+    code = _code(matrix=[[2, 1], [1, 2]], vectors=[[1, 0], [0, 1]],
+                 labels=["u", "v"])
+    apply_line = next(ln for ln in code.splitlines() if "ApplyMatrix" in ln)
+    assert "tags[0].animate.move_to" in apply_line
+    assert "tags[1].animate.move_to" in apply_line
+
+    # Assert the property rather than a coordinate: each label ends up nearer
+    # the image of its vector than the vector itself. M @ (1,0) = (2,1) and
+    # M @ (0,1) = (1,2), and the exact offset moves with the plane's scale.
+    targets = [(float(a), float(b)) for a, b in
+               re.findall(r"tags\[\d\]\.animate\.move_to\(plane\.c2p\(([-\d.]+), ([-\d.]+)\)\)",
+                          apply_line)]
+    assert len(targets) == 2
+    for before, after, target in (((1, 0), (2, 1), targets[0]),
+                                  ((0, 1), (1, 2), targets[1])):
+        d_before = math.dist(target, before)
+        d_after = math.dist(target, after)
+        assert d_after < d_before, (target, before, after)
+
+
+def test_labels_are_moved_rather_than_transformed():
+    """Feeding text to ApplyMatrix shears the letterforms."""
+    code = _code(matrix=[[2, 1], [1, 2]], vectors=[[1, 0]], labels=["u"])
+    moving = next(ln for ln in code.splitlines() if "moving = VGroup(" in ln)
+    assert "tags" not in moving
+
+
+def test_a_span_line_follows_the_map_but_a_spanned_plane_does_not():
+    """P1. The image of a line is a line; the image of the plane is the plane.
+
+    Shearing the whole-plane rectangle would draw a parallelogram, which is a
+    different subspace from the one the span actually became.
+    """
+    line_case = _code(matrix=[[2, 1], [1, 2]], vectors=[[1, 2], [2, 4]],
+                      show_span=True)
+    assert "span" in next(ln for ln in line_case.splitlines()
+                          if "moving = VGroup(" in ln)
+
+    plane_case = _code(matrix=[[2, 1], [1, 2]], vectors=[[1, 0], [0, 1]],
+                       show_span=True)
+    assert "span" not in next(ln for ln in plane_case.splitlines()
+                              if "moving = VGroup(" in ln)
+
+
+def test_the_span_of_the_zero_vector_is_a_point_not_a_line():
+    """P1. `span_dim <= 1` drew a zero-length Line captioned as a line."""
+    code = _code(vectors=[[0, 0]], show_span=True)
+    assert "Dot(plane.c2p(0, 0)" in code
+    assert "the span of the zero vector is just the origin" in code
+    assert "the span is a line" not in code
+
+
+def test_a_lone_vector_is_not_called_parallel_to_anything():
+    code = _code(vectors=[[1, 2]], show_span=True)
+    assert "the span is a line" in code
+    assert "these vectors are parallel" not in code
+
+
+@pytest.mark.parametrize("vectors", [42, "nope", None, 3.5, {"x": 1}])
+def test_a_malformed_vectors_container_never_raises(vectors):
+    """P1. `vectors=42` raised TypeError from inside validation itself."""
+    assert coerce_vectors(vectors) == []
+    validate(plan_from_template(ConceptLinAlg.LINEAR_MAP, {"vectors": vectors}))
+
+
+@pytest.mark.parametrize("vectors", [42, "nope", 3.5])
+def test_a_malformed_vectors_container_is_reported(vectors):
+    """A string iterates, so it used to drop silently and render stock vectors."""
+    found = blocking(_violations(vectors=vectors))
+    assert [v.param for v in found] == ["vectors"]
+    assert "list of [x, y] pairs" in found[0].message
+
+
+def test_a_scalar_matrix_keeps_its_two_dimensional_eigenspace():
+    """P2. Both repeated roots took the x-axis branch and were deduplicated.
+
+    2I scales every direction equally, so every direction is invariant. One
+    dashed line tells the viewer the others turn.
+    """
+    pairs = eigenpairs([[2, 0], [0, 2]])
+    assert len(pairs) == 2
+    assert {lam for lam, _ in pairs} == {2.0}
+    (_, u), (_, v) = pairs
+    assert abs(u[0] * v[1] - u[1] * v[0]) > 0.5      # independent, not a copy
+
+
+def test_a_repeated_eigenvalue_with_one_eigenvector_still_lists_one():
+    """The dedup this replaces was right for a shear; only scalars were wrong."""
+    pairs = eigenpairs([[2, 1], [0, 2]])
+    assert len(pairs) == 1
+
+
+def test_show_span_is_published_and_checked():
+    """P2. Supported, documented, changelogged — and read by no check."""
+    entry = next(t for t in list_templates() if t.id == ConceptLinAlg.LINEAR_MAP)
+    assert "show_span" in entry.params
+    found = _violations(vectors=[[0, 0]], show_span=True)
+    assert [v.param for v in found] == ["show_span"]
+    assert blocking(found) == []

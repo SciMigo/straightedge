@@ -144,6 +144,53 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   import-time error rather than a topic that half-works.
 
 ### Fixed
+Review findings on PR #2, all reproduced before being fixed.
+
+- **Labels and span did not follow their vectors through the map.** `ApplyMatrix`
+  transformed the plane and the arrows only, so a labelled `u` stayed at the old
+  arrow's tip while the arrow left, and a requested span kept pointing the old
+  way. This was the landing-page example, which supplies labels with a
+  non-identity matrix. The tags are now *moved* rather than transformed —
+  feeding text to `ApplyMatrix` shears the letterforms, so it would arrive in
+  the right place unreadable — and a span *line* is carried through the map
+  while a spanned *plane* is not, because the image of the plane is the plane
+  and shearing that rectangle would draw a subspace the span never became.
+- **`coerce_vectors` was not total.** `vectors=42` raised `TypeError` from inside
+  validation — a check that crashes on bad input is not a check — and
+  `vectors="nope"` iterated character by character, dropped every one, reported
+  nothing, and rendered the stock pair. Both now yield `[]`, and `is_vector_list`
+  lets the precondition report a malformed container as malformed rather than as
+  empty.
+- **The zero subspace was described as a line.** `span_dimension` correctly
+  returned 0, but the scene grouped dimensions 0 and 1 together, drew a
+  zero-length `Line`, and captioned it "the span is a line: these vectors are
+  parallel". The span of zero vectors is `{0}`; it now draws the origin and says
+  so. A single vector is also no longer called parallel to anything.
+- **The readability floor voided the frame-fit guarantee**, and the guarantee
+  never covered the arrows in the first place. `NumberPlane` keeps a unit size of
+  one scene unit per plane unit whatever range it is given, so sizing the grid
+  never moved the vectors: under `10I` the vector `(1, 0)` was drawn one scene
+  unit long and `ApplyMatrix` sent it to `(10, 0)`, outside the frame, under a
+  grid that "fitted" — and at any scale a 1-unit arrow spanning several grid
+  squares misstates the vector it draws. The plane's `x_length` now carries a
+  single scale that everything placed through `c2p` inherits, solved from the
+  content; the grid is sized separately so its own image stays in frame, which
+  is what `qc` polices. A map too violent to draw legibly is refused rather than
+  rendered as a smudge.
+- **A scalar matrix lost its two-dimensional eigenspace.** For `2I` both repeated
+  roots took the already-diagonal branch, both returned the x-axis, and the
+  duplicate was removed — leaving one dashed line, which tells a viewer the other
+  directions turn. Every direction is invariant, so two independent basis
+  directions are returned. A *defective* repeated eigenvalue still lists one.
+- **`show_span` was supported, documented, changelogged, and read by no check**,
+  so `list_templates()` published five parameters for a six-parameter concept and
+  the feature was invisible to any caller trusting the catalog. The check now
+  reads it, and is load-bearing rather than decorative: it reports the case where
+  the subspace drawn is the origin alone.
+- Bottom-of-frame captions are stacked. Span, area and eigen captions each
+  claimed `to_edge(DOWN)` independently; with span and determinant both on, `qc`
+  measured the area line 87% covered by the span note.
+
 - Linear-algebra concepts were never checked for untranslated labels.
   `tests/test_labels._every_concept` hand-listed four concept classes and had
   not been updated for the fifth, so `linear_algebra/*` fell outside the

@@ -86,13 +86,33 @@ def coerce_vectors(value: Any) -> list[tuple[float, float]]:
     A three-component entry is dropped rather than truncated. This is a builder
     for the plane, so ``[1, 2, 3]`` is a caller who meant something else, and
     quietly using its first two coordinates answers a question nobody asked.
+
+    Total for *any* input, including input that is not a container at all.
+    ``vectors=42`` used to raise ``TypeError`` from inside validation — a check
+    that crashes on bad input is not a check — and ``vectors="nope"`` iterated
+    character by character, dropped every one, reported nothing, and rendered
+    the stock pair. Both now yield ``[]``; :func:`is_vector_list` is what lets
+    the precondition tell "no usable vectors" from "not a list of vectors".
     """
+    if not is_vector_list(value):
+        return []
     out: list[tuple[float, float]] = []
-    for item in value or []:
+    for item in value:
         vec = _coerce_vector(item)
         if vec is not None:
             out.append(vec)
     return out
+
+
+def is_vector_list(value: Any) -> bool:
+    """Whether ``value`` is the *shape* a vector list has, ignoring contents.
+
+    A string is not one, though it iterates. Neither is a number, though the
+    caller who passed it plainly meant something. Separating the container
+    question from the element question is what lets a malformed ``vectors`` be
+    reported as malformed rather than as empty.
+    """
+    return isinstance(value, (list, tuple))
 
 
 def determinant(matrix: Sequence[Sequence[float]]) -> float:
@@ -114,6 +134,18 @@ def eigenpairs(
     would not guarantee.
     """
     (a, b), (c, d) = coerce_matrix(matrix)
+
+    # A scalar matrix scales every direction equally, so *every* direction is
+    # invariant and the eigenspace is the whole plane. Falling through to the
+    # general solve gets this wrong in a way that looks right: both repeated
+    # roots take the already-diagonal branch, both return the x-axis, and the
+    # duplicate is then removed — leaving one dashed line, which tells a viewer
+    # the other directions do turn. Two independent directions is the smallest
+    # honest answer; callers wanting to say "all of them" can check for it with
+    # ``len(pairs) == 2 and pairs[0][0] == pairs[1][0]``.
+    if abs(b) < 1e-12 and abs(c) < 1e-12 and abs(a - d) < 1e-12:
+        return [(a, (1.0, 0.0)), (a, (0.0, 1.0))]
+
     trace = a + d
     det = a * d - b * c
     disc = trace * trace - 4.0 * det
