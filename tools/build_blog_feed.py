@@ -24,8 +24,8 @@ from __future__ import annotations
 
 import argparse
 import html
-import re
 import sys
+from html.parser import HTMLParser
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
@@ -37,23 +37,63 @@ TITLE = "Straightedge blog"
 SUBTITLE = "Mechanisms simulated, asserted, and animated from the simulation."
 
 
+class _PostReader(HTMLParser):
+    """Pulls a post's title, date and summary out of its markup.
+
+    A parser rather than three regexes, because both things a regex got wrong
+    here are things a parser gets right for free. Entity references are decoded
+    once — ``A &amp; B`` is the text ``A & B``, and re-escaping the raw source
+    on the way into XML produced ``A &amp;amp; B``. And inline markup inside the
+    headline is dropped rather than carried: a title reading ``<code>AB</code>``
+    would otherwise reach a feed reader as literal ``&lt;code&gt;`` text.
+
+    Attribute values arrive decoded too, which is the same fix for the summary.
+    """
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.title: str | None = None
+        self.date: str | None = None
+        self.summary: str | None = None
+        self._title_parts: list[str] = []
+        self._in_title = False
+
+    def handle_starttag(self, tag: str, attrs) -> None:
+        values = dict(attrs)
+        if tag == "h1" and self.title is None:
+            self._in_title = True
+        elif (tag == "meta" and values.get("name") == "description"
+              and self.summary is None):
+            self.summary = values.get("content")
+        elif tag == "time" and self.date is None and values.get("datetime"):
+            self.date = values["datetime"]
+
+    def handle_endtag(self, tag: str) -> None:
+        # Only the first h1 is the title; a later one closes nothing.
+        if tag == "h1" and self._in_title:
+            self._in_title = False
+            self.title = " ".join("".join(self._title_parts).split())
+
+    def handle_data(self, data: str) -> None:
+        if self._in_title:
+            self._title_parts.append(data)
+
+
 def read_post(path: Path) -> dict:
-    source = path.read_text(encoding="utf-8")
-    fields = {
-        "title": re.search(r"<h1>(.*?)</h1>", source, re.S),
-        "date": re.search(r'<time datetime="([\d-]+)"', source),
-        "summary": re.search(r'<meta name="description" content="(.*?)">', source),
-    }
-    missing = [name for name, match in fields.items() if match is None]
+    reader = _PostReader()
+    reader.feed(path.read_text(encoding="utf-8"))
+
+    missing = [name for name in ("title", "date", "summary")
+               if not getattr(reader, name)]
     if missing:
         raise SystemExit(
             f"{path.name}: no {', '.join(missing)} — every post needs an <h1>, a "
             "<time> in its dateline, and a description meta tag")
     return {
         "file": path.name,
-        "title": " ".join(fields["title"].group(1).split()),
-        "date": fields["date"].group(1),
-        "summary": fields["summary"].group(1),
+        "title": reader.title,
+        "date": reader.date,
+        "summary": reader.summary,
     }
 
 
