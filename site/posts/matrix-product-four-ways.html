@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#090d14">
+    <meta name="description" content="AB is taught as a rule for filling in entries. Three other readings of the same product — by column, by row, and as a sum of rank-1 terms — explain what a matrix product is for, and two of them are what a systolic array and tensor parallelism already execute.">
+    <meta property="og:title" content="The matrix product you already shipped twice">
+    <meta property="og:description" content="Four readings of AB, each one run in Python and asserted to reproduce the product before a frame is drawn. Two of them are already running in hardware.">
+    <meta property="og:image" content="https://pub-ae0e951cb13d4628913ced2bc423d839.r2.dev/straightedge/assets/posters/matmul-outer.jpg">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://scimigo.github.io/straightedge/posts/matrix-product-four-ways.html">
+    <link rel="canonical" href="https://scimigo.github.io/straightedge/posts/matrix-product-four-ways.html">
+    <meta name="twitter:card" content="player">
+    <meta name="twitter:title" content="Matrix multiplication, four ways — and two of them are hardware">
+    <meta name="twitter:description" content="Entry, column, row, and outer product: the same AB, four readings, each asserted against the definition before it is animated.">
+    <meta name="twitter:image" content="https://pub-ae0e951cb13d4628913ced2bc423d839.r2.dev/straightedge/assets/posters/matmul-outer.jpg">
+    <title>Matrix multiplication, four ways — and two of them are hardware</title>
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "TechArticle",
+      "headline": "Matrix multiplication, four ways — and two of them are hardware",
+      "description": "AB read entry by entry, by column, by row, and as a sum of rank-1 terms. Each reading is run in Python and asserted to reproduce A @ B before the scene is emitted.",
+      "url": "https://scimigo.github.io/straightedge/posts/matrix-product-four-ways.html",
+      "image": "https://pub-ae0e951cb13d4628913ced2bc423d839.r2.dev/straightedge/assets/posters/matmul-outer.jpg",
+      "author": { "@type": "Organization", "name": "SciMigo" },
+      "publisher": { "@type": "Organization", "name": "Straightedge" },
+      "about": ["Matrix multiplication", "Linear algebra", "Outer product", "Tensor parallelism", "Systolic array"],
+      "isPartOf": { "@type": "WebSite", "name": "Straightedge", "url": "https://scimigo.github.io/straightedge/" }
+    }
+    </script>
+    <link rel="stylesheet" href="../styles.css">
+    <link rel="stylesheet" href="post.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="wordmark" href="../index.html" aria-label="Straightedge, back to the gallery">
+        <span class="wordmark-mark" aria-hidden="true"></span>
+        <span>Straightedge</span>
+      </a>
+      <a class="repo-link" href="index.html">All posts <span aria-hidden="true">↗</span></a>
+    </header>
+
+    <main class="post">
+      <div class="post-head">
+        <p class="post-kicker">Linear algebra, four ways · 01</p>
+        <h1>The matrix product you already shipped twice</h1>
+        <p class="standfirst">
+          Almost everyone is taught one reading of <code>AB</code>: go along a
+          row, down a column, sum the products, write the entry. It is correct,
+          it is the definition, and it explains nothing about what a matrix
+          product is <em>for</em>. The other three readings do — and two of them
+          are already running in the posts above this one.
+        </p>
+        <p class="byline">
+          <span>2 &times; 2 example · four readings of one product</span>
+          <span>Re-renders from
+            <code>linear_algebra/matmul_views</code></span>
+        </p>
+      </div>
+
+      <figure class="post-figure">
+        <video controls playsinline preload="metadata"
+               poster="https://pub-ae0e951cb13d4628913ced2bc423d839.r2.dev/straightedge/assets/posters/matmul-outer.jpg"
+               aria-label="A two by two matrix product built as a sum of two rank-one terms, with a column of A and a row of B highlighted for each term and the running total filling the product grid">
+          <source src="https://pub-ae0e951cb13d4628913ced2bc423d839.r2.dev/straightedge/assets/mp4/matmul-outer.mp4" type="video/mp4">
+          Your browser does not support embedded video.
+        </video>
+        <figcaption>
+          <span>The <strong>outer</strong> reading. Each step takes one column of
+            <strong>A</strong> and one row of <strong>B</strong>, forms a
+            full-size rank-1 matrix, and adds it in. The product grid counts up
+            from zero rather than filling in cell by cell — because no cell is
+            finished until the last term lands.</span>
+        </figcaption>
+      </figure>
+
+      <div class="post-body">
+        <div class="claim">
+          <p>
+            <strong>The same product, four procedures.</strong> Entry, column,
+            row, and outer differ in what they compute at each step and in what
+            is finished when a step ends. They agree on the answer, and the
+            builder refuses to emit a scene for a reading whose own rule does
+            not reproduce <code>A @ B</code>.
+          </p>
+        </div>
+
+        <h2>The four readings</h2>
+        <p>
+          Take <code>A</code> of shape <code>m &times; k</code> and
+          <code>B</code> of shape <code>k &times; n</code>. Every reading below
+          is the same sum regrouped — which is the whole content of the idea, and
+          the reason all four have to give the same matrix.
+        </p>
+
+        <div class="results">
+          <table>
+            <thead>
+              <tr><th>Reading</th><th>One step computes</th><th>Steps</th><th>Finished per step</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>entry</strong></td>
+                <td><code>AB[i][j] = row<sub>i</sub>(A) · col<sub>j</sub>(B)</code></td>
+                <td class="n"><code>m&times;n</code></td>
+                <td>one cell, permanently</td>
+              </tr>
+              <tr>
+                <td><strong>column</strong></td>
+                <td><code>col<sub>j</sub>(AB) = A · col<sub>j</sub>(B)</code></td>
+                <td class="n"><code>n</code></td>
+                <td>one column, permanently</td>
+              </tr>
+              <tr>
+                <td><strong>row</strong></td>
+                <td><code>row<sub>i</sub>(AB) = row<sub>i</sub>(A) · B</code></td>
+                <td class="n"><code>m</code></td>
+                <td>one row, permanently</td>
+              </tr>
+              <tr>
+                <td><strong>outer</strong></td>
+                <td><code>col<sub>t</sub>(A) &otimes; row<sub>t</sub>(B)</code></td>
+                <td class="n"><code>k</code></td>
+                <td class="diff">nothing — every cell moves</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p>
+          That last column is the structural difference, and it is worth more
+          attention than the formulas. Three of the readings <em>partition</em>
+          the product: each step settles a piece nothing later touches. The outer
+          reading <em>accumulates</em>: after <code>t</code> of the
+          <code>k</code> terms, every cell holds a partial sum and none of them
+          is the answer yet.
+        </p>
+
+        <h2>Where you have seen the entry reading</h2>
+        <p>
+          <a href="systolic-skew.html">A systolic array</a> is the entry reading
+          built out of wires. The cell at <code>(k, j)</code> holds
+          <code>B[k][j]</code> and never lets go of it; activation
+          <code>A[m][k]</code> enters row <code>k</code> and moves one cell right
+          per cycle; the partial sum for <code>AB[m][j]</code> moves one cell
+          down and meets each activation exactly when it should. What falls out
+          of the bottom of column <code>j</code> is <code>row<sub>m</sub>(A) ·
+          col<sub>j</sub>(B)</code> — an inner product, accumulated in space
+          rather than in a loop.
+        </p>
+        <p>
+          The diagonal skew that every explainer draws and nobody justifies is
+          the scheduling consequence of choosing this reading. Pick a different
+          one and you get a different machine.
+        </p>
+
+        <h2>Where you have seen the outer reading</h2>
+        <p>
+          Tensor parallelism is the outer reading, sharded. The rule everyone
+          repeats is <em>split A by columns and B by rows</em>, usually offered
+          as a convention. It is not a convention. Grouping the rank-1 terms into
+          blocks,
+        </p>
+        <p>
+          <code>AB = Σ<sub>t</sub> col<sub>t</sub>(A) &otimes; row<sub>t</sub>(B)</code>,
+          so any partition of <code>{1…k}</code> across devices gives each device
+          a complete set of terms, and the sum of their outputs is the product.
+        </p>
+        <p>
+          That is the entire argument. A device holding columns
+          <code>S</code> of <code>A</code> and rows <code>S</code> of
+          <code>B</code> computes a full-size partial sum by itself, needing
+          nothing from its peers until the end — which is why an MLP block
+          crosses the network once. Split <code>A</code> by <em>rows</em> instead
+          and each device holds fragments of terms rather than whole ones, so
+          nothing elementwise can be applied yet; the block needs a second
+          collective, and skipping it computes
+          <code>Σ relu(partial)</code> where the answer is
+          <code>relu(Σ partial)</code>. Different number, not a rounding
+          difference.
+        </p>
+        <p>
+          The tensor-parallel example in this repository asserts both halves:
+          that the column/row pairing reproduces the single-device answer at
+          every split of the FFN dimension, and that the wrong pairing
+          <em>disagrees</em>. The second assertion is the load-bearing one — "the
+          pairing is forced, not conventional" is only worth claiming if skipping
+          the collective is shown to compute something else.
+        </p>
+
+        <h2>The two nobody builds hardware for</h2>
+        <p>
+          The column reading is the bridge back to a single matrix acting on
+          space: <code>col<sub>j</sub>(AB) = A · col<sub>j</sub>(B)</code> says a
+          product is just the map <code>A</code> applied once per column of
+          <code>B</code>, which is why <code>AB</code> composes transformations.
+          The row reading says each row of the result is a blend of the rows of
+          <code>B</code>, with a row of <code>A</code> supplying the weights —
+          the reading that makes a change of basis obvious.
+        </p>
+        <p>
+          Neither has a counterpart in the dataflow posts above, and that is a
+          fact about what accelerators optimise rather than about the algebra.
+        </p>
+
+        <h2>Nothing here is drawn</h2>
+        <p>
+          Each reading is executed in ordinary Python, its steps are summed, and
+          the total is compared against a plain triple-loop
+          <code>A @ B</code> before any scene source is produced. A reading that
+          disagrees raises instead of animating:
+        </p>
+<pre><code>from straightedge.linalg import VIEWS, check_view, coerce_grid
+
+a, b = coerce_grid([[1, 2], [3, 4]]), coerce_grid([[0, 1], [1, 1]])
+for view in VIEWS:
+    check_view(a, b, view)      # raises unless it reproduces A @ B</code></pre>
+        <p>
+          Every number in the animation is a constant computed that way — the
+          cell values, the running totals, the captions, the highlighted indices.
+          Change <code>A</code> or <code>B</code> and all of them follow, because
+          none of them is typed anywhere. The arithmetic is stdlib on purpose:
+          the library declares no dependencies, and a closed-form answer is
+          identical on every machine in a way a LAPACK routine's sign and
+          ordering conventions are not.
+        </p>
+<pre><code>pip install 'straightedge[render]'
+python -c "
+from straightedge import plan_from_template, write_scene
+from pathlib import Path
+plan = plan_from_template('linear_algebra/matmul_views',
+                          {'a': [[1,2],[3,4]], 'b': [[0,1],[1,1]], 'view': 'outer'})
+write_scene(plan, Path('.'))"
+manim -qm scene.py GeneratedScene</code></pre>
+
+        <h2>A note on what the picture had to lose</h2>
+        <p>
+          The example is 2&times;2, and 2&times;2 is small enough that the outer
+          reading looks like an odd way to do very little work — two rank-1
+          matrices to produce four numbers. The argument only pays at scale,
+          where <code>k</code> is thousands and the terms are what get
+          distributed. The builder refuses anything past 4&times;4, because the
+          grids stop being readable before they stop being correct: the library's
+          own layout checker reports a clean 4&times;4 and ten overlapping-text
+          errors at 5&times;5. Worth stating rather than hiding — a simplification
+          you cannot see is indistinguishable from an error.
+        </p>
+      </div>
+
+      <nav class="series-nav" aria-label="Post navigation">
+        <span>
+          <span class="muted">Related</span>
+          <a href="systolic-skew.html">Why the systolic array feeds itself diagonally</a>
+        </span>
+        <span class="next">
+          <span class="muted">All</span>
+          <a href="index.html">Every post</a>
+        </span>
+      </nav>
+    </main>
+  </body>
+</html>
