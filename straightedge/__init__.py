@@ -44,12 +44,24 @@ from .style import (
     DATAFLOW, PAPER, TEXTBOOK, THEME_NAMES, THEMES, Style, theme,
 )
 from .templates import SCENE_CLASS_NAME, scene_code_for
+from .topics import TopicSpec, all_ids as topic_ids, spec as topic_spec, verify as _topics_verify
+
+# Every topic module, and both builder modules, have now been imported, so every
+# registration that is going to happen has happened. Checking here rather than
+# lazily means a half-registered topic cannot reach a caller at all — the four
+# ways one used to fail silently are described in `straightedge.topics`.
+_topics_verify()
 
 __all__ = [
     "__version__",
     # Discovery
     "list_templates",
     "Template",
+    # Topics — what the animation lane can be asked about, and how each is
+    # declared. `topic_ids()` replaces the old `Topic.ALL`.
+    "topic_ids",
+    "topic_spec",
+    "TopicSpec",
     # Errors — typed, with a remedy; catch StraightedgeError for all of them
     "StraightedgeError",
     "RequestError",

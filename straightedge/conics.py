@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from .models import Topic
+from .topics import topic
+
 
 class ConceptConic:
     """Sub-topic identifiers under ``Topic.CONIC``."""
@@ -30,3 +33,11 @@ CONE_HALF_ANGLE_TAN = 0.8
 #: degrees and nothing is legible.
 CONE_TAN_MIN = 0.15
 CONE_TAN_MAX = 6.0
+
+
+@topic(Topic.CONIC, priority=20,
+       keywords=("圆锥曲线", "椭圆", "抛物线", "双曲线", "焦点", "准线", "离心率"))
+class Conics:
+    """Conic sections: the ellipse, the parabola, and the cone they come from."""
+
+    concepts = ConceptConic

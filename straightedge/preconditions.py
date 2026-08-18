@@ -43,6 +43,17 @@ from straightedge.conics import CONE_TAN_MAX as _CONE_TAN_MAX
 from straightedge.conics import CONE_TAN_MIN as _CONE_TAN_MIN
 from straightedge.conics import ConceptConic
 from straightedge.expr import validate_expression
+from straightedge.linalg import (
+    MAX_DIM,
+    VIEWS,
+    ConceptLinAlg,
+    coerce_grid,
+    coerce_matrix,
+    coerce_vectors,
+    determinant,
+    eigenpairs,
+    shape,
+)
 from straightedge.models import AnimationPlan, Topic
 from straightedge.solids3d import Concept3D
 from straightedge.trig import Concept as ConceptTrig
@@ -246,6 +257,154 @@ def _cone_half_angle_is_drawable(plan: AnimationPlan) -> list[Violation]:
             "flat or that sharp leaves no readable sweep between the circle and "
             "the hyperbola")]
     return []
+
+
+# ----------------------------------------------------------- linear algebra
+
+@register(ConceptLinAlg.LINEAR_MAP)
+def _linear_map_is_drawable(plan: AnimationPlan) -> list[Violation]:
+    """The one concept whose parameters *are* the lesson, so a drop is total.
+
+    Every other builder here is a fixed picture with a few knobs. This one has
+    no picture of its own: ``matrix`` decides what the animation shows, and the
+    ``show_*`` flags decide which reading it gives. A parameter quietly dropped
+    is therefore not a detail rendered slightly differently — it is a different
+    lesson, rendered confidently.
+
+    This is also the check :mod:`straightedge.catalog` recovers parameter names
+    from, by walking this function for literal ``plan.parameters.get("...")``.
+    Hence the repetition of ``plan.parameters`` below rather than a local alias:
+    a concept whose entire interface *is* its parameters would otherwise be
+    published with none, which is how it read before this check existed.
+    """
+    concept = plan.concept or ConceptLinAlg.LINEAR_MAP
+    out: list[Violation] = []
+
+    raw_matrix = plan.parameters.get("matrix")
+    if raw_matrix is not None and not _is_2x2_of_numbers(raw_matrix):
+        # An error, not a warning: the scene falls back to the identity, so the
+        # video shows *no* transformation while narrating one.
+        out.append(Violation(
+            concept, "matrix",
+            f"expected a 2x2 of numbers, got {raw_matrix!r}; the identity would "
+            "be drawn instead, and a map that changes nothing is not the map "
+            "that was asked for"))
+
+    # Total by design: ``None`` and a malformed value both give the identity,
+    # which is exactly what the scene would draw.
+    matrix = coerce_matrix(raw_matrix)
+
+    raw_vectors = plan.parameters.get("vectors")
+    if raw_vectors is not None:
+        kept = coerce_vectors(raw_vectors)
+        dropped = _countable(raw_vectors) - len(kept)
+        if dropped > 0:
+            out.append(Violation(
+                concept, "vectors",
+                f"{dropped} of {_countable(raw_vectors)} entries are not plane "
+                "vectors and would be dropped; the scene draws the rest, or its "
+                "own stock pair if none survive"))
+        # ``labels`` is zipped to the surviving vectors by index, so a label
+        # past the end is not drawn and nothing says so.
+        labels = plan.parameters.get("labels")
+        if labels is not None and _countable(labels) > len(kept):
+            out.append(Violation(
+                concept, "labels",
+                f"{_countable(labels)} labels for {len(kept)} drawable vectors; "
+                "the extras are not drawn", severity="warn"))
+
+    if plan.parameters.get("show_eigenvectors") and not eigenpairs(matrix):
+        out.append(Violation(
+            concept, "show_eigenvectors",
+            "this matrix has no real eigenvalues, so it has no invariant "
+            "direction to draw — it turns every vector. The scene omits the "
+            "step rather than inventing one", severity="warn"))
+
+    if plan.parameters.get("show_determinant") and abs(determinant(matrix)) < 1e-12:
+        out.append(Violation(
+            concept, "show_determinant",
+            "this matrix is singular, so the unit square collapses to a segment "
+            "and the area caption reads 0. Drawable, and sometimes the point, "
+            "but rarely what a determinant lesson intends", severity="warn"))
+
+    return out
+
+
+@register(ConceptLinAlg.MATMUL_VIEWS)
+def _matrix_product_exists(plan: AnimationPlan) -> list[Violation]:
+    """A product needs two matrices that conform, and a reading that exists.
+
+    Stricter than the single-map checks above, and it has to be. ``linear_map``
+    can fall back to the identity and still draw something the caller recognises
+    as their request minus a detail. There is no such fallback for a product:
+    substituting a matrix animates *different arithmetic*, narrated as if it
+    were the arithmetic that was asked for, with every intermediate value on
+    screen agreeing with the substitution.
+    """
+    concept = plan.concept or ConceptLinAlg.MATMUL_VIEWS
+    out: list[Violation] = []
+
+    a = coerce_grid(plan.parameters.get("a"))
+    b = coerce_grid(plan.parameters.get("b"))
+    for name, raw, grid in (("a", plan.parameters.get("a"), a),
+                            ("b", plan.parameters.get("b"), b)):
+        if raw is not None and grid is None:
+            out.append(Violation(
+                concept, name,
+                f"expected a rectangular grid of numbers, got {raw!r}; the scene "
+                "would animate its own stock matrices instead, and every value "
+                "on screen would agree with them"))
+
+    if a is not None and b is not None and shape(a)[1] != shape(b)[0]:
+        out.append(Violation(
+            concept, "b",
+            f"shapes {shape(a)} and {shape(b)} do not conform: A has "
+            f"{shape(a)[1]} columns and B has {shape(b)[0]} rows, so AB does "
+            "not exist and there is nothing to animate"))
+
+    for name, grid in (("a", a), ("b", b)):
+        if grid is not None and max(shape(grid)) > MAX_DIM:
+            out.append(Violation(
+                concept, name,
+                f"{shape(grid)[0]}x{shape(grid)[1]} exceeds {MAX_DIM}x{MAX_DIM}; "
+                "the grids shrink to fit, and past this size the bottom row runs "
+                "into the running caption — measured, not assumed: qc reports a "
+                "clean 4x4 and ten text_overlap errors at 5x5"))
+
+    view = plan.parameters.get("view")
+    if view is not None and str(view).lower() not in VIEWS:
+        out.append(Violation(
+            concept, "view",
+            f"{view!r} is not one of {VIEWS}; the entry reading would be drawn, "
+            "which is a different lesson from the one requested", severity="warn"))
+
+    return out
+
+def _is_2x2_of_numbers(raw: object) -> bool:
+    """Whether ``coerce_matrix`` will keep this, rather than substitute.
+
+    Asked structurally instead of by comparing the result to the identity: a
+    caller who passes the identity *on purpose* must not be told their matrix
+    was rejected.
+    """
+    try:
+        rows = [list(row) for row in raw]        # type: ignore[call-overload]
+    except TypeError:
+        return False
+    if len(rows) != 2 or any(len(row) != 2 for row in rows):
+        return False
+    try:
+        [float(x) for row in rows for x in row]
+    except (TypeError, ValueError):
+        return False
+    return True
+
+
+def _countable(value: object) -> int:
+    """``len`` where there is one. A string is not a list of vectors."""
+    if isinstance(value, (str, bytes)) or not isinstance(value, Sequence):
+        return 0
+    return len(value)
 
 
 # -------------------------------------------------------------------- utils

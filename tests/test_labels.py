@@ -10,16 +10,14 @@ from __future__ import annotations
 
 import pytest
 
-from straightedge.calculus import ConceptCalculus
 from straightedge.conics import ConceptConic
 from straightedge.labels import (
     AUTHORED_LANGUAGE, DEFAULT_LANGUAGE, LANGUAGES, TRANSLATIONS,
     needs_cjk_font, normalize, translate, untranslated,
 )
 from straightedge.models import AnimationPlan, Topic
-from straightedge.solids3d import Concept3D
+from straightedge.topics import all_ids as topic_ids, all_specs
 from straightedge.templates import scene_code_for
-from straightedge.trig import Concept as ConceptTrig
 
 
 def _plan(topic=Topic.CONIC, concept=ConceptConic.ELLIPSE_FOCI):
@@ -30,10 +28,16 @@ def _plan(topic=Topic.CONIC, concept=ConceptConic.ELLIPSE_FOCI):
 
 
 def _every_concept():
-    cases = [(t, None) for t in Topic.ALL]
-    for cls, topic in [(ConceptConic, Topic.CONIC), (ConceptCalculus, Topic.CALCULUS),
-                       (Concept3D, Topic.THREE_D), (ConceptTrig, Topic.TRIG)]:
-        cases += [(topic, getattr(cls, n)) for n in dir(cls) if n.isupper()]
+    """Every topic, and every concept, from the registry rather than by hand.
+
+    The hand-written version listed four concept classes and had not been
+    updated for the fifth, so no linear-algebra concept was ever checked for an
+    untranslated label. Reading the registry means a new topic joins this
+    coverage by existing.
+    """
+    cases = [(t, None) for t in topic_ids()]
+    for spec in all_specs():
+        cases += [(spec.id, concept) for concept in spec.concept_ids]
     return cases
 
 

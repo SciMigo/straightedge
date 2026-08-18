@@ -19,6 +19,7 @@ from pathlib import Path
 
 import pytest
 
+from straightedge.linalg import VIEWS, ConceptLinAlg
 from straightedge.models import AnimationPlan, Topic
 from straightedge.planner import build_plan
 from straightedge.solids3d import Concept3D
@@ -176,3 +177,38 @@ def test_smoke_an_unmeasured_scene_keeps_its_own_timing(tmp_path):
     second.mkdir()          # _render writes into this dir, it does not create it
     narrated = _seconds(_render(_riemann_plan(), second, beat_seconds=beats))
     assert narrated > plain + 5, "measured narration should visibly lengthen the scene"
+
+
+# ------------------------------------------------------------ linear algebra
+#
+# These builders emit primitives the others do not — ``ApplyMatrix`` over a
+# NumberPlane, and ``FadeTransform`` between labels of differing glyph counts —
+# which is exactly the class of failure ``ast.parse`` cannot see and a render can.
+
+
+def test_smoke_linear_map_scene(tmp_path):
+    _render(_stock(Topic.LINEAR_ALGEBRA, ConceptLinAlg.LINEAR_MAP,
+                   {"matrix": [[3, 1], [0, 2]], "vectors": [[1, 0], [0, 1]],
+                    "labels": ["u", "v"], "show_eigenvectors": True,
+                    "show_determinant": True}), tmp_path)
+
+
+def test_smoke_linear_map_rotation_draws_no_eigenline(tmp_path):
+    """The degrade path renders too — a refused step must not leave a broken scene."""
+    _render(_stock(Topic.LINEAR_ALGEBRA, ConceptLinAlg.LINEAR_MAP,
+                   {"matrix": [[0, -1], [1, 0]], "show_eigenvectors": True}),
+            tmp_path)
+
+
+@pytest.mark.parametrize("view", VIEWS)
+def test_smoke_matmul_views_scene(tmp_path, view):
+    _render(_stock(Topic.LINEAR_ALGEBRA, ConceptLinAlg.MATMUL_VIEWS,
+                   {"a": [[1, 2], [3, 4]], "b": [[0, 1], [1, 1]], "view": view}),
+            tmp_path)
+
+
+def test_smoke_matmul_views_non_square(tmp_path):
+    """Shapes that are not square are where an index mix-up actually shows."""
+    _render(_stock(Topic.LINEAR_ALGEBRA, ConceptLinAlg.MATMUL_VIEWS,
+                   {"a": [[1, 2, 0], [0, 1, 3]], "b": [[1, 1], [0, 2], [1, 0]],
+                    "view": "outer"}), tmp_path)

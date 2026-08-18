@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from .models import Topic
+from .topics import topic
+
 
 class ConceptCalculus:
     """Sub-topic identifiers under ``Topic.CALCULUS``."""
@@ -86,3 +89,12 @@ def is_ftc_request(text: str) -> bool:
 def is_taylor_request(text: str) -> bool:
     lowered = text.lower()
     return any(keyword.lower() in lowered for keyword in TAYLOR_KEYWORDS)
+
+
+@topic(Topic.CALCULUS, priority=10,
+       keywords=("导数", "微分", "切线", "斜率", "变化率", "积分", "黎曼", "dx", "极限",
+              "泰勒", "麦克劳林", "级数", "多项式逼近"))
+class Calculus:
+    """Derivatives, integrals, the fundamental theorem, Taylor series."""
+
+    concepts = ConceptCalculus

@@ -11,7 +11,9 @@ from .calculus import (
 )
 from .conics import ConceptConic
 from .expr import parse_function, pretty_expr
+from .linalg import VIEWS, ConceptLinAlg
 from .models import AnimationPlan, Topic
+from .topics import detect, plan_builder, plan_for
 from .solids3d import (
     Concept3D,
     SolidSpec,
@@ -21,29 +23,6 @@ from .solids3d import (
     solid_title_zh,
 )
 from .trig import Concept as ConceptTrig, TrigSpec, parse_trig_spec, trig_func_zh
-
-
-TOPIC_KEYWORDS = {
-    # Conic *sections*: keyed on 圆锥曲线 (not bare 圆锥, which is a 3D cone solid).
-    # 面积 (area) is intentionally absent here: it collides with geometry/3D and
-    # is handled by is_integral_request, which requires a curve/region cue.
-    Topic.CALCULUS: (
-        "导数", "微分", "切线", "斜率", "变化率", "积分", "黎曼", "dx", "极限",
-        "泰勒", "麦克劳林", "级数", "多项式逼近",
-    ),
-    Topic.TRIG: ("三角", "正弦", "余弦", "tan", "sin", "cos", "周期", "振幅"),
-    Topic.CONIC: ("圆锥曲线", "椭圆", "抛物线", "双曲线", "焦点", "准线", "离心率"),
-    Topic.THREE_D: (
-        "三维", "3d", "立体", "空间", "球", "圆锥", "圆柱", "平面", "向量",
-        "正方体", "立方体", "长方体", "棱柱", "棱锥", "棱台", "四面体",
-    ),
-    Topic.GEOMETRY: ("几何", "三角形", "圆", "角", "相似", "全等", "垂直", "平行"),
-}
-
-# Tie-break order when two topics score equally. Earlier = higher priority.
-# Conic-section terms are more specific than the generic 3D vocabulary, so a
-# 圆锥曲线/圆锥 collision resolves to conic; geometry stays last as the default.
-TOPIC_PRIORITY = (Topic.CALCULUS, Topic.CONIC, Topic.TRIG, Topic.THREE_D, Topic.GEOMETRY)
 
 
 def plan_from_template(template: str,
@@ -119,7 +98,7 @@ def build_plan(chinese_request: str) -> AnimationPlan:
         return calculus_plan
 
     topic = _detect_topic(request)
-    return _PLAN_BUILDERS.get(topic, _geometry_plan)(request)
+    return (plan_builder(topic) or _geometry_plan)(request)
 
 
 def _normalize(text: str) -> str:
@@ -127,19 +106,14 @@ def _normalize(text: str) -> str:
 
 
 def _detect_topic(text: str) -> str:
-    lowered = text.lower()
-    scores = {
-        topic: sum(1 for keyword in keywords if keyword.lower() in lowered)
-        for topic, keywords in TOPIC_KEYWORDS.items()
-    }
-    best = max(scores.values())
-    if best == 0:
-        return Topic.GEOMETRY
-    # Break ties by explicit priority rather than dict insertion order.
-    return min(
-        (topic for topic, score in scores.items() if score == best),
-        key=TOPIC_PRIORITY.index,
-    )
+    """Which topic a request is about, or geometry when nothing matches.
+
+    Keywords and tie-break priority now live on each topic's own declaration
+    rather than in two tuples here that a new topic had to be added to. Geometry
+    stays the default: the planner never refuses, and ``AnimationPlan.match``
+    is what tells a caller the result was a fallback.
+    """
+    return detect(text, default=Topic.GEOMETRY)
 
 
 def _is_unit_circle_to_sine(text: str) -> bool:
@@ -163,6 +137,7 @@ def _is_ellipse_foci(text: str) -> bool:
     return any(keyword in text for keyword in ("焦点", "距离和", "距离的和", "pf1", "pf2"))
 
 
+@plan_for(Topic.GEOMETRY)
 def _geometry_plan(request: str) -> AnimationPlan:
     return AnimationPlan(
         topic=Topic.GEOMETRY,
@@ -184,6 +159,7 @@ def _geometry_plan(request: str) -> AnimationPlan:
     )
 
 
+@plan_for(Topic.TRIG)
 def _trig_plan(request: str) -> AnimationPlan:
     return AnimationPlan(
         topic=Topic.TRIG,
@@ -235,6 +211,7 @@ def _unit_circle_to_sine_plan(request: str) -> AnimationPlan:
     )
 
 
+@plan_for(Topic.CONIC)
 def _conic_plan(request: str) -> AnimationPlan:
     return AnimationPlan(
         topic=Topic.CONIC,
@@ -317,6 +294,7 @@ def _parabola_focus_directrix_plan(request: str) -> AnimationPlan:
     )
 
 
+@plan_for(Topic.THREE_D)
 def _three_d_plan(request: str) -> AnimationPlan:
     spec = parse_solid_spec(request)
     if spec is not None:
@@ -417,6 +395,7 @@ def _calculus_plan_for_request(request: str, expression: str | None) -> Animatio
     return None
 
 
+@plan_for(Topic.CALCULUS)
 def _calculus_plan(request: str) -> AnimationPlan:
     return _derivative_tangent_plan(request, None)
 
@@ -619,12 +598,55 @@ def _function_plan(request: str, expression: str) -> AnimationPlan:
     )
 
 
-# Topic -> plan builder. Adding a topic means adding one entry here (plus a
-# keyword tuple above and a scene in templates._SCENE_BUILDERS).
-_PLAN_BUILDERS = {
-    Topic.GEOMETRY: _geometry_plan,
-    Topic.TRIG: _trig_plan,
-    Topic.CONIC: _conic_plan,
-    Topic.THREE_D: _three_d_plan,
-    Topic.CALCULUS: _calculus_plan,
+
+#: Words that pick a *reading* of a matrix product, for a request that already
+#: asked for one. Absent from ``TOPIC_KEYWORDS`` on purpose: "行"/"row" alone is
+#: not a linear-algebra request, it is a word.
+_VIEW_KEYWORDS = {
+    "outer": ("外积", "秩一", "rank-1", "rank one", "outer product"),
+    "column": ("列向量", "按列", "column of b", "by column", "columns of"),
+    "row": ("行向量", "按行", "row of a", "by row", "rows of"),
+    "entry": ("逐元素", "内积视角", "entry by entry", "dot product"),
 }
+
+_MATMUL_KEYWORDS = (
+    "矩阵乘法", "矩阵相乘", "矩阵乘积", "外积", "秩一",
+    "matmul", "matrix multiplication", "matrix product", "outer product",
+    "rank-1", "rank one",
+)
+
+
+@plan_for(Topic.LINEAR_ALGEBRA)
+def _linear_algebra_plan(request: str) -> AnimationPlan:
+    """Two concepts: one matrix acting, or two matrices meeting.
+
+    Which one a prompt gets is decided here; *which reading* of a product it
+    gets is decided by the parameters, and a text request carries none — so a
+    prompt that names a view in words is honoured, and everything else takes the
+    default and leaves refinement to callers that pass ``parameters`` (which is
+    what :func:`plan_from_template` is for).
+    """
+    if any(word in request for word in _MATMUL_KEYWORDS):
+        view = next((name for name, words in _VIEW_KEYWORDS.items()
+                     if any(word in request for word in words)), "entry")
+        assert view in VIEWS
+        return AnimationPlan(
+            topic=Topic.LINEAR_ALGEBRA,
+            title_zh="矩阵乘法的四种读法",
+            objective_zh="同一个乘积，四种理解方式",
+            english_prompt=request,
+            concept=ConceptLinAlg.MATMUL_VIEWS,
+            parameters={"view": view},
+            elements=["matrix", "matrix", "product"],
+        )
+
+    return AnimationPlan(
+        topic=Topic.LINEAR_ALGEBRA,
+        title_zh="线性变换",
+        objective_zh="看矩阵如何作用于平面",
+        english_prompt=request,
+        concept=ConceptLinAlg.LINEAR_MAP,
+        elements=["plane", "vectors", "matrix"],
+    )
+
+

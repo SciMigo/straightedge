@@ -44,6 +44,17 @@ one chip, tensor parallelism inside one layer, the pipeline across stages, and
 the all-reduce across data parallel replicas — which is why the set is worth
 having rather than any one of them.
 
+Two of them are also linear algebra wearing a hard hat. `systolic_array` is the
+entry reading of a matrix product — `AB[i][j] = row_i(A) . col_j(B)` — executed
+in silicon, and `tensor_parallel` is the outer-product reading — `AB = sum_k
+col_k(A) (x) row_k(B)` — executed across devices, which is *why* A splits by
+columns and B by rows rather than the other way round. Neither says so, because
+neither is addressed to someone learning what a matrix product is. The concept
+`linear_algebra/matmul_views` is: same four readings, animated as a lesson and
+reachable from the catalog. These stay here as the argument that the readings
+are load-bearing rather than decorative — the pairing a transformer depends on
+is a statement about rank-1 terms.
+
 ## One set, more than one style
 
 The four scenes share a palette, and it lives in `straightedge.style` rather than

@@ -9,7 +9,23 @@ from .conics import CONE_HALF_ANGLE_TAN, CONE_TAN_MAX, CONE_TAN_MIN, ConceptConi
 from .expr import to_latex_expr, to_numpy_expr, validate_expression
 from .fonts import DEFAULT_CJK_FONT
 from .labels import DEFAULT_LANGUAGE, translate
+from .linalg import (
+    IDENTITY,
+    VIEWS,
+    ConceptLinAlg,
+    check_view,
+    coerce_grid,
+    coerce_matrix,
+    coerce_vectors,
+    determinant,
+    eigenpairs,
+    fmt,
+    shape,
+    span_dimension,
+    steps_for,
+)
 from .models import AnimationPlan, Topic
+from .topics import scene_builder, scene_for
 from .style import TEXTBOOK, Style
 from .solids3d import (
     Concept3D,
@@ -141,7 +157,10 @@ def scene_code_for(
     values are Manim's own constants, which is what these builders drew with
     before the palette was named; passing it changes no pixel.
     """
-    body = _SCENE_BUILDERS.get(plan.topic, _geometry_scene)(plan)
+    # Unknown topics fall back to the geometry scene, as they always have.
+    # `topics.verify` makes that a genuine fallback rather than a silent
+    # gap: a registered topic without a scene builder fails at import.
+    body = (scene_builder(plan.topic) or _geometry_scene)(plan)
     code = _preamble(font, beat_seconds, aspect, style) + "\n\n\n" + body
     if qc_sidecar is not None:
         code += "\n\n\n" + qc_tail_source(qc_sidecar)
@@ -306,6 +325,7 @@ def _preamble(
     return base + "\n\n\n" + SOLID_HELPERS_SRC
 
 
+@scene_for(Topic.GEOMETRY)
 def _geometry_scene(plan: AnimationPlan) -> str:
     return dedent(
         '''
@@ -334,6 +354,7 @@ def _geometry_scene(plan: AnimationPlan) -> str:
     ).strip()
 
 
+@scene_for(Topic.TRIG)
 def _trig_scene(plan: AnimationPlan) -> str:
     builder = _TRIG_CONCEPT_BUILDERS.get(plan.concept, _trig_basic_scene)
     return builder(plan)
@@ -818,6 +839,7 @@ _TRIG_CONCEPT_BUILDERS = {
 }
 
 
+@scene_for(Topic.CONIC)
 def _conic_scene(plan: AnimationPlan) -> str:
     builder = _CONIC_CONCEPT_BUILDERS.get(plan.concept, _ellipse_static_scene)
     return builder(plan)
@@ -1372,6 +1394,7 @@ _CONIC_CONCEPT_BUILDERS = {
 }
 
 
+@scene_for(Topic.THREE_D)
 def _three_d_scene(plan: AnimationPlan) -> str:
     builder = _THREE_D_CONCEPT_BUILDERS.get(plan.concept, _sphere_section_scene)
     return builder(plan)
@@ -1616,6 +1639,7 @@ _THREE_D_CONCEPT_BUILDERS = {
 }
 
 
+@scene_for(Topic.CALCULUS)
 def _calculus_scene(plan: AnimationPlan) -> str:
     builder = _CALCULUS_CONCEPT_BUILDERS.get(plan.concept, _derivative_tangent_scene)
     return builder(plan)
@@ -2449,6 +2473,7 @@ _CALCULUS_CONCEPT_BUILDERS = {
 }
 
 
+@scene_for(Topic.FUNCTION)
 def _function_scene(plan: AnimationPlan) -> str:
     raw = plan.parameters.get("expression") or "x**2"
     if not validate_expression(raw):
@@ -2533,13 +2558,434 @@ def _function_scene(plan: AnimationPlan) -> str:
     return body.replace("__PLOT_EXPR__", to_numpy_expr(raw)).replace("__LATEX__", latex)
 
 
-# Topic -> scene builder. Mirrors planner._PLAN_BUILDERS; unknown topics fall
-# back to the geometry scene.
-_SCENE_BUILDERS = {
-    Topic.GEOMETRY: _geometry_scene,
-    Topic.TRIG: _trig_scene,
-    Topic.CONIC: _conic_scene,
-    Topic.THREE_D: _three_d_scene,
-    Topic.FUNCTION: _function_scene,
-    Topic.CALCULUS: _calculus_scene,
+
+def _fit_plane_reach(matrix, half_w: float, half_h: float,
+                     base_x: float = 6.0, base_y: float = 4.0) -> tuple[float, float]:
+    """Half-extents for a plane whose image under ``matrix`` fits the frame.
+
+    The corner of a rectangle maps furthest, and for a linear map the extreme
+    image coordinate is ``a*|m00| + b*|m01|`` horizontally (and the analogous
+    sum vertically), so one scale factor on the base extents is enough. Never
+    scales *up*: a small matrix should not blow the grid past the frame in the
+    other direction.
+    """
+    (m00, m01), (m10, m11) = matrix
+    span_x = base_x * abs(m00) + base_y * abs(m01)
+    span_y = base_x * abs(m10) + base_y * abs(m11)
+    t = 1.0
+    if span_x > 0:
+        t = min(t, half_w / span_x)
+    if span_y > 0:
+        t = min(t, half_h / span_y)
+    # Below this the grid has too few lines to read as a grid at all.
+    t = max(t, 0.18)
+    return (round(base_x * t, 3), round(base_y * t, 3))
+
+
+class _BeatKeys:
+    """Sequential beat keys, numbered in the order the scene actually emits.
+
+    Hardcoding ``b01``..``b09`` leaves gaps when a section is not requested — a
+    scene with no span step jumped from b02 to b04 — and ``beat_seconds`` is
+    matched by key, so every step after the gap would be handed the length of
+    the wrong narration clip.
+    """
+
+    def __init__(self) -> None:
+        self._n = 0
+
+    def next(self) -> str:
+        self._n += 1
+        return '"b%02d"' % self._n
+
+
+def _linear_algebra_scene(plan: AnimationPlan) -> str:
+    """One scene, read five ways, depending on what the parameters ask for.
+
+    The geometry is resolved here rather than in the emitted scene: eigenvectors
+    and the determinant are computed from the matrix now, as constants, so the
+    animation draws a result that was already checked instead of deriving one at
+    render time. A matrix with no real eigenvalues simply gets no eigen-step —
+    the alternative, drawing an "invariant" direction for a rotation, is the
+    confidently-wrong output this library exists to avoid.
+    """
+    params = plan.parameters or {}
+    matrix = coerce_matrix(params.get("matrix", IDENTITY))
+    (m00, m01), (m10, m11) = matrix
+    is_identity = matrix == IDENTITY
+
+    # Shared with the precondition check rather than reimplemented, so what the
+    # check reports dropped is exactly what this fails to draw.
+    vectors = coerce_vectors(params.get("vectors"))
+    if not vectors:
+        # Something has to move for the map to be visible at all.
+        vectors = [(1.0, 0.0), (0.0, 1.0)] if not is_identity else [(3.0, 1.0), (1.0, 2.0)]
+
+    labels = [str(x) for x in (params.get("labels") or [])]
+
+    want_eigen = bool(params.get("show_eigenvectors"))
+    want_det = bool(params.get("show_determinant"))
+    want_span = bool(params.get("show_span"))
+
+    pairs = eigenpairs(matrix) if want_eigen else []
+    det = determinant(matrix)
+    span_dim = span_dimension(vectors) if want_span else 0
+
+    title = params.get("title") or (
+        "Eigenvectors" if pairs else
+        "Span" if want_span else
+        "Determinant" if want_det else
+        "A linear map" if not is_identity else
+        "Vectors"
+    )
+
+    lines = []
+    lines.append("class GeneratedScene(Scene):")
+    lines.append("    def construct(self):")
+    lines.append("        M = [[%r, %r], [%r, %r]]" % (m00, m01, m10, m11))
+    # Size the plane so its *image* under M fits the frame, not the plane
+    # itself. A grid drawn to a fixed +/-6 and then stretched by a matrix with
+    # a large eigenvalue runs many units past the edge — QC measured 11.8 — and
+    # the transformed picture, the one the lesson is about, is the half that
+    # leaves the screen. Solving for the image instead keeps the whole
+    # animation inside the frame for any matrix, which is why this is computed
+    # rather than tuned.
+    half_w, half_h = 7.11, 4.0
+    x_reach, y_reach = _fit_plane_reach(matrix, half_w, half_h)
+    lines.append("        plane = NumberPlane(")
+    lines.append("            x_range=[%r, %r, 1], y_range=[%r, %r, 1],"
+                 % (-x_reach, x_reach, -y_reach, y_reach))
+    lines.append("            background_line_style={\"stroke_color\": C_RULE, \"stroke_width\": 1,")
+    lines.append("                                   \"stroke_opacity\": 0.5},")
+    lines.append("        )")
+    lines.append("        title = _t(%r, font_size=34).to_edge(UP)" % title)
+    # The grid and any long dashed line run behind the title; a backdrop is what
+    # keeps it legible without moving the plane off centre.
+    lines.append("        title.add_background_rectangle(opacity=0.9)")
+    beat = _BeatKeys()
+    lines.append("        _beat(self, %s, Write(title), Create(plane))" % beat.next())
+
+    # The vectors themselves.
+    lines.append("        arrows = VGroup()")
+    lines.append("        tags = VGroup()")
+    for i, (vx, vy) in enumerate(vectors):
+        colour = ["C_FLOW", "C_HOLD", "C_DONE", "C_AUX", "C_WARM"][i % 5]
+        lines.append("        a%d = Arrow(plane.c2p(0, 0), plane.c2p(%r, %r), "
+                     "buff=0, color=%s)" % (i, vx, vy, colour))
+        lines.append("        arrows.add(a%d)" % i)
+        if i < len(labels):
+            # Offset along the vector's own normal, so a label clears its
+            # arrowhead and the unit square instead of sitting under them.
+            nx, ny = -vy, vx
+            n = (nx * nx + ny * ny) ** 0.5 or 1.0
+            lines.append("        tags.add(_t(%r, font_size=26, color=%s)"
+                         ".move_to(plane.c2p(%r, %r)))"
+                         % (labels[i], colour,
+                            vx * 1.06 + nx / n * 0.42, vy * 1.06 + ny / n * 0.42))
+            lines.append("        tags[-1].add_background_rectangle(opacity=0.85)")
+    lines.append("        _beat(self, " + beat.next() + ", *[GrowArrow(a) for a in arrows], "
+                 "*[Write(t) for t in tags])")
+
+    # Span: a line for one dimension, the whole plane for two. Drawn from the
+    # computed dimension, so two parallel vectors do not get a plane.
+    if want_span:
+        if span_dim <= 1:
+            vx, vy = vectors[0]
+            lines.append("        span = Line(plane.c2p(%r, %r), plane.c2p(%r, %r), "
+                         "color=C_DEEP, stroke_width=6)"
+                         % (-6 * vx, -6 * vy, 6 * vx, 6 * vy))
+            note = "the span is a line: these vectors are parallel"
+        else:
+            lines.append("        span = Rectangle(width=12, height=8, color=C_DEEP, "
+                         "fill_opacity=0.18, stroke_width=0)")
+            note = "the span is the whole plane"
+        lines.append("        span_note = _t(%r, font_size=24, color=C_DEEP)"
+                     ".to_edge(DOWN)" % note)
+        lines.append("        span_note.add_background_rectangle(opacity=0.85)")
+        lines.append("        _beat(self, %s, FadeIn(span), Write(span_note))" % beat.next())
+
+    # The unit square, and the area it becomes.
+    if want_det:
+        lines.append("        square = Polygon(plane.c2p(0, 0), plane.c2p(1, 0), "
+                     "plane.c2p(1, 1), plane.c2p(0, 1), color=C_WARM, "
+                     "fill_opacity=0.35, stroke_width=2)")
+        lines.append("        _beat(self, %s, FadeIn(square))" % beat.next())
+
+    # Eigen-directions, before the map, so the viewer can watch them hold still.
+    # Kept short enough to stay inside the frame, and deliberately NOT included
+    # in the transformed group below. An eigenline is invariant *as a set*, so
+    # the honest picture is one that does not move; feeding it to ApplyMatrix
+    # instead redraws the same line lambda times longer, which pushed it several
+    # units outside the frame and told the viewer the direction had changed.
+    _EIG_REACH = 3.0
+    for j, (lam, (ex, ey)) in enumerate(pairs):
+        lines.append("        eig%d = DashedLine(plane.c2p(%r, %r), plane.c2p(%r, %r), "
+                     "color=C_WARN, stroke_width=4)"
+                     % (j, -_EIG_REACH * ex, -_EIG_REACH * ey,
+                        _EIG_REACH * ex, _EIG_REACH * ey))
+        # Sit the label at the far end of its own line, pushed off the shaft, so
+        # it lands clear of the arrows and the unit square rather than under
+        # them. A backdrop keeps it readable where the grid runs behind.
+        lines.append("        eiglab%d = MathTex(r\"\\lambda = %s\", font_size=30, "
+                     "color=C_WARN).move_to(plane.c2p(%r, %r))"
+                     % (j, ("%.2f" % lam).rstrip("0").rstrip("."),
+                        _EIG_REACH * ex * 0.97 - ey * 0.78,
+                        _EIG_REACH * ey * 0.97 + ex * 0.78))
+        lines.append("        eiglab%d.add_background_rectangle(opacity=0.85)" % j)
+        lines.append("        _beat(self, %s, Create(eig%d), Write(eiglab%d))"
+                     % (beat.next(), j, j))
+
+    # Apply the map. Everything drawn in plane coordinates moves together.
+    if not is_identity:
+        movers = ["plane", "arrows"]
+        if want_det:
+            movers.append("square")
+        # `eig*` is absent on purpose — see _EIG_REACH above.
+        lines.append("        moving = VGroup(%s)" % ", ".join(movers))
+        lines.append("        _beat_stretch(self, " + beat.next() + ", "
+                     "ApplyMatrix(M, moving), run_time=3)")
+        if want_det:
+            area = abs(det)
+            lines.append("        area = _t(%r, font_size=28, color=C_WARM).to_edge(DOWN)"
+                         % ("area x %s  (det = %s)"
+                            % (("%.2f" % area).rstrip("0").rstrip("."),
+                               ("%.2f" % det).rstrip("0").rstrip("."))))
+            lines.append("        area.add_background_rectangle(opacity=0.85)")
+            lines.append("        _beat(self, %s, Write(area))" % beat.next())
+        if pairs:
+            # Both captions sit at the bottom; the second must clear the
+            # first or the determinant line is drawn over by this one.
+            # A 0.15 gap put the two captions inside each other's backdrops, so
+            # the upper one shipped half painted over. Clear the whole line.
+            place = ".next_to(area, UP, buff=0.42)" if want_det else ".to_edge(DOWN)"
+            lines.append("        held = _t(%r, font_size=24, color=C_WARN)%s"
+                         % ("the dashed directions did not turn", place))
+            lines.append("        held.add_background_rectangle(opacity=0.85)")
+            lines.append("        _beat(self, %s, Write(held))" % beat.next())
+
+    lines.append("        self.wait(1)")
+    return "\n".join(lines)
+
+
+#: Biggest a cell is allowed to get. Sized so a 2x2 — much the most common
+#: lesson — fills a useful part of the frame rather than sitting as a small
+#: block of black space; larger shapes shrink below it. At 0.62 the 2x2 block
+#: spanned under a third of the width, which reads as a rendering mistake.
+_MM_CELL_MAX = 1.0
+
+#: The band the three grids may occupy, after the title at the top and the
+#: running caption at the bottom have taken theirs. Narrower than the frame
+#: because the A/B/AB tags hang off the outer edges, and shorter than it looks
+#: like it could be: a caption placed with ``to_edge(DOWN)`` reaches y=-3.1, so
+#: a band that used the full 8 units let the bottom row of the product sit
+#: under the closing line. ``qc`` reported it as ``text_obscured`` at 4x4.
+_MM_BAND = (12.0, 5.6)
+
+#: Vertical centre of the block. Slightly low, because the title above it is
+#: larger than the caption below.
+_MM_CENTRE_Y = -0.1
+
+
+def _matmul_layout(m: int, k: int, n: int) -> tuple[float, tuple, tuple, tuple]:
+    """Cell size and the three top-left cell centres, solved from the shapes.
+
+    The schoolbook arrangement puts B above the product and A to its left, so
+    that product cell (i, j) sits at the intersection of A's row i and B's
+    column j — which is what makes the entry reading legible as a crossing.
+    That arrangement means the block is ``(k + n)`` cells wide and ``(k + m)``
+    cells tall, and both grow with the *inner* dimension.
+
+    Fixed offsets therefore cannot work, and did not: tuned against 2x2 they put
+    B on top of the product at 4x4, which the library's own ``qc`` reported as
+    six ``text_overlap`` errors. Solving for the cell size instead makes the
+    layout correct for every shape this concept accepts rather than for the one
+    it was tried against.
+    """
+    gap_cells = 0.9                      # the A|AB and B/AB separation, in cells
+    cell = min(_MM_CELL_MAX,
+               _MM_BAND[0] / (k + n + gap_cells),
+               _MM_BAND[1] / (k + m + gap_cells))
+    gap = gap_cells * cell
+    stride = k * cell + gap              # B's rows plus the gap; A's cols plus it
+
+    # Centre the whole block: solved rather than nudged, so no shape drifts off
+    # one edge while another sits central.
+    x = ((k + 1 - n) * cell + gap) / 2.0
+    y = _MM_CENTRE_Y + ((k + m - 1) * cell + gap) / 2.0
+
+    b_at = (x, y)
+    out_at = (x, y - stride)
+    a_at = (x - stride, y - stride)
+    return cell, a_at, b_at, out_at
+
+
+def _matmul_views_scene(plan: AnimationPlan) -> str:
+    """A @ B, animated under one of four readings of the same product.
+
+    The arithmetic is run here and the *result of running it* is what gets
+    emitted — every cell value, every caption, every highlighted index is a
+    computed constant. That is the rule ``examples/README.md`` states for the
+    dataflow scenes, applied to a lesson: a scene that computes what it shows
+    cannot drift from it, and a view whose own rule fails to reproduce ``A @ B``
+    raises out of :func:`check_view` before a frame is drawn rather than
+    teaching a procedure that does not work.
+
+    Every text swap is a ``FadeTransform``, never a ``Transform``. The note in
+    ``examples/README.md`` is the reason: ``Transform`` zips the two mobjects'
+    glyph families, so ``"0" -> "16"`` raises rather than animating, and both
+    the captions and the accumulating cells here change digit count constantly.
+    Zero-padding is the fix that note recommends, but ``02`` in a matrix cell is
+    a lie about the number, so the structure-agnostic transform is the right one.
+    """
+    params = plan.parameters or {}
+    a = coerce_grid(params.get("a")) or ((1.0, 2.0), (3.0, 4.0))
+    b = coerce_grid(params.get("b")) or ((0.0, 1.0), (1.0, 1.0))
+    if shape(a)[1] != shape(b)[0]:
+        # Non-conforming shapes have no product to animate. The precondition
+        # check reports this; the builder still needs something to draw.
+        b = tuple(tuple(1.0 if i == j else 0.0 for j in range(shape(a)[1]))
+                  for i in range(shape(a)[1]))
+
+    view = str(params.get("view") or "entry").lower()
+    if view not in VIEWS:
+        view = "entry"
+
+    product = check_view(a, b, view)      # raises rather than emitting a lie
+    steps = steps_for(a, b, view)
+    (m, k), (_, n) = shape(a), shape(b)
+
+    cell, a_at, b_at, out_at = _matmul_layout(m, k, n)
+    # Type scales with the cell, or a 4x4's digits swim in their boxes while a
+    # 2x2's overflow them. Clamped at both ends: below 15 it is unreadable at
+    # the width a video gives it, above 34 it crowds the box's own stroke.
+    font = max(15, min(34, int(round(34 * cell))))
+
+    def literal(grid):
+        return "[%s]" % ", ".join(
+            "[%s]" % ", ".join(repr(fmt(v)) for v in row) for row in grid)
+
+    L = []
+    L.append("class GeneratedScene(Scene):")
+    L.append("    def construct(self):")
+    L.append("        cells = {}")
+    L.append("")
+    L.append("        def _grid(name, values, at, colour, shown):")
+    L.append("            g = VGroup()")
+    L.append("            for i, row in enumerate(values):")
+    L.append("                for j, value in enumerate(row):")
+    L.append("                    box = Rectangle(width=%r, height=%r, "
+             "stroke_width=1.5, color=colour)" % (cell, cell))
+    L.append("                    box.move_to([at[0] + j * %r, at[1] - i * %r, 0])"
+             % (cell, cell))
+    L.append("                    label = _t(value, font_size=%d, color=C_FG)"
+             ".move_to(box.get_center())" % font)
+    L.append("                    # The product's numbers exist from the start but")
+    L.append("                    # stay invisible until the step that derives them.")
+    L.append("                    if not shown:")
+    L.append("                        label.set_opacity(0)")
+    L.append("                    cells[(name, i, j)] = [box, label]")
+    L.append("                    g.add(box, label)")
+    L.append("            return g")
+    L.append("")
+    L.append("        def _put(name, i, j, value):")
+    L.append("            \"\"\"Replace a cell's number, and keep `cells` pointing at it.")
+    L.append("")
+    L.append("            FadeTransform removes the source from the scene, so the")
+    L.append("            entry must be rebound or the next step animates a mobject")
+    L.append("            that is no longer drawn.")
+    L.append("            \"\"\"")
+    L.append("            box, old = cells[(name, i, j)]")
+    L.append("            new = _t(value, font_size=%d, color=C_DONE)"
+             ".move_to(box.get_center())" % font)
+    L.append("            cells[(name, i, j)] = [box, new]")
+    L.append("            return FadeTransform(old, new)")
+    L.append("")
+    # The outer reading *accumulates* into the product; the other three
+    # partition it. That is the one structural difference between the views, and
+    # it decides what the product grid starts as: an accumulating scene opens at
+    # zero and counts up, so seeding it with the finished product would show the
+    # answer for a frame before the first rank-1 term replaced it. A
+    # partitioning scene seeds the real values and reveals them cell by cell,
+    # because no later step revisits one.
+    accumulating = view == "outer"
+    opening = (tuple(tuple(0.0 for _ in range(n)) for _ in range(m))
+               if accumulating else product)
+
+    L.append("        A = _grid('A', %s, %r, C_FLOW, True)" % (literal(a), a_at))
+    L.append("        B = _grid('B', %s, %r, C_HOLD, True)" % (literal(b), b_at))
+    L.append("        P = _grid('P', %s, %r, C_DONE, %s)"
+             % (literal(opening), out_at, accumulating))
+    L.append("        A_tag = _t(\"A\", font_size=26, color=C_FLOW)"
+             ".next_to(A, LEFT, buff=0.22)")
+    L.append("        B_tag = _t(\"B\", font_size=26, color=C_HOLD)"
+             ".next_to(B, LEFT, buff=0.22)")
+    L.append("        P_tag = _t(\"AB\", font_size=26, color=C_DONE)"
+             ".next_to(P, RIGHT, buff=0.22)")
+
+    heading = {
+        "entry": "AB entry by entry",
+        "column": "AB one column at a time",
+        "row": "AB one row at a time",
+        "outer": "AB as a sum of rank-1 terms",
+    }[view]
+    L.append("        title = _t(%r, font_size=34).to_edge(UP)" % heading)
+    L.append("        title.add_background_rectangle(opacity=0.9)")
+
+    beat = _BeatKeys()
+    L.append("        _beat(self, %s, Write(title), FadeIn(A), FadeIn(B), FadeIn(P),"
+             " Write(A_tag), Write(B_tag), Write(P_tag))" % beat.next())
+
+    running = [[0.0] * n for _ in range(m)]
+
+    for index, step in enumerate(steps):
+        reads = (["cells[('A', %d, %d)][0]" % (i, j) for i, j in step.a_cells]
+                 + ["cells[('B', %d, %d)][0]" % (i, j) for i, j in step.b_cells])
+        L.append("        read_%d = VGroup(%s)" % (index, ", ".join(reads)))
+        L.append("        cap_%d = _t(%r, font_size=24, color=C_MUTED).to_edge(DOWN)"
+                 % (index, step.caption))
+        L.append("        cap_%d.add_background_rectangle(opacity=0.85)" % index)
+
+        if accumulating:
+            for i, row in enumerate(step.contribution):
+                for j, value in enumerate(row):
+                    running[i][j] += value
+            writes = ["_put('P', %d, %d, %r)" % (i, j, fmt(running[i][j]))
+                      for i in range(m) for j in range(n)]
+        else:
+            writes = ["cells[('P', %d, %d)][1].animate.set_opacity(1)" % (i, j)
+                      for i, j in step.out_cells]
+
+        swap = ("Write(cap_0)" if index == 0
+                else "FadeTransform(cap_%d, cap_%d)" % (index - 1, index))
+        L.append("        _beat(self, %s, %s, Indicate(read_%d, color=C_WARN), %s)"
+                 % (beat.next(), swap, index, ", ".join(writes)))
+
+    closing = {
+        "entry": "each entry: one row of A meets one column of B",
+        "column": "A acts on each column of B, one column at a time",
+        "row": "each row of AB is a blend of the rows of B",
+        "outer": "%d rank-1 terms, added — the reading that shards across devices" % k,
+    }[view]
+    L.append("        done = _t(%r, font_size=26, color=C_DEEP).to_edge(DOWN)" % closing)
+    L.append("        done.add_background_rectangle(opacity=0.9)")
+    L.append("        _beat(self, %s, FadeTransform(cap_%d, done))"
+             % (beat.next(), len(steps) - 1))
+    L.append("        self.wait(1)")
+    return "\n".join(L)
+
+
+#: Concept -> builder within the linear-algebra topic. Mirrors the calculus and
+#: trig dispatchers; the topic's generic form is the single-map scene.
+_LINALG_CONCEPT_BUILDERS = {
+    ConceptLinAlg.LINEAR_MAP: _linear_algebra_scene,
+    ConceptLinAlg.MATMUL_VIEWS: _matmul_views_scene,
 }
+
+
+@scene_for(Topic.LINEAR_ALGEBRA)
+def _linalg_scene(plan: AnimationPlan) -> str:
+    builder = _LINALG_CONCEPT_BUILDERS.get(plan.concept, _linear_algebra_scene)
+    return builder(plan)
+
+
+

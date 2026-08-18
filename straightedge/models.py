@@ -8,9 +8,14 @@ class Topic:
     """Canonical topic identifiers — the single source of truth for routing.
 
     Plain string constants (not an Enum) so the values stay JSON-friendly and
-    compare/hash as ordinary strings on Python 3.10+. Keyword detection
-    (`planner.TOPIC_KEYWORDS`), plan builders (`planner._PLAN_BUILDERS`), and
-    scene builders (`templates._SCENE_BUILDERS`) all key off these.
+    compare/hash as ordinary strings on Python 3.10+.
+
+    Names only. What a topic *does* — its keywords, its tie-break priority, its
+    concepts, its plan and scene builders — is declared with
+    :func:`straightedge.topics.topic` in the module that owns the topic, and
+    :func:`straightedge.topics.verify` raises at import if a name here has no
+    such declaration. Use :func:`straightedge.topics.all_ids` for the set of
+    topics that actually exist; a constant here is a spelling, not a promise.
     """
 
     GEOMETRY = "geometry"
@@ -19,8 +24,7 @@ class Topic:
     THREE_D = "3d"
     FUNCTION = "function"
     CALCULUS = "calculus"
-
-    ALL = (GEOMETRY, TRIG, CONIC, THREE_D, FUNCTION, CALCULUS)
+    LINEAR_ALGEBRA = "linear_algebra"
 
 
 @dataclass(frozen=True)
