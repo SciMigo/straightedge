@@ -1,0 +1,188 @@
+#!/usr/bin/env python3
+"""Build the repository's social preview card.
+
+GitHub renders a card whenever the repository URL is shared -- in a chat, on
+Hacker News, in a tweet. Without one uploaded it generates a grey text card
+carrying the description and the star count, which for this project is exactly
+backwards: the argument for a diagram library is the diagrams, and the default
+card shows none of them.
+
+So the card is built from the repository's own figures. They are the claim.
+
+`site/assets/social-preview.png` is committed, which the rule in
+`build_site_assets.py` otherwise forbids -- binaries belong in R2, not in git.
+Three reasons this one is an exception rather than a lapse: it is 66K against
+that file's 3.3M of MP4s, it is singular rather than a set that grows with every
+render, and GitHub's social-preview upload takes a *file* through the web UI,
+so it has to be fetchable by whoever is doing the uploading.
+
+Uploading is manual. The REST API exposes no endpoint for it:
+
+    Settings -> General -> Social preview -> Edit -> Upload an image
+
+Requires `rsvg-convert` (librsvg), Pillow, and the **DejaVu** fonts.
+
+    Debian/Ubuntu   apt install librsvg2-bin fonts-dejavu-core
+    macOS           brew install librsvg && brew install --cask font-dejavu
+
+DejaVu specifically, not whatever the system happens to have. The card in the
+repository was drawn with it, and a run that quietly substituted Helvetica would
+produce a different card while reporting success -- the person regenerating it
+would have no way to tell. Substituting is therefore an error, not a fallback.
+Point `--font-dir` at a directory holding `DejaVuSans.ttf`, `DejaVuSans-Bold.ttf`
+and `DejaVuSansMono.ttf` if yours live somewhere unusual.
+
+    python tools/make_social_preview.py
+"""
+
+from __future__ import annotations
+
+import argparse
+import subprocess
+import sys
+from pathlib import Path
+
+from PIL import Image, ImageDraw, ImageFont
+
+ROOT = Path(__file__).resolve().parent.parent
+SVG_DIR = ROOT / "site" / "assets" / "svg"
+OUT = ROOT / "site" / "assets" / "social-preview.png"
+
+# GitHub's stated size. Cards are often displayed at half this, so the type is
+# sized to survive that rather than to fill the canvas.
+W, H = 1280, 640
+MARGIN = 44
+
+BG = (255, 255, 255)
+INK = (25, 28, 33)
+MUTED = (108, 117, 128)
+# Taken from the figures themselves rather than invented, so the card and its
+# contents are not two different palettes sitting next to each other.
+ACCENT = (33, 150, 243)
+RULE = (226, 230, 235)
+
+# Where DejaVu lands on the platforms anyone is likely to run this from. The
+# first hard-coded path was Debian's, which failed on macOS with an `apt`
+# instruction -- an error message that is wrong twice over.
+FONT_SEARCH_PATHS = (
+    Path("/usr/share/fonts/truetype/dejavu"),          # Debian, Ubuntu
+    Path("/usr/share/fonts/dejavu"),                   # Fedora, Arch
+    Path("/opt/homebrew/share/fonts"),                 # macOS, Apple silicon
+    Path("/usr/local/share/fonts"),                    # macOS, Intel
+    Path.home() / "Library" / "Fonts",                 # macOS, per-user
+    Path("C:/Windows/Fonts"),                          # Windows
+)
+
+FONT_FILES = ("DejaVuSans.ttf", "DejaVuSans-Bold.ttf", "DejaVuSansMono.ttf")
+
+INSTALL_HINT = {
+    "linux": "apt install fonts-dejavu-core   (or dnf install dejavu-sans-fonts)",
+    "darwin": "brew install --cask font-dejavu",
+    "win32": "download DejaVu from https://dejavu-fonts.github.io/ and install it",
+}
+
+
+def find_font_dir(override: Path | None = None) -> Path:
+    """Locate a directory holding all three DejaVu faces.
+
+    Returns the first complete match. A partial match is skipped rather than
+    used: three faces from two directories is how a card ends up mixing
+    typefaces, which is harder to notice than an outright failure.
+    """
+    candidates = (override,) if override else FONT_SEARCH_PATHS
+    for directory in candidates:
+        if directory and all((directory / name).exists() for name in FONT_FILES):
+            return directory
+
+    hint = INSTALL_HINT.get(sys.platform, INSTALL_HINT["linux"])
+    searched = "\n  ".join(str(c) for c in candidates if c)
+    raise SystemExit(
+        "DejaVu fonts not found. The committed card was drawn with them, and "
+        "substituting another family would silently produce a different card.\n"
+        f"  {hint}\n"
+        f"Searched:\n  {searched}\n"
+        "Or pass --font-dir /path/to/fonts"
+    )
+
+# The figures are drawn in dark strokes on transparency: they are meant for a
+# light page, and would vanish on a dark card.
+FIGURES = [
+    ("unit-circle", 268, (742, 62)),
+    ("riemann-sum", 196, (905, 372)),
+]
+
+
+def rasterise(name: str, height: int) -> Image.Image:
+    """SVG -> PNG at a known height, via librsvg.
+
+    Rasterising each figure separately rather than inlining them into one SVG
+    avoids the CSS class collisions that would follow from merging several
+    stylesheets that each assume they are alone in the document.
+    """
+    source = SVG_DIR / f"{name}.svg"
+    if not source.exists():
+        raise SystemExit(f"missing figure: {source}")
+    png = subprocess.run(
+        ["rsvg-convert", "-h", str(height), "-b", "white", str(source)],
+        check=True,
+        capture_output=True,
+    ).stdout
+    import io
+
+    return Image.open(io.BytesIO(png)).convert("RGBA")
+
+
+def build(font_dir: Path) -> Image.Image:
+    card = Image.new("RGB", (W, H), BG)
+    draw = ImageDraw.Draw(card)
+
+    for name, height, (x, y) in FIGURES:
+        figure = rasterise(name, height)
+        # Assert rather than eyeball: a figure whose aspect ratio changes would
+        # otherwise silently run off the edge, and the failure is only visible
+        # by opening the file.
+        if x + figure.width > W - MARGIN:
+            raise SystemExit(f"{name} overflows the right edge: {x + figure.width} > {W - MARGIN}")
+        if y + figure.height > H - MARGIN:
+            raise SystemExit(f"{name} overflows the bottom: {y + figure.height} > {H - MARGIN}")
+        card.paste(figure, (x, y), figure)
+
+    title = ImageFont.truetype(str(font_dir / "DejaVuSans-Bold.ttf"), 74)
+    tag = ImageFont.truetype(str(font_dir / "DejaVuSans.ttf"), 30)
+    meta = ImageFont.truetype(str(font_dir / "DejaVuSansMono.ttf"), 22)
+
+    x = 84
+    draw.text((x, 138), "Straightedge", font=title, fill=INK)
+    draw.line([(x, 248), (x + 112, 248)], fill=ACCENT, width=7)
+    draw.text((x, 288), "Deterministic, machine-checkable", font=tag, fill=INK)
+    draw.text((x, 328), "SVG diagrams and Manim animations.", font=tag, fill=INK)
+    draw.text((x, 386), "Generated from structure, not guessed.", font=tag, fill=MUTED)
+    draw.line([(x, 462), (x + 548, 462)], fill=RULE, width=2)
+    draw.text((x, 492), "pip install straightedge", font=meta, fill=ACCENT)
+    draw.text((x, 530), "MIT  ·  Python 3.10+  ·  SciMigo/straightedge", font=meta, fill=MUTED)
+
+    return card
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument(
+        "--font-dir",
+        type=Path,
+        default=None,
+        help="directory holding the three DejaVu faces, if not in a standard location",
+    )
+    args = parser.parse_args(argv)
+
+    font_dir = find_font_dir(args.font_dir)
+    card = build(font_dir)
+    OUT.parent.mkdir(parents=True, exist_ok=True)
+    card.save(OUT, "PNG", optimize=True)
+    print(f"{OUT.relative_to(ROOT)}  {card.size[0]}x{card.size[1]}  {OUT.stat().st_size // 1024}K")
+    print(f"fonts:  {font_dir}")
+    print("upload: Settings -> General -> Social preview -> Edit")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
