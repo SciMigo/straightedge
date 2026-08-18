@@ -81,10 +81,7 @@ def as_dicts() -> list[dict]:
 
 
 def _animation_templates() -> list[Template]:
-    from straightedge.calculus import ConceptCalculus
-    from straightedge.conics import ConceptConic
-    from straightedge.solids3d import Concept3D
-    from straightedge.trig import Concept as ConceptTrig
+    from straightedge import topics
 
     reachable = _text_reachable_concepts()
     param_names = _precondition_params()
@@ -105,12 +102,11 @@ def _animation_templates() -> list[Template]:
             summary=f"{topic} (generic)",
         ))
 
-    concepts: list[str] = []
-    for enum in (ConceptCalculus, ConceptConic, Concept3D, ConceptTrig):
-        concepts += [v for k, v in vars(enum).items()
-                     if not k.startswith("_") and isinstance(v, str)]
-
-    for concept in sorted(concepts):
+    # Read from the topic registry rather than from a tuple of enums listed
+    # here. That tuple was the quietest of the four lists a new topic had to
+    # join: a concept missing from it renders perfectly and is invisible to
+    # every agent, which is the one failure a *discovery* API must not have.
+    for concept in topics.concept_ids():
         reach = concept in reachable
         templates.append(Template(
             id=concept,
@@ -142,6 +138,8 @@ CANONICAL_PROMPTS: dict[str, str] = {
     "3d/three_views": "画一个正方体，展示三视图",
     "3d/cube_section": "画一个正方体的截面，过 A B C 三点",
     "3d/sphere_section": "球的截面是什么形状",
+    "linear_algebra/linear_map": "画一个线性变换，展示特征向量",
+    "linear_algebra/matmul_views": "画矩阵乘法，用外积的方式展示",
 }
 
 

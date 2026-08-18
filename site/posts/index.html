@@ -4,18 +4,18 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#090d14">
-    <meta name="description" content="Short technical writeups on how data actually moves through accelerators and clusters — each one a simulation you can run, animated from the simulation rather than illustrated beside it.">
-    <meta property="og:title" content="Dataflow, executed">
-    <meta property="og:description" content="Systolic arrays, pipeline schedules, collectives — simulated, measured, and animated from the measurement.">
-    <meta property="og:image" content="https://scimigo.github.io/straightedge/assets/posters/systolic-array.jpg">
+    <meta name="description" content="The Straightedge blog: short technical posts where the animation is generated from a simulation that asserts its own claim. Dataflow inside accelerators and across clusters, and the linear algebra underneath it.">
+    <meta property="og:title" content="The Straightedge blog">
+    <meta property="og:description" content="Systolic arrays, pipeline schedules, collectives, and matrix products — simulated, measured, and animated from the measurement.">
+    <meta property="og:image" content="https://pub-ae0e951cb13d4628913ced2bc423d839.r2.dev/straightedge/assets/posters/systolic-array.jpg">
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://scimigo.github.io/straightedge/posts/">
     <link rel="canonical" href="https://scimigo.github.io/straightedge/posts/">
     <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:title" content="Dataflow, executed — systolic arrays, pipeline schedules, collectives">
-    <meta name="twitter:description" content="Short technical writeups where the animation is generated from a simulation that asserts its own claim.">
-    <meta name="twitter:image" content="https://scimigo.github.io/straightedge/assets/posters/systolic-array.jpg">
-    <title>Dataflow, executed — systolic arrays, pipeline schedules, collectives</title>
+    <meta name="twitter:title" content="The Straightedge blog — dataflow, executed">
+    <meta name="twitter:description" content="Short technical posts where the animation is generated from a simulation that asserts its own claim.">
+    <meta name="twitter:image" content="https://pub-ae0e951cb13d4628913ced2bc423d839.r2.dev/straightedge/assets/posters/systolic-array.jpg">
+    <title>Blog — Straightedge</title>
     <link rel="stylesheet" href="../styles.css">
     <link rel="stylesheet" href="post.css">
   </head>
@@ -34,18 +34,18 @@
 
     <main class="post">
       <div class="post-head">
-        <p class="post-kicker">Series</p>
-        <h1>Dataflow, executed</h1>
+        <p class="post-kicker">Blog</p>
+        <h1>Written down, then run</h1>
         <p class="standfirst">
-          How data actually moves through an accelerator and across a cluster —
-          the mechanisms everyone draws as a static grid with arrows, and nobody
-          runs. Each post is a simulation you can execute, animated from the
-          simulation rather than illustrated beside it.
+          Short technical posts about mechanisms that are usually drawn and
+          rarely executed. Each one simulates the thing first, asserts the claim
+          it is about to make, and animates the simulation — so a post whose
+          claim stops being true fails to render rather than going out wrong.
         </p>
         <p class="byline">
           <span>Every claim on screen is asserted in the code that draws it</span>
-          <span>Scenes live in
-            <code>examples/</code> and re-render from source</span>
+          <span>Scenes re-render from source in
+            <code>examples/</code> and <code>straightedge/</code></span>
         </p>
       </div>
 
@@ -56,9 +56,13 @@
           and nobody will notice, because nothing in the drawing is checked
           against anything. These posts take the opposite approach: the mechanism
           is simulated first, the picture is a consequence of the simulation, and
-          the numbers on screen are counted from the run rather than typed in. A
-          scene whose claim stops being true fails to render.
+          the numbers on screen are counted from the run rather than typed in.
         </p>
+      </div>
+
+      <div class="series-heading">
+        <h2>Dataflow, executed</h2>
+        <p>How data moves through an accelerator and across a cluster</p>
       </div>
 
       <ol class="post-list">
@@ -97,6 +101,33 @@
             Splitting each device's layers into several non-contiguous chunks
             genuinely shrinks the bubble, and pays for it in cross-device
             traffic. Same treatment: simulated, measured, animated.
+          </p>
+          <span class="tag">Planned</span>
+        </li>
+      </ol>
+
+      <div class="series-heading">
+        <h2>Linear algebra, four ways</h2>
+        <p>The operations underneath the dataflow above</p>
+      </div>
+
+      <ol class="post-list">
+        <li>
+          <h2><a href="matrix-product-four-ways.html">The matrix product you already shipped twice</a></h2>
+          <p>
+            <code>AB</code> is taught as a rule for filling in entries. Three
+            other readings of the same product explain what it is <em>for</em> —
+            and two of them are already running in the posts above, one in
+            silicon and one across eight GPUs.
+          </p>
+          <span class="tag">Matrix multiplication</span>
+        </li>
+        <li class="pending">
+          <h2>Low rank, and what it throws away</h2>
+          <p>
+            If <code>AB</code> is a sum of rank-1 terms, keeping only the largest
+            few is an approximation with a measurable error. Same treatment:
+            computed, bounded, animated from the computation.
           </p>
           <span class="tag">Planned</span>
         </li>

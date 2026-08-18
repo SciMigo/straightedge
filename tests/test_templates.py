@@ -4,6 +4,7 @@ import pytest
 
 from straightedge.labels import AUTHORED_LANGUAGE
 from straightedge.models import AnimationPlan, Topic
+from straightedge.topics import all_ids as topic_ids
 from straightedge.templates import SCENE_CLASS_NAME
 from straightedge.templates import scene_code_for as _scene_code_for
 
@@ -25,13 +26,13 @@ def _plan(topic: str) -> AnimationPlan:
     return AnimationPlan(topic=topic, title_zh="", objective_zh="", english_prompt="")
 
 
-@pytest.mark.parametrize("topic", Topic.ALL)
+@pytest.mark.parametrize("topic", topic_ids())
 def test_template_is_valid_python(topic):
     # Guards against typos shipping broken scenes that only fail at render time.
     ast.parse(scene_code_for(_plan(topic)))
 
 
-@pytest.mark.parametrize("topic", Topic.ALL)
+@pytest.mark.parametrize("topic", topic_ids())
 def test_template_defines_scene_class(topic):
     # renderer.render_scene() targets templates.SCENE_CLASS_NAME.
     tree = ast.parse(scene_code_for(_plan(topic)))

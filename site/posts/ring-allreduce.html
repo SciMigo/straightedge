@@ -7,14 +7,14 @@
     <meta name="description" content="A ring all-reduce moves 2(N-1)/N times the buffer per rank — under 2D at every ring size, 1.5D at four ranks and 1.97D at sixty-four. Adding ranks does not cost bytes. What grows is the number of serial round trips.">
     <meta property="og:title" content="Ring all-reduce: the bytes per rank don't grow">
     <meta property="og:description" content="Executed chunk by chunk, four ranks, every send counted. The bandwidth is bounded no matter how large the ring gets; the latency is not.">
-    <meta property="og:image" content="https://scimigo.github.io/straightedge/assets/posters/ring-allreduce.jpg">
+    <meta property="og:image" content="https://pub-ae0e951cb13d4628913ced2bc423d839.r2.dev/straightedge/assets/posters/ring-allreduce.jpg">
     <meta property="og:type" content="article">
     <meta property="og:url" content="https://scimigo.github.io/straightedge/posts/ring-allreduce.html">
     <link rel="canonical" href="https://scimigo.github.io/straightedge/posts/ring-allreduce.html">
     <meta name="twitter:card" content="player">
     <meta name="twitter:title" content="Ring all-reduce visualization: why bytes per rank don't grow">
     <meta name="twitter:description" content="Executed chunk by chunk, four ranks, every send counted. Bandwidth-optimal by construction; the cost that grows is round trips.">
-    <meta name="twitter:image" content="https://scimigo.github.io/straightedge/assets/posters/ring-allreduce.jpg">
+    <meta name="twitter:image" content="https://pub-ae0e951cb13d4628913ced2bc423d839.r2.dev/straightedge/assets/posters/ring-allreduce.jpg">
     <title>Ring all-reduce visualization: why bytes per rank don't grow</title>
     <link rel="stylesheet" href="../styles.css">
     <link rel="stylesheet" href="post.css">
@@ -25,7 +25,7 @@
       "headline": "Ring all-reduce: the bytes per rank don't grow",
       "description": "A ring all-reduce moves 2(N-1)/N times the buffer per rank, which is under 2D at every ring size. Adding ranks does not cost bandwidth; it costs serial round trips.",
       "url": "https://scimigo.github.io/straightedge/posts/ring-allreduce.html",
-      "image": "https://scimigo.github.io/straightedge/assets/posters/ring-allreduce.jpg",
+      "image": "https://pub-ae0e951cb13d4628913ced2bc423d839.r2.dev/straightedge/assets/posters/ring-allreduce.jpg",
       "author": { "@type": "Organization", "name": "SciMigo" },
       "publisher": { "@type": "Organization", "name": "Straightedge" },
       "about": ["Ring all-reduce", "Collective communication", "Data parallelism", "Distributed training", "Bandwidth optimality"],
@@ -39,7 +39,7 @@
         <span class="wordmark-mark" aria-hidden="true"></span>
         <span>Straightedge</span>
       </a>
-      <a class="repo-link" href="index.html">All writeups <span aria-hidden="true">↗</span></a>
+      <a class="repo-link" href="index.html">All posts <span aria-hidden="true">↗</span></a>
     </header>
 
     <main class="post">
@@ -60,9 +60,9 @@
 
       <figure class="post-figure">
         <video controls playsinline preload="metadata"
-               poster="../assets/posters/ring-allreduce.jpg"
+               poster="https://pub-ae0e951cb13d4628913ced2bc423d839.r2.dev/straightedge/assets/posters/ring-allreduce.jpg"
                aria-label="Four ranks arranged in a ring exchanging chunks, each rank's chunks darkening as they accumulate partial sums and then turning green as the finished sum propagates back around">
-          <source src="../assets/mp4/ring-allreduce.mp4" type="video/mp4">
+          <source src="https://pub-ae0e951cb13d4628913ced2bc423d839.r2.dev/straightedge/assets/mp4/ring-allreduce.mp4" type="video/mp4">
           Your browser does not support embedded video.
         </video>
         <figcaption>

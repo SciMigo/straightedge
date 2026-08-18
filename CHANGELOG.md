@@ -6,6 +6,208 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **Linear algebra**, the first topic outside the exam-shaped catalog described
+  in issue #13. One concept, `linear_algebra/linear_map`, parameterised by the
+  map itself: `matrix`, `vectors`, `labels`, `show_eigenvectors`, `show_span`,
+  `show_determinant`. Vector addition, a linear transformation, the span of a
+  set, the determinant as signed area and the eigen-directions are all readings
+  of the same picture, so they are one builder rather than five — the `function`
+  pattern, applied where it fits.
+- `straightedge.linalg`: closed-form 2x2 eigenpairs, determinant, span
+  dimension, and the coercions the builder and its checks share. The geometry is
+  resolved in Python and baked into the emitted scene as constants, which is
+  what lets a request be *refused* before Manim starts: a rotation has no
+  invariant direction, so asking for its eigenvectors draws none rather than
+  inventing one.
+- **`linear_algebra/matmul_views`**, the second general builder: `A @ B` under
+  each of the four readings of the same product — `entry` (the rule as taught),
+  `column` (`col_j(AB) = A · col_j(B)`), `row`, and `outer` (`Σ_k col_k(A) ⊗
+  row_k(B)`). Parameters are `a`, `b`, `view`.
+
+  Two of those readings were already in this repository as hardware examples and
+  reachable as neither prompt nor template. `examples/systolic_array` is the
+  entry reading executed in silicon; `examples/tensor_parallel` is the outer
+  reading executed across devices — "A split by columns, B by rows" is exactly
+  the rank-1 factorisation, and that argument was doing linear-algebra teaching
+  inside a networking video where no student learning matrix multiplication
+  would find it.
+
+  The scene follows the rule `examples/README.md` states for those examples —
+  *simulate the mechanism, assert the claim, then animate the simulation*. Each
+  view's own rule is run in Python, its steps are asserted to reproduce `A @ B`,
+  and a view that does not raises before a frame is drawn. Every value, caption
+  and highlighted index in the emitted scene is a computed constant, so changing
+  the input matrices cannot leave a stale number behind.
+
+  The arithmetic is stdlib — a triple loop and closed forms, no numpy, no sympy.
+  `pyproject.toml` declares no dependencies on purpose, and determinism needs it:
+  an eigenvector's sign convention varies between LAPACK builds, and a picture
+  that flips between machines is not a picture the library can stand behind.
+
+  The three grids are laid out by solving for the cell size, not by fixed
+  offsets, and the type scales with it. The block is `(k + n)` cells wide and `(k + m)` tall — both grow with
+  the inner dimension — so no fixed offset can be right for more than one shape,
+  and the first attempt, tuned against a 2x2, put grid B on top of the product at
+  4x4. `qc` reports clean at every shape up to the 4x4 cap, and the cap is there
+  because 5x5 is where the bottom row measurably reaches the caption.
+- Preconditions for `linear_algebra/linear_map`, registered in
+  `straightedge.preconditions` alongside every other concept's. This is the one
+  builder with no picture of its own — the parameters *are* the lesson — so a
+  dropped parameter is not a detail rendered differently but a different lesson
+  rendered confidently. A malformed `matrix` blocks, because falling back to the
+  identity narrates a transformation over a video that shows none; vectors the
+  scene cannot draw are reported with the count; eigenvectors on a rotation and
+  a singular determinant warn, since the scene already degrades honestly. It
+  also gives `list_templates()` the five parameter names it previously published
+  as an empty list, for the one concept whose entire interface is its
+  parameters.
+
+### Added
+- `tools/build_site_assets.py` — renders, stills, and publishes the site's demo
+  assets. Every MP4, poster and GIF under `site/assets/` was made by hand and
+  nothing could reproduce any of them, so a scene builder could change and the
+  landing page would keep showing output the library no longer produces. Each
+  scene now declares the exact input that made its file, including the seven
+  that predate the script.
+
+  Binaries go to the public `scimigo-cdn` bucket under `straightedge/assets/`
+  rather than into git — `site/assets/` is already 3.3M against a 5.1M `.git`.
+  Renders stage in `build/` (already gitignored) and the page references the
+  published URL. Credentials are read from the environment only.
+
+  The demo reel is declared rather than taken from `list_templates()`: the
+  catalog says what *can* be drawn, and a landing page wants a curated subset.
+  Each template render is passed through `preconditions.validate` first, because
+  a front-page asset that trips a blocking check is the worst possible place for
+  the failure this project exists to refuse.
+- **The writeups section is now a blog** (`site/posts/`), with the three dataflow
+  pieces grouped under a "Dataflow, executed" heading and room for series beside
+  it. The directory keeps its `/posts/` path: three of its URLs are already in
+  the sitemap and indexed, and renaming it to `/blog/` would 404 them to buy a
+  nicer path.
+- `site/posts/matrix-product-four-ways.html` — the first post outside dataflow.
+  `AB` under its four readings, and the observation that two of them were
+  already on this site without saying so: the systolic array executes the entry
+  reading in silicon, and tensor parallelism executes the outer reading across
+  devices. "Split A by columns and B by rows" is usually offered as a
+  convention; it is the rank-1 factorisation, which is why each device can
+  compute a whole partial sum and the block crosses the network once.
+- Two linear-algebra cards on the landing page gallery: `linear_algebra/linear_map`
+  showing the eigen-directions of `[[2,1],[1,2]]`, and `linear_algebra/matmul_views`
+  building `AB` as a sum of rank-1 terms — the same reading the systolic-array
+  and tensor-parallel examples further down the page already execute.
+
+### Changed
+- **The site's MP4s and posters left git for R2.** 2.8M of binaries against a
+  5.1M `.git`, regenerated rather than edited, and read by nothing but two HTML
+  pages. They now live in the public `scimigo-cdn` bucket under
+  `straightedge/assets/` and the pages reference them by URL; `site/` fell from
+  3.3M to 464K. The exact bytes were uploaded rather than re-rendered, so the
+  live site is unchanged.
+
+  The GIFs stayed. `README.md` embeds them through `raw.githubusercontent.com`,
+  so moving them would make the project's GitHub and PyPI landing images depend
+  on a bucket binding rather than on the repository — 292K is not the weight
+  worth that. `site/assets/README.md` records the split.
+- **Topics now declare themselves.** `straightedge.topics` is a registry: a topic
+  states its id, keywords, tie-break priority and concepts in the module that
+  owns it, and its plan and scene builders attach themselves with `@plan_for` /
+  `@scene_for` where they are defined. Four hardcoded lists are gone — `Topic.ALL`,
+  the concept-enum tuple in `catalog.py`, `planner._PLAN_BUILDERS` and
+  `templates._SCENE_BUILDERS` — along with `planner.TOPIC_KEYWORDS` and
+  `TOPIC_PRIORITY`.
+
+  This is the figure lane's design, which has never had a central list:
+  `diagrams/__init__.py` imports its templates for the side effect of
+  registering them, and `preconditions.register` is the same pattern again. The
+  animation lane was the exception, and adding linear algebra measured the cost
+  — one topic, five files, and each omission failing differently and silently. A
+  concept missing from the catalog's tuple renders perfectly and is invisible to
+  every agent; a topic missing from `_SCENE_BUILDERS` quietly draws the
+  *geometry* scene. `topics.verify()` runs when the package finishes importing
+  and raises on any of them, so a half-registered topic cannot reach a caller at
+  all.
+
+  Registration is internal only — no entry points. The catalog earns its
+  authority by *probing* (rendering a bare prompt to see if a topic is generic,
+  running each canonical prompt to see which concepts are truly reachable), and
+  those guarantees hold because everything listed shipped in this package.
+  Opening that up is a decision about what `list_templates()` means, not a
+  loader to add.
+
+  New public names: `topic_ids()`, `topic_spec()`, `TopicSpec`.
+
+  **Breaking:** `Topic.ALL` is removed. Use `straightedge.topic_ids()`. The
+  `Topic.*` constants are unchanged, but they are now names only — what a topic
+  *does* lives on its declaration, and a constant with no declaration is an
+  import-time error rather than a topic that half-works.
+
+### Fixed
+Review findings on PR #2, all reproduced before being fixed.
+
+- **Labels and span did not follow their vectors through the map.** `ApplyMatrix`
+  transformed the plane and the arrows only, so a labelled `u` stayed at the old
+  arrow's tip while the arrow left, and a requested span kept pointing the old
+  way. This was the landing-page example, which supplies labels with a
+  non-identity matrix. The tags are now *moved* rather than transformed —
+  feeding text to `ApplyMatrix` shears the letterforms, so it would arrive in
+  the right place unreadable — and a span *line* is carried through the map
+  while a spanned *plane* is not, because the image of the plane is the plane
+  and shearing that rectangle would draw a subspace the span never became.
+- **`coerce_vectors` was not total.** `vectors=42` raised `TypeError` from inside
+  validation — a check that crashes on bad input is not a check — and
+  `vectors="nope"` iterated character by character, dropped every one, reported
+  nothing, and rendered the stock pair. Both now yield `[]`, and `is_vector_list`
+  lets the precondition report a malformed container as malformed rather than as
+  empty.
+- **The zero subspace was described as a line.** `span_dimension` correctly
+  returned 0, but the scene grouped dimensions 0 and 1 together, drew a
+  zero-length `Line`, and captioned it "the span is a line: these vectors are
+  parallel". The span of zero vectors is `{0}`; it now draws the origin and says
+  so. A single vector is also no longer called parallel to anything.
+- **The readability floor voided the frame-fit guarantee**, and the guarantee
+  never covered the arrows in the first place. `NumberPlane` keeps a unit size of
+  one scene unit per plane unit whatever range it is given, so sizing the grid
+  never moved the vectors: under `10I` the vector `(1, 0)` was drawn one scene
+  unit long and `ApplyMatrix` sent it to `(10, 0)`, outside the frame, under a
+  grid that "fitted" — and at any scale a 1-unit arrow spanning several grid
+  squares misstates the vector it draws. The plane's `x_length` now carries a
+  single scale that everything placed through `c2p` inherits, solved from the
+  content; the grid is sized separately so its own image stays in frame, which
+  is what `qc` polices. A map too violent to draw legibly is refused rather than
+  rendered as a smudge.
+- **A scalar matrix lost its two-dimensional eigenspace.** For `2I` both repeated
+  roots took the already-diagonal branch, both returned the x-axis, and the
+  duplicate was removed — leaving one dashed line, which tells a viewer the other
+  directions turn. Every direction is invariant, so two independent basis
+  directions are returned. A *defective* repeated eigenvalue still lists one.
+- **`show_span` was supported, documented, changelogged, and read by no check**,
+  so `list_templates()` published five parameters for a six-parameter concept and
+  the feature was invisible to any caller trusting the catalog. The check now
+  reads it, and is load-bearing rather than decorative: it reports the case where
+  the subspace drawn is the origin alone.
+- Bottom-of-frame captions are stacked. Span, area and eigen captions each
+  claimed `to_edge(DOWN)` independently; with span and determinant both on, `qc`
+  measured the area line 87% covered by the span note.
+
+- Linear-algebra concepts were never checked for untranslated labels.
+  `tests/test_labels._every_concept` hand-listed four concept classes and had
+  not been updated for the fifth, so `linear_algebra/*` fell outside the
+  coverage sweep. It reads the topic registry now, and a new topic joins that
+  coverage by existing.
+- `coordinate_plane` drew vectors as bare line segments. It referenced
+  `url(#arrowhead)` and defined no such marker, so every vector lost the
+  arrowhead that makes it a vector; the `label` documented for vectors since the
+  template was written was never read; and all vectors defaulted to one blue,
+  which the curve palette had already been introduced to avoid. Markers now
+  carry an id derived from the vector data, so two diagrams on one page cannot
+  resolve to each other's arrowhead — the collision `graph.py` documents.
+- A generated linear-algebra scene sizes its plane so the *image* under the
+  matrix fits the frame, rather than drawing a fixed grid that a large
+  eigenvalue then pushes off-screen. QC measured 11.8 units outside a 14.2-unit
+  frame before; the same scene now reports no errors.
+
 ## [0.2.0] - 2026-08-17
 
 A minor rather than a patch release: the public API grew by seven names and a

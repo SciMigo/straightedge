@@ -17,6 +17,9 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
+from .models import Topic
+from .topics import topic
+
 
 class Concept3D:
     """Sub-topic identifiers under ``Topic.THREE_D``.
@@ -930,3 +933,12 @@ def three_views(kind, params, color=C_FLOW, stroke=3):
         Square(side_length=1.0, color=color, stroke_width=stroke),
     )
 '''.strip()
+
+
+@topic(Topic.THREE_D, priority=40,
+       keywords=("三维", "3d", "立体", "空间", "球", "圆锥", "圆柱", "平面", "向量",
+              "正方体", "立方体", "长方体", "棱柱", "棱锥", "棱台", "四面体"))
+class Solids3D:
+    """Solids in space: overviews, three views, and plane sections."""
+
+    concepts = Concept3D

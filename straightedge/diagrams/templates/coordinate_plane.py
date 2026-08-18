@@ -6,6 +6,7 @@ Used as foundation for function graphs, vector diagrams, etc.
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import math
 from typing import Any, Callable, Dict, List, Optional, Tuple
@@ -25,9 +26,25 @@ from .function_graph import _safe_eval
 
 logger = logging.getLogger(__name__)
 
+
+def _stable_suffix(payload: Any) -> str:
+    """A short id derived from the data, not from a counter or the clock.
+
+    Marker ids have to be unique across every diagram on a page, and this
+    library's output has to be byte-identical for identical input. Hashing the
+    data satisfies both: two different vector sets get different ids, and the
+    same vector set always gets the same one.
+    """
+    return hashlib.sha1(repr(payload).encode("utf-8")).hexdigest()[:8]
+
 # Distinct default strokes, so a two-curve comparison reads as a comparison.
 # Every curve defaulting to the same blue is indistinguishable from a bug.
 _CURVE_PALETTE = ("#2196F3", "#E5533D", "#4CAF50", "#9C27B0", "#FF9800")
+
+# Vectors get the same treatment for the same reason: u, v and u+v drawn in one
+# blue is a picture of three anonymous segments, and vector addition is exactly
+# the relationship the colours have to carry.
+_VECTOR_PALETTE = ("#2196F3", "#E5533D", "#4CAF50", "#9C27B0", "#FF9800")
 
 
 def _sample_curve(
@@ -419,7 +436,22 @@ class CoordinatePlaneTemplate:
 
         # Draw vectors
         if vectors:
-            vector_elements = []
+            # The marker has to be defined, and defined under an id no other
+            # diagram on the page shares. This template referenced
+            # ``url(#arrowhead)`` and defined nothing, so every vector rendered
+            # as a bare line segment — a vector without an arrowhead does not
+            # show direction, which is the whole of what a vector is. The id is
+            # derived from the vector data rather than a counter so the output
+            # stays deterministic; see ``graph.py::_arrow_marker`` for the
+            # collision this avoids.
+            marker_id = f"cp-arrow-{_stable_suffix(vectors)}"
+            vector_elements = [
+                f'<defs><marker id="{marker_id}" markerWidth="10" markerHeight="7" '
+                f'refX="9" refY="3.5" orient="auto">'
+                f'<polygon points="0 0, 10 3.5, 0 7" fill="context-stroke"/>'
+                f"</marker></defs>"
+            ]
+            drawn = 0
             for vec in vectors:
                 if not isinstance(vec, dict):
                     continue
@@ -427,7 +459,8 @@ class CoordinatePlaneTemplate:
                 vy = float(vec.get("y", 0))
                 origin_x = float(vec.get("origin_x", 0))
                 origin_y = float(vec.get("origin_y", 0))
-                color = vec.get("color", "#2196F3")
+                color = vec.get("color") or _VECTOR_PALETTE[drawn % len(_VECTOR_PALETTE)]
+                drawn += 1
 
                 px1 = to_svg_x(origin_x)
                 py1 = to_svg_y(origin_y)
@@ -435,8 +468,25 @@ class CoordinatePlaneTemplate:
                 py2 = to_svg_y(origin_y + vy)
 
                 vector_elements.append(
-                    line(px1, py1, px2, py2, stroke=color, stroke_width="2", marker_end="url(#arrowhead)")
+                    line(px1, py1, px2, py2, stroke=color, stroke_width="2",
+                         marker_end=f"url(#{marker_id})")
                 )
+
+                # ``label`` has been in this template's docstring since it was
+                # written and was never read, so a caller who labelled u and v
+                # got an unlabelled picture and no error.
+                label = vec.get("label")
+                if label:
+                    # Offset along the vector's own normal, so the text clears
+                    # the shaft rather than sitting on top of it.
+                    dx, dy = px2 - px1, py2 - py1
+                    length = math.hypot(dx, dy) or 1.0
+                    off_x, off_y = -dy / length * 10, dx / length * 10
+                    vector_elements.append(
+                        text(px2 + off_x, py2 + off_y, str(label),
+                             **{"class": "coord-point-label", "fill": color,
+                                "text_anchor": "middle"})
+                    )
             elements.append(group("\n".join(vector_elements)))
 
         # Title

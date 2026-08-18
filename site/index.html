@@ -8,7 +8,7 @@
     <link rel="canonical" href="https://scimigo.github.io/straightedge/">
     <meta property="og:title" content="Straightedge — Python SVG Diagram &amp; Manim Animation Generator">
     <meta property="og:description" content="Generate deterministic, machine-checkable SVG diagrams and Manim animations from Python. 35 dependency-free templates, and geometry an AI agent can inspect before accepting a visual.">
-    <meta property="og:image" content="https://scimigo.github.io/straightedge/assets/posters/unit-circle-sine.jpg">
+    <meta property="og:image" content="https://pub-ae0e951cb13d4628913ced2bc423d839.r2.dev/straightedge/assets/posters/unit-circle-sine.jpg">
     <meta property="og:image:alt" content="A point on the unit circle tracing one period of a sine curve">
     <meta property="og:type" content="website">
     <meta property="og:site_name" content="Straightedge">
@@ -16,7 +16,7 @@
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Straightedge — Python SVG Diagram &amp; Manim Animation Generator">
     <meta name="twitter:description" content="Generate deterministic, machine-checkable SVG diagrams and Manim animations from Python.">
-    <meta name="twitter:image" content="https://scimigo.github.io/straightedge/assets/posters/unit-circle-sine.jpg">
+    <meta name="twitter:image" content="https://pub-ae0e951cb13d4628913ced2bc423d839.r2.dev/straightedge/assets/posters/unit-circle-sine.jpg">
     <title>Straightedge — Python SVG Diagram &amp; Manim Animation Generator</title>
     <link rel="stylesheet" href="styles.css">
 
@@ -306,8 +306,8 @@
 
         <div class="gallery-grid">
           <article class="scene-card">
-            <video controls playsinline preload="metadata" poster="assets/posters/derivative-tangent.jpg" aria-label="Derivative tangent animation">
-              <source src="assets/mp4/derivative-tangent.mp4" type="video/mp4">
+            <video controls playsinline preload="metadata" poster="https://pub-ae0e951cb13d4628913ced2bc423d839.r2.dev/straightedge/assets/posters/derivative-tangent.jpg" aria-label="Derivative tangent animation">
+              <source src="https://pub-ae0e951cb13d4628913ced2bc423d839.r2.dev/straightedge/assets/mp4/derivative-tangent.mp4" type="video/mp4">
               Your browser does not support embedded video.
             </video>
             <div class="card-copy">
@@ -319,8 +319,8 @@
           </article>
 
           <article class="scene-card">
-            <video controls playsinline preload="metadata" poster="assets/posters/riemann-integral.jpg" aria-label="Riemann integral animation">
-              <source src="assets/mp4/riemann-integral.mp4" type="video/mp4">
+            <video controls playsinline preload="metadata" poster="https://pub-ae0e951cb13d4628913ced2bc423d839.r2.dev/straightedge/assets/posters/riemann-integral.jpg" aria-label="Riemann integral animation">
+              <source src="https://pub-ae0e951cb13d4628913ced2bc423d839.r2.dev/straightedge/assets/mp4/riemann-integral.mp4" type="video/mp4">
               Your browser does not support embedded video.
             </video>
             <div class="card-copy">
@@ -332,8 +332,8 @@
           </article>
 
           <article class="scene-card">
-            <video controls playsinline preload="metadata" poster="assets/posters/unit-circle-sine.jpg" aria-label="Unit circle generating a sine curve">
-              <source src="assets/mp4/unit-circle-sine.mp4" type="video/mp4">
+            <video controls playsinline preload="metadata" poster="https://pub-ae0e951cb13d4628913ced2bc423d839.r2.dev/straightedge/assets/posters/unit-circle-sine.jpg" aria-label="Unit circle generating a sine curve">
+              <source src="https://pub-ae0e951cb13d4628913ced2bc423d839.r2.dev/straightedge/assets/mp4/unit-circle-sine.mp4" type="video/mp4">
               Your browser does not support embedded video.
             </video>
             <div class="card-copy">
@@ -345,8 +345,8 @@
           </article>
 
           <article class="scene-card">
-            <video controls playsinline preload="metadata" poster="assets/posters/ellipse-foci.jpg" aria-label="Ellipse focus-distance animation">
-              <source src="assets/mp4/ellipse-foci.mp4" type="video/mp4">
+            <video controls playsinline preload="metadata" poster="https://pub-ae0e951cb13d4628913ced2bc423d839.r2.dev/straightedge/assets/posters/ellipse-foci.jpg" aria-label="Ellipse focus-distance animation">
+              <source src="https://pub-ae0e951cb13d4628913ced2bc423d839.r2.dev/straightedge/assets/mp4/ellipse-foci.mp4" type="video/mp4">
               Your browser does not support embedded video.
             </video>
             <div class="card-copy">
@@ -354,6 +354,35 @@
               <h3>The focal sum stays fixed</h3>
               <p class="prompt"><span>Input intent</span> Mark an ellipse’s two foci and show that a moving point keeps their distance sum constant.</p>
               <details class="source-input"><summary>Original input · Chinese adapter</summary><p lang="zh">“画一个椭圆，标出两个焦点，展示动点到焦点的距离和保持不变”</p></details>
+            </div>
+          </article>
+
+          <!-- Linear algebra. Video and poster are served from R2 rather than
+               committed: site/assets/ is already 3.3M against a 5.1M .git, and
+               tools/build_site_assets.py is what produces and publishes them. -->
+          <article class="scene-card">
+            <video controls playsinline preload="metadata" poster="https://pub-ae0e951cb13d4628913ced2bc423d839.r2.dev/straightedge/assets/posters/linear-map.jpg" aria-label="Linear map eigenvector animation">
+              <source src="https://pub-ae0e951cb13d4628913ced2bc423d839.r2.dev/straightedge/assets/mp4/linear-map.mp4" type="video/mp4">
+              Your browser does not support embedded video.
+            </video>
+            <div class="card-copy">
+              <p class="card-kicker">Linear algebra · eigenvectors</p>
+              <h3>The directions that do not turn</h3>
+              <p class="prompt"><span>Input intent</span> Apply <code>[[2,1],[1,2]]</code> to the plane, mark the two directions it leaves in place, and show the unit square’s area become the determinant.</p>
+              <details class="source-input"><summary>Original input · template call</summary><p><code>linear_algebra/linear_map</code> with <code>show_eigenvectors</code> and <code>show_determinant</code>. A matrix with no real eigenvalues draws no invariant direction — a rotation turns every vector, and the precondition says so rather than inventing one.</p></details>
+            </div>
+          </article>
+
+          <article class="scene-card">
+            <video controls playsinline preload="metadata" poster="https://pub-ae0e951cb13d4628913ced2bc423d839.r2.dev/straightedge/assets/posters/matmul-outer.jpg" aria-label="Matrix product as a sum of rank-1 terms">
+              <source src="https://pub-ae0e951cb13d4628913ced2bc423d839.r2.dev/straightedge/assets/mp4/matmul-outer.mp4" type="video/mp4">
+              Your browser does not support embedded video.
+            </video>
+            <div class="card-copy">
+              <p class="card-kicker">Linear algebra · the product, read four ways</p>
+              <h3>AB as a sum of rank-1 terms</h3>
+              <p class="prompt"><span>Input intent</span> Build <code>AB</code> not entry by entry but as <code>Σ&#8202;col<sub>k</sub>(A) ⊗ row<sub>k</sub>(B)</code> — the reading that explains low-rank approximation.</p>
+              <details class="source-input"><summary>Original input · template call</summary><p><code>linear_algebra/matmul_views</code> with <code>view="outer"</code>. Each reading’s own rule is run in Python and asserted to reproduce <code>A @ B</code> before a frame is drawn. It is also the reading the systolic array and tensor-parallel examples below already execute — in silicon, and across devices.</p></details>
             </div>
           </article>
         </div>
@@ -368,14 +397,14 @@
           <p>
             These dataflow examples do not use the prompt pipeline. They simulate
             the mechanism, assert its central claim, and only then animate it.
-            <a href="posts/index.html">Read the writeups &rarr;</a>
+            <a href="posts/index.html">Read the blog &rarr;</a>
           </p>
         </div>
 
         <div class="gallery-grid gallery-grid-three">
           <article class="scene-card claim-card">
-            <video controls playsinline preload="metadata" poster="assets/posters/systolic-array.jpg" aria-label="Weight-stationary systolic array animation">
-              <source src="assets/mp4/systolic-array.mp4" type="video/mp4">
+            <video controls playsinline preload="metadata" poster="https://pub-ae0e951cb13d4628913ced2bc423d839.r2.dev/straightedge/assets/posters/systolic-array.jpg" aria-label="Weight-stationary systolic array animation">
+              <source src="https://pub-ae0e951cb13d4628913ced2bc423d839.r2.dev/straightedge/assets/mp4/systolic-array.mp4" type="video/mp4">
               Your browser does not support embedded video.
             </video>
             <div class="card-copy">
@@ -386,8 +415,8 @@
           </article>
 
           <article class="scene-card claim-card">
-            <video controls playsinline preload="metadata" poster="assets/posters/pipeline-schedules.jpg" aria-label="GPipe and 1F1B pipeline schedule comparison">
-              <source src="assets/mp4/pipeline-schedules.mp4" type="video/mp4">
+            <video controls playsinline preload="metadata" poster="https://pub-ae0e951cb13d4628913ced2bc423d839.r2.dev/straightedge/assets/posters/pipeline-schedules.jpg" aria-label="GPipe and 1F1B pipeline schedule comparison">
+              <source src="https://pub-ae0e951cb13d4628913ced2bc423d839.r2.dev/straightedge/assets/mp4/pipeline-schedules.mp4" type="video/mp4">
               Your browser does not support embedded video.
             </video>
             <div class="card-copy">
@@ -398,8 +427,8 @@
           </article>
 
           <article class="scene-card claim-card">
-            <video controls playsinline preload="metadata" poster="assets/posters/ring-allreduce.jpg" aria-label="Ring all-reduce animation">
-              <source src="assets/mp4/ring-allreduce.mp4" type="video/mp4">
+            <video controls playsinline preload="metadata" poster="https://pub-ae0e951cb13d4628913ced2bc423d839.r2.dev/straightedge/assets/posters/ring-allreduce.jpg" aria-label="Ring all-reduce animation">
+              <source src="https://pub-ae0e951cb13d4628913ced2bc423d839.r2.dev/straightedge/assets/mp4/ring-allreduce.mp4" type="video/mp4">
               Your browser does not support embedded video.
             </video>
             <div class="card-copy">

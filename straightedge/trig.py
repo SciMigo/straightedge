@@ -18,6 +18,9 @@ import math
 from dataclasses import dataclass
 from fractions import Fraction
 
+from .models import Topic
+from .topics import topic
+
 
 class Concept:
     """Sub-topic identifiers under ``Topic.TRIG``.
@@ -348,3 +351,11 @@ def _format_positive_float(value: float) -> str:
             return str(frac.numerator)
         return rf"\frac{{{frac.numerator}}}{{{frac.denominator}}}"
     return f"{value:g}"
+
+
+@topic(Topic.TRIG, priority=30,
+       keywords=("三角", "正弦", "余弦", "tan", "sin", "cos", "周期", "振幅"))
+class Trigonometry:
+    """The unit circle, and what A f(wx+p)+k does to a graph."""
+
+    concepts = Concept
