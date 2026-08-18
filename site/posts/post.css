@@ -191,88 +191,200 @@
 .series-nav .next { text-align: right; }
 .series-nav .muted { color: var(--quiet); display: block; font-size: 0.8rem; }
 
-/* Series index */
-.post-list {
-  max-width: 52rem;
-  list-style: none;
-  margin: 2rem 0 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 1.4rem;
-}
-
-.post-list li {
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  background: var(--panel);
-  padding: 1.2rem 1.3rem;
-}
-
-.post-list h2 {
-  font-size: 1.15rem;
-  margin: 0 0 0.4rem;
-  letter-spacing: -0.01em;
-}
-
-.post-list h2 a { text-decoration: none; }
-.post-list h2 a:hover { color: var(--cyan); }
-
-.post-list p {
-  margin: 0;
-  color: var(--muted);
-  font-size: 0.96rem;
-  line-height: 1.6;
-}
-
-.post-list .pending {
-  opacity: 0.55;
-}
-
-.post-list .tag {
+/* Scoped to `.post-list` until that layout was removed, which left every `.tag`
+   on the site unstyled while still being marked up — the kind of regression a
+   dead-rule sweep causes if it only checks that the rule is unused. */
+.tag {
   display: inline-block;
   font-size: 0.7rem;
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--quiet);
-  margin-top: 0.6rem;
 }
 
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
 }
 
-/* Blog index: a heading above each series' cards. Distinct from `.post-list h2`,
-   which titles a card — a section heading that shared those rules read as an
-   untitled fourth post sitting above the list. */
-.series-heading {
-  max-width: 52rem;
-  margin: 2.6rem 0 0;
+/* ---------------------------------------------------------------- blog index
+
+   The index used to be `<main class="post">` — literally an article, with the
+   post list bolted into its body. That reads as one long page whatever is on
+   it, and it does not get better as posts are added: there is nowhere for a
+   date, nowhere for a thumbnail, and every series lands in the same column of
+   prose. This is a separate layout so the index can grow along its own axis.  */
+
+.blog {
+  width: min(var(--max), 100% - 3rem);
+  margin: 0 auto;
+  padding: 3.5rem 0 5rem;
+}
+
+.blog-masthead {
+  max-width: 44rem;
+  margin-bottom: 3rem;
+}
+
+.blog-masthead .post-kicker { margin-bottom: 0.6rem; }
+
+.blog-masthead h1 {
+  font-size: clamp(2rem, 4.5vw, 3rem);
+  letter-spacing: -0.02em;
+  margin: 0 0 1rem;
+}
+
+.blog-masthead p {
+  color: var(--muted);
+  font-size: 1.05rem;
+  line-height: 1.65;
+  margin: 0;
+}
+
+/* A series is a section of the index, not a page of its own — five posts do
+   not justify five thin pages. The markup is self-contained so that when one
+   series outgrows the index it can be lifted out without restyling. */
+.blog-series { margin-top: 3rem; }
+
+.blog-series > header {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
   gap: 1rem;
+  padding-bottom: 0.6rem;
   border-bottom: 1px solid var(--line);
-  padding-bottom: 0.5rem;
+  margin-bottom: 1.5rem;
 }
 
-.series-heading h2 {
-  font-size: 1.05rem;
-  letter-spacing: 0.02em;
+.blog-series > header h2 {
+  font-size: 0.95rem;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
+  color: var(--cyan);
   margin: 0;
 }
 
-.series-heading p {
+.blog-series > header p {
   margin: 0;
-  color: var(--muted);
+  color: var(--quiet);
   font-size: 0.9rem;
   text-align: right;
 }
 
-.series-heading + .post-list { margin-top: 1.1rem; }
+.blog-cards {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 1.5rem;
+  grid-template-columns: repeat(auto-fill, minmax(20rem, 1fr));
+}
+
+.blog-card {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--panel);
+  overflow: hidden;
+  transition: border-color 140ms ease, transform 140ms ease;
+}
+
+.blog-card:hover { border-color: rgba(112, 214, 209, 0.45); transform: translateY(-2px); }
+
+/* No hover lift for anyone who asked not to be moved. */
+@media (prefers-reduced-motion: reduce) {
+  .blog-card { transition: border-color 140ms ease; }
+  .blog-card:hover { transform: none; }
+}
+
+.blog-card img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  border-bottom: 1px solid var(--line);
+  background: #0b1017;
+}
+
+.blog-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  padding: 1.15rem 1.25rem 1.35rem;
+  flex: 1;
+}
+
+.blog-card h3 {
+  font-size: 1.1rem;
+  line-height: 1.35;
+  letter-spacing: -0.01em;
+  margin: 0;
+}
+
+.blog-card h3 a { text-decoration: none; color: inherit; }
+.blog-card h3 a:hover { color: var(--cyan); }
+
+/* The whole card is the click target, not just the words in the heading. */
+.blog-card h3 a::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+}
+
+.blog-card { position: relative; }
+
+.blog-card p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.94rem;
+  line-height: 1.6;
+}
+
+.blog-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+  color: var(--quiet);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.blog-meta .tag { margin: 0; }
+
+.blog-card-footer { margin-top: auto; padding-top: 0.9rem; }
+
+/* Announced but unwritten. Dimmed and not a link, so it cannot be mistaken for
+   one — a card that looks clickable and is not is worse than no card. */
+.blog-card.pending { opacity: 0.55; }
+.blog-card.pending:hover { transform: none; border-color: var(--line); }
+
+.blog-card.pending .blog-thumb-empty {
+  aspect-ratio: 16 / 9;
+  border-bottom: 1px solid var(--line);
+  background: repeating-linear-gradient(
+    135deg, transparent, transparent 9px,
+    rgba(255, 255, 255, 0.035) 9px, rgba(255, 255, 255, 0.035) 18px);
+}
 
 @media (max-width: 640px) {
-  .series-heading { flex-direction: column; gap: 0.3rem; }
-  .series-heading p { text-align: left; }
+  .blog { width: min(var(--max), 100% - 2rem); padding-top: 2.5rem; }
+  .blog-series > header { flex-direction: column; gap: 0.3rem; }
+  .blog-series > header p { text-align: left; }
 }
+
+/* A dateline on the article pages themselves, so a post carries when it was
+   written without the reader going back to the index to find out. */
+.post-dateline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+  color: var(--quiet);
+  font-size: 0.85rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  margin: 0 0 1.4rem;
+}
+
+.post-dateline .dot { opacity: 0.5; }
