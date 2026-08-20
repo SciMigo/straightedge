@@ -121,11 +121,16 @@ class TestTheServer:
         pytest.importorskip("mcp")
         return mcp_server.build_server()
 
-    def test_it_exposes_the_four_granular_tools(self):
+    def test_it_exposes_the_granular_tools(self):
+        """One per question an agent asks, and the set is asserted exactly.
+
+        An exact set is the point: a tool added without a thought for the shape
+        of the whole fails here rather than quietly widening the surface.
+        """
         import asyncio
         server = self._server()
         names = {t.name for t in asyncio.run(server.list_tools())}
-        assert names == {"list_templates", "plan", "validate", "render"}
+        assert names == {"list_templates", "draw", "plan", "validate", "render"}
 
     def test_render_is_the_only_tool_with_a_force_switch(self):
         """A tool set an agent can read: the expensive one is the one you force."""
@@ -194,6 +199,25 @@ class TestTheFigureLaneIsReachable:
         with pytest.raises(StraightedgeError) as excinfo:
             mcp_server._draw_payload("", {})
         assert excinfo.value.code == "no_request"
+
+    def test_bytes_are_bytes_not_characters(self):
+        """CJK labels made `len(svg)` under-report the payload by 44 bytes.
+
+        A field named `bytes` that counts code points is worse than no field: a
+        caller sizing a buffer or a quota from it is wrong by exactly the amount
+        of non-ASCII in the figure.
+        """
+        result = mcp_server._draw_payload("org_chart", {"root": {
+            "name": "艾达·洛夫莱斯", "title": "首席执行官",
+            "children": [{"name": "格蕾丝·霍珀", "title": "工程副总裁"}]}})
+        assert result["bytes"] == len(result["svg"].encode("utf-8"))
+        assert result["characters"] == len(result["svg"])
+        assert result["bytes"] > result["characters"], "no multi-byte glyph in the fixture"
+
+    def test_bytes_and_characters_agree_on_ascii(self):
+        result = mcp_server._draw_payload("org_chart", {"root": {
+            "name": "Ada Lovelace", "title": "CEO"}})
+        assert result["bytes"] == result["characters"]
 
     def test_drawing_needs_no_manim(self):
         """The figure lane is stdlib; this is what makes `draw` milliseconds."""

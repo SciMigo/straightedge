@@ -4,6 +4,30 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project aims to
 follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.2] - 2026-08-20
+
+Three review findings on 0.3.1, and the reason the second of them shipped.
+
+### Fixed
+- **An assistant row collapsed to an ellipsis on a narrow chart.** With no more
+  than one top-level unit the canvas was sized for the root card alone, leaving
+  34px beside it, so "Chief of Staff" rendered as `…`. The 0.3.1 change that let
+  columns grow had made the canvas *tighter* for the row hanging off the spine.
+  The width is now solved for the card and the assistant together, so a one-unit
+  chart is 1,020px rather than 568.
+- **`draw` reported characters as `bytes`.** `len(svg)` counts code points, so a
+  figure with Chinese labels under-reported its payload by the width of every
+  multi-byte glyph — 1,807 against 1,851. It is UTF-8 length now, with the code
+  point count kept beside it as `characters`. A field named `bytes` that is not
+  bytes is worse than no field.
+- **The MCP tool-set assertion still named four tools** after `draw` made five.
+  It failed for anyone with the SDK installed.
+- **…and the reason nobody noticed: that test never ran.** It is guarded by
+  `importorskip("mcp")` and CI installs only `.[dev]`, which did not include the
+  SDK — so the one check that asserts the exact tool surface was skipped on
+  every build, and a stale assertion survived a tool being added. `mcp>=2.0`
+  joins the `dev` extra. A test that never runs is not a test.
+
 ## [0.3.1] - 2026-08-20
 
 A patch release in effect and a small feature in fact: the figure lane became

@@ -23,6 +23,7 @@ from straightedge.diagrams.renderer import (
     wrap_units,
 )
 from straightedge.diagrams.templates.org_chart import (
+    ASSISTANT_W,
     CARD_W,
     CARD_W_MAX,
     COL_GAP,
@@ -392,3 +393,48 @@ class TestTheDottedLineLandsWhereItPoints:
             for bx, by, bw, bh in boxes:
                 inside = (bx + 1 < x < bx + bw - 1) and (by + 1 < y < by + bh - 1)
                 assert not inside, f"endpoint ({x}, {y}) is inside a card"
+
+
+class TestTheAssistantGetsRoomToBeRead:
+    """A one-unit chart sized itself to the card and left the assistant 34px.
+
+    "Chief of Staff" rendered as a bare ellipsis — the width fix that let
+    columns grow had made the canvas *tighter* for the row hanging beside them,
+    because the canvas was sized for the card alone.
+    """
+
+    @pytest.mark.parametrize("units", [0, 1, 2, 3, 5])
+    def test_the_assistant_name_survives_at_every_width(self, units):
+        params = {"root": {"name": "Ada Lovelace", "title": "CEO",
+                           "children": [{"name": f"Unit {i}", "title": "VP"}
+                                        for i in range(units)]},
+                  "assistants": [{"name": "Chief of Staff", "title": "Operations"}]}
+        svg = render_diagram({"type": "org_chart", "params": params})
+        labels = [node.text for node in ET.fromstring(svg).iter(f"{SVG_NS}text")]
+        assert "Chief of Staff" in labels, (
+            f"assistant collapsed with {units} unit(s): "
+            f"{[l for l in labels if l and ELLIPSIS in l]}")
+
+    def test_the_canvas_widens_to_hold_the_assistant(self):
+        base = {"root": {"name": "Ada", "title": "CEO",
+                         "children": [{"name": "Only Unit", "title": "VP"}]}}
+        without = _dims(render_diagram({"type": "org_chart", "params": base}))[0]
+        with_one = _dims(render_diagram({"type": "org_chart", "params": dict(
+            base, assistants=[{"name": "Chief of Staff"}])}))[0]
+        assert with_one > without
+
+    def test_the_assistant_row_stays_on_the_canvas(self):
+        params = {"root": {"name": "Ada", "title": "CEO",
+                           "children": [{"name": "Only Unit", "title": "VP"}]},
+                  "assistants": [{"name": "Chief of Staff", "title": "Operations"}]}
+        svg = render_diagram({"type": "org_chart", "params": params})
+        width, _ = _dims(svg)
+        for node in ET.fromstring(svg).iter(f"{SVG_NS}rect"):
+            if node.get("class") == "grid-paper":
+                continue
+            right = float(node.get("x")) + float(node.get("width"))
+            assert right <= width + 1, f"a row reaches {right} on a {width} canvas"
+
+    def test_the_reserved_width_is_never_more_than_the_card(self):
+        """A narrow card must not be given a wider assistant beside it."""
+        assert min(CARD_W, ASSISTANT_W) <= CARD_W_MAX
