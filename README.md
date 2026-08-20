@@ -127,6 +127,10 @@ from straightedge.diagrams.templates.construction import verify
 verify({"steps": [...], "claims": [...]})   # findings, without drawing anything
 ```
 
+See [`docs/construction.md`](https://github.com/SciMigo/straightedge/blob/main/docs/construction.md)
+for the notation, the full claim vocabulary, and an honest account of what the
+precision caps mean.
+
 `verify` is the cheap step before the cheap step — it returns `qc.Finding`
 values, so the CLI, the MCP tools and every existing consumer report them
 unchanged. A claim that holds is silent; one that fails is an `error`; one that

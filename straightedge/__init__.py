@@ -28,6 +28,7 @@ __version__ = "0.3.2"
 
 from .aspect import ASPECTS, LANDSCAPE, VERTICAL
 from .catalog import Template, list_templates
+from .geometry import Construction, Exact, Tower
 from .errors import (
     DependencyError, FontError, InputFileError, PreconditionError, RenderError,
     RequestError, StraightedgeError, UnknownTemplateError,
@@ -70,6 +71,10 @@ __all__ = [
     "InputFileError",
     "PreconditionError",
     "PrecisionError",
+    # Constructive geometry — exact coordinates, decidable claims
+    "Construction",
+    "Exact",
+    "Tower",
     "FontError",
     "RenderError",
     "DependencyError",
