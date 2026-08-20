@@ -19,5 +19,28 @@ package except the typed errors.
 from __future__ import annotations
 
 from .exact import MAX_BITS, MAX_DEPTH, Exact, Tower
+from .model import (
+    Circle,
+    Construction,
+    Element,
+    Line,
+    Point,
+    Polygon,
+    Section,
+    Segment,
+)
 
-__all__ = ["Exact", "Tower", "MAX_DEPTH", "MAX_BITS"]
+__all__ = [
+    "Construction",
+    "Element",
+    "Point",
+    "Line",
+    "Circle",
+    "Segment",
+    "Section",
+    "Polygon",
+    "Exact",
+    "Tower",
+    "MAX_DEPTH",
+    "MAX_BITS",
+]
