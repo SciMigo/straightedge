@@ -4,7 +4,13 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project aims to
 follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.3.0] - 2026-08-20
+
+A minor release on both lanes. The animation lane gains its first topic outside
+the exam-shaped catalog — linear algebra, as two general builders rather than
+five narrow ones — and the figure lane gains `roadmap`, the calendar diagram
+`gantt` was being misused as. Nothing was removed; code written against 0.2.0
+keeps working.
 
 ### Added
 - **A blog layout, rather than an article page listing articles.** `site/posts/`
@@ -105,7 +111,6 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   as an empty list, for the one concept whose entire interface is its
   parameters.
 
-### Added
 - `tools/build_site_assets.py` — renders, stills, and publishes the site's demo
   assets. Every MP4, poster and GIF under `site/assets/` was made by hand and
   nothing could reproduce any of them, so a scene builder could change and the
@@ -259,6 +264,12 @@ Review findings on PR #2, all reproduced before being fixed.
 - `gantt` row labels are trimmed to the width of the gutter they are drawn in,
   with an ellipsis when they are cut. The fixed `[:8]` was blind to the gutter
   and truncated mid-word with no sign anything had been dropped.
+- The README's registry summary drifted from the registry. It advertised 35
+  templates against 36, omitted `roadmap`, and listed "state machines" among the
+  computer-science figures as though one were registered — there is no
+  `state_machine` template, and a reader who went looking for it by the name the
+  README used would not find it. A state machine is `graph` with `directed`
+  edges, which the README now says.
 
 ## [0.2.0] - 2026-08-17
 
