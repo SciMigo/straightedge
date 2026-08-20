@@ -31,6 +31,7 @@ from typing import Any, Dict, List, Tuple
 
 from ..registry import register
 from ..renderer import path, rect, style, svg_document, text
+from ..renderer import text_width as _measure
 
 WIDTH = 1160
 MARGIN = 28
@@ -77,14 +78,18 @@ def _date(value: Any) -> date | None:
         return None
 
 
-def text_width(value: str, size: float) -> float:
-    """Approximate advance width of a proportional sans string.
+def text_width(value: str, size: float, bold: bool = False) -> float:
+    """Advance width of a caption, delegating to the shared measurement.
 
-    Deliberately generous: it decides whether a caption fits inside its bar, and
-    a caption that overflows its bar is the failure this template is here to
-    avoid.
+    It decides whether a caption fits inside its bar, and a caption that
+    overflows its bar is the failure this template exists to avoid — so it has
+    to be right for the text actually drawn. The private `len(value) * 0.55`
+    this replaced counted a Chinese glyph as half an em: nine characters
+    measured 57px and rendered ~103px, and the caption went inside a bar it
+    overflowed. `renderer.text_width` counts CJK full-width and distinguishes a
+    semi-bold em from a regular one.
     """
-    return len(value) * size * 0.55
+    return _measure(value, size, bold=bold)
 
 
 def pack_lanes(items: List[Dict[str, Any]]) -> List[List[Dict[str, Any]]]:
@@ -176,7 +181,7 @@ class RoadmapTemplate:
                 continue
             mx = x_for(when)
             label = str(milestone.get("title") or "")
-            flip = mx + 11 + text_width(label, 11) > WIDTH - MARGIN
+            flip = mx + 11 + text_width(label, 11, bold=True) > WIDTH - MARGIN
             anchor, tx = ("end", mx - 11) if flip else ("start", mx + 11)
             p.append(path(f"M {mx:.1f} 88 L {mx + 6:.1f} 95 L {mx:.1f} 102 "
                           f"L {mx - 6:.1f} 95 Z", fill=MILESTONE, **{"class": "r-ms-mark"}))
@@ -227,9 +232,9 @@ class RoadmapTemplate:
                     p.append(rect(bx, item["y"], bw, BAR_H, rx=6, fill=colour,
                                   **{"class": "r-bar"}))
                     caption, ty = item["title"], item["y"] + BAR_H / 2 + 4
-                    if text_width(caption, 11.5) + 16 <= bw:
+                    if text_width(caption, 11.5, bold=True) + 16 <= bw:
                         p.append(text(bx + 8, ty, caption, **{"class": "r-bar-text-in"}))
-                    elif bx + bw + 8 + text_width(caption, 11.5) <= WIDTH - MARGIN:
+                    elif bx + bw + 8 + text_width(caption, 11.5, bold=True) <= WIDTH - MARGIN:
                         p.append(text(bx + bw + 8, ty, caption, **{"class": "r-bar-text"}))
                     else:
                         p.append(text(bx - 8, ty, caption, text_anchor="end",

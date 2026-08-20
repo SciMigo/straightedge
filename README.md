@@ -73,15 +73,16 @@ Path("unit-circle.svg").write_text(svg, encoding="utf-8")
 diagram type returns an empty string so a missing optional figure does not abort
 an entire document build.
 
-The registry currently contains 36 templates across several domains:
+The registry currently contains 37 templates across several domains:
 
 - Math and data: function graphs, coordinate planes, Riemann sums, unit circles,
   polar graphs, matrices, step functions, heatmaps, and tables.
 - Computer science: binary trees, linked lists, stacks, queues, hash tables, call
   stacks, dynamic-programming tables, architecture diagrams, and graphs — a state
   machine is `graph` with `directed` edges, not a template of its own.
-- Projects and business: Gantt charts, calendar roadmaps, work-breakdown
-  structures, project networks, timelines, flow diagrams, and T-accounts.
+- Projects and business: Gantt charts, calendar roadmaps, org charts,
+  work-breakdown structures, project networks, timelines, flow diagrams, and
+  T-accounts.
 
 Inspect `straightedge.diagrams.DIAGRAM_REGISTRY` for the exact registered names.
 Each renderer accepts a compact, serializable hint and returns a complete SVG
