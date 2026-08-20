@@ -56,11 +56,11 @@ stt = ["faster-whisper>=1.1"]
 # from an agent over the Model Context Protocol. The SDK is imported lazily, so
 # the package works without it; only the server needs this.
 mcp = ["mcp>=2.0"]
-# `mcp` is here so the SDK-gated tests actually run. They are guarded by
-# `importorskip`, and CI installs only `.[dev]` — so the one test asserting the
-# exact tool set was skipped on every build, and a stale assertion survived a
-# tool being added. A test that never runs is not a test.
-dev = ["pytest>=7.4", "mcp>=2.0"]
+# Everything the fast test suite imports belongs here. Keep this separate from
+# `render` and `stt`, whose heavyweight/runtime dependencies are not needed in
+# the per-PR job. MCP must be present so its `importorskip`-guarded tests run.
+# Kept on one line because the declaration guard reads this assignment.
+dev = ["pytest>=7.4", "numpy>=1.24", "mcp>=2.0"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
