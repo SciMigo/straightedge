@@ -26,7 +26,14 @@ Three review findings on 0.3.1, and the reason the second of them shipped.
   `importorskip("mcp")` and CI installs only `.[dev]`, which did not include the
   SDK — so the one check that asserts the exact tool surface was skipped on
   every build, and a stale assertion survived a tool being added. `mcp>=2.0`
-  joins the `dev` extra. A test that never runs is not a test.
+  joins the `dev` extra, and `test_mcp_server.py` goes from 16 passed with 2
+  skipped to 18 passed. A test that never runs is not a test.
+- A check on the declaration itself, because the first attempt at the line above
+  did not take and was reported as done anyway. It reads the `dev` extra out of
+  `pyproject.toml` rather than asking whether `mcp` imports: an import check
+  passes in any environment where someone installed the SDK by hand, which is
+  precisely how a missing declaration was verified as present. What has to hold
+  is that the *declared* test extra installs it, and only the file says that.
 
 ## [0.3.1] - 2026-08-20
 

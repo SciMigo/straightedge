@@ -12,6 +12,8 @@ than exceptions, and each render is isolated so concurrent calls cannot collide.
 
 from __future__ import annotations
 
+import pathlib
+
 import pytest
 
 from straightedge import mcp_server
@@ -154,6 +156,35 @@ class TestTheServer:
         with pytest.raises(StraightedgeError) as exc:
             mcp_server.build_server()
         assert "straightedge[mcp]" in (exc.value.remedy or "")
+
+
+class TestTheGatedTestsActuallyRun:
+    """The declaration, not the environment.
+
+    `test_it_exposes_the_granular_tools` is guarded by `importorskip("mcp")` and
+    CI installs `.[dev]`. When that extra did not carry the SDK the guard turned
+    the check into a permanent skip, and a stale assertion outlived a tool being
+    added while every build stayed green.
+
+    This reads `pyproject.toml` rather than asking whether `mcp` imports, because
+    an import check passes in any environment where someone installed it by hand
+    — which is exactly how the missing declaration was verified as present and
+    written up as fixed. What has to be true is that the *declared* test extra
+    installs the SDK, and only the file says that.
+    """
+
+    @staticmethod
+    def _dev_extra() -> str:
+        root = pathlib.Path(__file__).resolve().parent.parent
+        for line in (root / "pyproject.toml").read_text().splitlines():
+            if line.startswith("dev = "):
+                return line
+        raise AssertionError("no dev extra declared in pyproject.toml")
+
+    def test_the_dev_extra_installs_the_sdk_the_gated_tests_need(self):
+        assert "mcp" in self._dev_extra(), (
+            "tests/test_mcp_server.py guards on importorskip('mcp'); without the "
+            "SDK in the dev extra those checks silently never run in CI")
 
 
 class TestTheFigureLaneIsReachable:
