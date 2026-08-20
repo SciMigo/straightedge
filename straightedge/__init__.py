@@ -31,6 +31,8 @@ from .catalog import Template, list_templates
 from .errors import (
     DependencyError, FontError, InputFileError, PreconditionError, RenderError,
     RequestError, StraightedgeError, UnknownTemplateError,
+    DependencyError, FontError, InputFileError, PreconditionError,
+    PrecisionError, RenderError, RequestError, StraightedgeError,
 )
 from .estimate import Estimate, estimate
 from .expr import parse_function, to_latex_expr, to_numpy_expr
@@ -67,6 +69,7 @@ __all__ = [
     "RequestError",
     "InputFileError",
     "PreconditionError",
+    "PrecisionError",
     "FontError",
     "RenderError",
     "DependencyError",
