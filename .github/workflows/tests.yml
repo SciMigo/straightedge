@@ -38,14 +38,12 @@ jobs:
           cache-dependency-path: pyproject.toml
 
       - name: Install
-        # The package itself has no runtime deps, so `.[dev]` is pytest and
-        # nothing else. numpy is in no extra, yet `tests/test_cone_slice.py`
-        # imports it at module scope and fails collection without it — so it is
-        # named here rather than inherited from the `render` extra, which is the
-        # heavyweight thing this job exists to avoid.
+        # `dev` is the fast suite's complete environment: pytest, numpy for the
+        # cone-slice checks, and the MCP SDK for the server-surface checks. The
+        # heavyweight render and STT dependencies remain in their own extras.
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -e '.[dev]' numpy
+          python -m pip install -e '.[dev]'
 
       - name: Pytest
         run: python -m pytest -q

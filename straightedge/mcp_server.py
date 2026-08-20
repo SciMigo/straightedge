@@ -180,7 +180,12 @@ def _draw_payload(diagram_type: str, params: dict | None) -> dict[str, Any]:
         "ok": True,
         "type": name,
         "svg": svg,
-        "bytes": len(svg),
+        # UTF-8 length, not character count. `len(svg)` counts code points, so a
+        # figure with Chinese labels under-reported its payload by the width of
+        # every multi-byte glyph in it — and a field called `bytes` that is not
+        # bytes is worse than no field.
+        "bytes": len(svg.encode("utf-8")),
+        "characters": len(svg),
         "data_marks": marks,
         # Reported rather than raised: an empty figure is a parameter-shape
         # mismatch the caller can fix, and it is the caller who knows what the

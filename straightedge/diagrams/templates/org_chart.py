@@ -61,6 +61,11 @@ HEADER_H = 62
 CARD_W = 206
 #: …and no wider, so a single unit does not become one 1,100px-wide card.
 CARD_W_MAX = 392
+#: An assistant row needs room for a name and a role. The canvas is widened to
+#: hold it rather than the row being squeezed into whatever is left: a chart with
+#: one unit sized itself to the card alone, leaving 34px beside it, and "Chief of
+#: Staff" came out as a bare ellipsis.
+ASSISTANT_W = 260
 CARD_H = 56          # a manager card: name over role
 ROW_H = 36           # a stacked report row
 COL_GAP = 22
@@ -242,6 +247,9 @@ class OrgChartTemplate:
         # Everything under a unit is stacked; the unit itself heads the column.
         stacks = [_flatten(u)[1:] for u in units]
 
+        assistants = [a for a in (params.get("assistants") or []) if isinstance(a, dict)]
+        assistant_h = ROW_H if assistants else 0
+
         per_bank = columns_per_bank(len(units) or 1)
         banks: List[List[int]] = [list(range(i, min(i + per_bank, len(units))))
                                   for i in range(0, len(units), per_bank)] or [[]]
@@ -250,8 +258,6 @@ class OrgChartTemplate:
         for node, _ in _flatten(root):
             index.setdefault(node["name"], node)
 
-        assistants = [a for a in (params.get("assistants") or []) if isinstance(a, dict)]
-        assistant_h = ROW_H if assistants else 0
 
         top = HEADER_H if title else MARGIN
         root_y = top
@@ -265,8 +271,19 @@ class OrgChartTemplate:
 
         widest = max((len(bank) for bank in banks), default=1)
         card_w = column_width(widest)
-        width = (MAX_WIDTH if len(units) > 1
-                 else max(420, int(card_w) + 2 * MARGIN + 120))
+        # An assistant hangs to the right of the spine, so the canvas has to be
+        # wide enough for the root card *and* that row. Solving
+        # `centre + card_w/2 + 26 + assistant + MARGIN <= width` for width gives
+        # the second term below; without it a one-unit chart sized itself to the
+        # card and left the assistant 34px to render a name in.
+        assistant_w = float(min(card_w, ASSISTANT_W)) if assistants else 0.0
+        if len(units) > 1:
+            width = MAX_WIDTH
+        else:
+            needed = card_w + 2 * MARGIN + 120
+            if assistants:
+                needed = max(needed, card_w + 52 + 2 * assistant_w + 2 * MARGIN)
+            width = max(420, int(needed + 0.5))
         height = int(bank_top + sum(bank_heights) + BANK_GAP * max(0, len(banks) - 1)
                      + MARGIN + 30)
 
@@ -286,10 +303,10 @@ class OrgChartTemplate:
                 continue
             ay = root_y + CARD_H + 8 + i * ROW_H
             ax = centre + card_w / 2 + 26
-            available = width - MARGIN - ax
             p.append(path(f"M {centre:.1f} {ay + ROW_H / 2:.1f} H {ax:.1f}",
                           **{"class": "oc-edge"}))
-            p.extend(self._row(node, ax, ay, min(card_w, available)))
+            p.extend(self._row(node, ax, ay,
+                               min(assistant_w, width - MARGIN - ax)))
 
         placed: Dict[str, Tuple[float, float]] = {}
         y = bank_top
