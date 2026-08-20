@@ -29,6 +29,29 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   missing, and a guess would send a caller to install what they already have.
 
 ### Added
+- **A constructive-geometry lane**, and with it the check the library did not
+  have. `preconditions` validates a plan's shape, `qc` measures a rendered
+  frame, and `labels` checks translation — not one of them can tell you that the
+  line you drew through two circle intersections *is* the perpendicular
+  bisector. That is a fourth failure mode, the picture is legible and the
+  mathematics is wrong, and it is what this lane exists to decide.
+  - `straightedge.geometry.exact` — arithmetic over the tower of quadratic
+    extensions of Q, which is exactly what ruler and compass reach. Sign is
+    decidable by recursion, so `is_zero` is a proof rather than a tolerance.
+    Both caps refuse with a typed `PrecisionError` rather than falling back to
+    floats. Stdlib only.
+  - `straightedge.geometry.model` — `Point`, `Line`, `Circle`, `Segment`,
+    `Section`, `Polygon` and the `Construction` that holds them in the order
+    they were drawn, with automatic intersection, exact deduplication, and
+    `parents`/`children` kept apart.
+  - `construction`, a figure template: construction steps in, SVG out, with
+    circles drawn whole and lines run to the frame. `to_svg_steps()` gives one
+    frame per step against a fixed viewBox, which is the bridge to the
+    animation lane.
+- `sympy` joins the `dev` extra as a **test oracle** for the exact kernel —
+  never a runtime path. Random expressions are built twice and required to
+  agree on sign, zero and order, which covers the mistakes nobody has made yet.
+  The shipped package still imports nothing but the standard library.
 - **Parameter shapes in the catalog.** `Template.parameters` reports each
   parameter with its type and default where the code states one, beside the
   existing `params` name list. Names alone are what let an agent send `"pi/4"`

@@ -38,6 +38,7 @@ from . import comparison  # noqa: F401
 from . import timeline  # noqa: F401
 from . import roadmap  # noqa: F401
 from . import org_chart  # noqa: F401
+from . import construction  # noqa: F401
 from . import descent_triangles  # noqa: F401
 from . import circle_chord_rational  # noqa: F401
 
@@ -79,4 +80,5 @@ __all__ = [
     "circle_chord_rational",
     "roadmap",
     "org_chart",
+    "construction",
 ]

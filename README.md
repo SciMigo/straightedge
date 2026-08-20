@@ -73,10 +73,11 @@ Path("unit-circle.svg").write_text(svg, encoding="utf-8")
 diagram type returns an empty string so a missing optional figure does not abort
 an entire document build.
 
-The registry currently contains 37 templates across several domains:
+The registry currently contains 38 templates across several domains:
 
 - Math and data: function graphs, coordinate planes, Riemann sums, unit circles,
-  polar graphs, matrices, step functions, heatmaps, and tables.
+  polar graphs, matrices, step functions, heatmaps, tables, and compass-and-
+  straightedge constructions with exactly placed points.
 - Computer science: binary trees, linked lists, stacks, queues, hash tables, call
   stacks, dynamic-programming tables, architecture diagrams, and graphs — a state
   machine is `graph` with `directed` edges, not a template of its own.
