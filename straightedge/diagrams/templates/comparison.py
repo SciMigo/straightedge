@@ -24,7 +24,7 @@ from __future__ import annotations
 from typing import Any, Dict, List
 
 from ..registry import register
-from ..renderer import group, rect, style, svg_document, text, wrap_units
+from ..renderer import fit_text, group, rect, style, svg_document, text, wrap_units
 
 MARGIN = 24
 TITLE_H = 34
@@ -155,7 +155,12 @@ class ComparisonTemplate:
         ty = y + HEAD_H + PAD + 6
         if has_desc:
             if c["desc"]:
-                inner.append(text(x + COL_W / 2, ty, c["desc"][:22],
+                # Trimmed to the column, with the cut marked. `[:22]` cut at a
+                # character count that had nothing to do with COL_W and left no
+                # sign it had cut — and it measured a Chinese description, which
+                # is twice as wide per character, by the same count as English.
+                inner.append(text(x + COL_W / 2, ty,
+                                  fit_text(c["desc"], COL_W - 2 * PAD, 13),
                                   **{"class": "cmp-desc", "text-anchor": "middle"}))
             ty += DESC_H
         for lines in wrapped:

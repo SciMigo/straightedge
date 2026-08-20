@@ -4,9 +4,71 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project aims to
 follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.3.0] - 2026-08-20
+
+A minor release on both lanes. The animation lane gains its first topic outside
+the exam-shaped catalog — linear algebra, as two general builders rather than
+five narrow ones. The figure lane gains two templates that existed only as
+misuses of a neighbouring one — `roadmap`, which `gantt` was standing in for,
+and `org_chart`, which `wbs` was — and, underneath both, one shared answer to
+"how wide is this string" in place of the seven the templates had grown
+separately. Four silent-truncation bugs fell out of writing it. Nothing was
+removed; code written against 0.2.0 keeps working.
 
 ### Added
+- **`org_chart`, reporting lines in the shape an organisation is read in.**
+  `wbs` packs a tree by subtree width, which is right for a work breakdown and
+  unusable for an organisation, because there the leaves are people: width grows
+  with the *leaf count*, so a 157-person org rendered 18,528px wide at a 51:1
+  aspect and a 685-person one 88,730px at 193:1. The new template follows the
+  convention org charts have used since they were drawn on paper — the level
+  under the top in a horizontal row, everything below it stacked in indented
+  columns — and the same 157 people come out 1,160x2,150. Width is hard-bounded
+  at 1,160px however large the org gets, because depth adds rows rather than
+  columns, and columns past the width wrap into banks.
+
+  It also says the three things a work-breakdown tree has no way to: a node is a
+  **person and a role** rather than one label; a **dotted line** is secondary or
+  matrix reporting, drawn dashed and named in a legend rather than left to be
+  guessed; and an **assistant** hangs off the side of the spine, below the
+  person it assists and above that person's own reports. `vacant` and `interim`
+  are drawn states rather than text, so a status cannot be lost to truncation.
+  A flat `{id, name, title, reports_to}` export is accepted as well as a nested
+  tree, and a cycle or an unknown manager in one is survived — an unreachable
+  person is attached to the root rather than dropped, because a person missing
+  from an org chart is a worse failure than one drawn in the wrong place.
+- **Shared text measurement** in `diagrams.renderer`: `text_width`, `fit_text`
+  and `char_em`. Seven templates had grown seven private answers to "how wide is
+  this string" — five held their own factor, two sliced at a character count,
+  and one measured CJK as though it were Latin. The widths are now measured per
+  character rather than averaged, because a single factor cannot describe a
+  proportional face: "Ken Thompson" and "Chief of Staff" are the same length and
+  differ by 25%, and an averaged estimate under-measured the first by 14%. The
+  tables were read off a rasteriser and agree with the published Helvetica
+  metrics.
+
+  `text_width(..., safe=True)` adds headroom for the face resolving wider than
+  the one measured — every template asks for `'Noto Sans SC'` first, and where
+  that is absent fontconfig substitutes a face whose Latin glyphs run ~15%
+  wider. A fit decision carries the margin because over-measuring costs
+  whitespace and under-measuring puts one label on top of another.
+- **`roadmap`, a calendar diagram for dated work in swim lanes.** `gantt` places
+  bars on a *unit* axis for a CPM exercise: ticks are integers, every task owns a
+  row, and there is nowhere to put a track or a milestone. A product roadmap is
+  none of those things, and expressing one through `gantt` loses the lane, the
+  milestone and the date — a six-month plan handed over as day units rendered
+  ~4,800px wide with a 0..180 axis, captions cut at eight characters. The new
+  template takes `start_date`/`end_date`, `tracks`, dated `items` with a
+  `status`, `milestones` and `depends_on`; it packs overlapping items in a track
+  into sub-rows so bars never collide, labels the axis with calendar dates, and
+  draws a dependency whose target starts before its source finishes by routing
+  around rather than backwards through the lane. Width is fixed, so a five-year
+  plan and a one-month plan produce the same shape.
+- A legibility check for the above, rather than a smoke test: the suite parses
+  the emitted SVG and asserts no caption is drawn outside the viewBox, in any
+  anchoring. A label that overflows is clipped, so it reads as *missing* — the
+  failure a byte-count or element-count assertion cannot see.
+
 - **A blog layout, rather than an article page listing articles.** `site/posts/`
   was `<main class="post">` with the post list bolted into its body — literally
   an article — which reads as one long page whatever is on it and has nowhere to
@@ -27,12 +89,6 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   on every PR, and `--check` in the `pages` workflow before it uploads, because
   those two workflows race on a push to main and only the second is between a
   stale feed and a subscriber.
-
-### Changed
-- The linear-algebra post is titled "Matrix multiplication, four ways". The
-  previous title spoke to whoever had already built the systolic array and
-  tensor-parallel scenes, not to a reader arriving at the site.
-
 - **Linear algebra**, the first topic outside the exam-shaped catalog described
   in issue #13. One concept, `linear_algebra/linear_map`, parameterised by the
   map itself: `matrix`, `vectors`, `labels`, `show_eigenvectors`, `show_span`,
@@ -89,7 +145,6 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   as an empty list, for the one concept whose entire interface is its
   parameters.
 
-### Added
 - `tools/build_site_assets.py` — renders, stills, and publishes the site's demo
   assets. Every MP4, poster and GIF under `site/assets/` was made by hand and
   nothing could reproduce any of them, so a scene builder could change and the
@@ -125,6 +180,9 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   and tensor-parallel examples further down the page already execute.
 
 ### Changed
+- The linear-algebra post is titled "Matrix multiplication, four ways". The
+  previous title spoke to whoever had already built the systolic array and
+  tensor-parallel scenes, not to a reader arriving at the site.
 - **The site's MP4s and posters left git for R2.** 2.8M of binaries against a
   5.1M `.git`, regenerated rather than edited, and read by nothing but two HTML
   pages. They now live in the public `scimigo-cdn` bucket under
@@ -233,6 +291,40 @@ Review findings on PR #2, all reproduced before being fixed.
   matrix fits the frame, rather than drawing a fixed grid that a large
   eigenvalue then pushes off-screen. QC measured 11.8 units outside a 14.2-unit
   frame before; the same scene now reports no errors.
+
+- **`gantt` no longer grows without bound.** `MIN_UNIT_PX` floored the scale at
+  26px per unit with no ceiling on the total, so width grew linearly with the
+  unit count — fine for a 12-week textbook schedule, ~4,800px for the same plan
+  expressed in days, with one gridline and one tick label per day. The scale now
+  falls below the floor when the units are dense enough to need it, and the axis
+  draws at most 24 ticks. A 180-unit schedule went from 4,844px to 1,064px.
+- `gantt` row labels are trimmed to the width of the gutter they are drawn in,
+  with an ellipsis when they are cut. The fixed `[:8]` was blind to the gutter
+  and truncated mid-word with no sign anything had been dropped.
+- **`wbs` cut names at `[:10]`, with no mark and no regard for the box.**
+  "Dr. Alexandra Whitfield" rendered as "Dr. Alexan", which reads as a name
+  rather than as a cut. This is the same defect as the `gantt` `[:8]` fixed
+  above, one file over; both now trim to the width they are drawn in and mark
+  the cut.
+- **`comparison` cut descriptions at `[:22]`**, a character count with no
+  relation to `COL_W`, applied to Chinese text at the same count as English
+  despite being twice as wide per character.
+- **`roadmap` measured CJK captions as half-width.** `text_width` was
+  `len(value) * size * 0.55`, so a nine-glyph Chinese caption measured 57px and
+  renders ~103px — and that number decides whether a caption goes *inside* its
+  bar, so a Chinese roadmap put captions inside bars they overflowed. This is
+  the failure the template exists to prevent, in the language this library
+  targets most heavily.
+- **`wrap_units` dropped everything past `max_lines` in silence.** An
+  82-character caption came back as 37 characters that read like the whole
+  thing, with nothing downstream able to tell that 44 had gone. The last kept
+  line is now marked.
+- The README's registry summary drifted from the registry. It advertised 35
+  templates against 36, omitted `roadmap`, and listed "state machines" among the
+  computer-science figures as though one were registered — there is no
+  `state_machine` template, and a reader who went looking for it by the name the
+  README used would not find it. A state machine is `graph` with `directed`
+  edges, which the README now says.
 
 ## [0.2.0] - 2026-08-17
 

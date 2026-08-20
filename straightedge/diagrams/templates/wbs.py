@@ -20,7 +20,7 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional
 
 from ..registry import register
-from ..renderer import rect, style, svg_document, text
+from ..renderer import fit_text, rect, style, svg_document, text
 
 BOX_W = 132
 BOX_H = 46
@@ -107,7 +107,12 @@ class WbsTemplate:
             cls = "wbs-box root" if is_root else "wbs-box"
             lcls = "wbs-label root" if is_root else "wbs-label"
             parts.append(rect(cx - BOX_W / 2, y, BOX_W, BOX_H, rx=6, **{"class": cls}))
-            parts.append(text(cx, y + BOX_H / 2 + 5, str(node.get("name") or "")[:10],
+            # Trimmed to the box it is drawn in, with the cut marked. The fixed
+            # `[:10]` was blind to the box and silent about the loss: a real
+            # name rendered as "Dr. Alexan", which reads as a name.
+            label = fit_text(str(node.get("name") or ""), BOX_W - 12, 14,
+                             bold=bool(is_root))
+            parts.append(text(cx, y + BOX_H / 2 + 5, label,
                               text_anchor="middle", **{"class": lcls}))
             for c in children:
                 draw(c, depth + 1)
