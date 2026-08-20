@@ -21,6 +21,13 @@ image_hint usage::
             {"circle": ["B", "A"]},
             {"line": ["C", "D"]}]}}
 
+``steps`` also accepts the notation from
+:mod:`straightedge.geometry.notation`, as one newline-separated document or as a
+list of lines::
+
+    {"type": "construction", "params": {"steps": [
+        "A = 0, 0", "B = 1, 0", "( A B )", "( B A )", "[ C D ]"]}}
+
 A step is one of ``point`` (a coordinate pair), ``line`` (two point ids),
 ``circle`` (centre id then a point id the circle passes through), ``polygon``
 (three or more point ids) or ``section`` (three collinear point ids). Any step
@@ -50,6 +57,7 @@ from ...errors import PrecisionError
 from ...geometry.claims import check as check_claims
 from ...geometry.draw import DEFAULT_WIDTH, to_svg
 from ...geometry.model import Construction
+from ...geometry.notation import NotationError, parse as parse_notation
 from ...qc import Finding, worst_severity
 from ..registry import register
 from ..renderer import svg_document
@@ -131,10 +139,32 @@ def _apply(construction: Construction, step: Any) -> None:
     raise ValueError(f"a step names nothing to draw: {sorted(step)}")
 
 
-def build(steps: List[Any], name: str = "construction") -> Construction:
+def normalise_steps(steps: Any) -> List[Any]:
+    """Accept the notation as readily as the structured form.
+
+    ``steps`` may be one notation document, a list of notation lines, a list of
+    step mappings, or a mix — an agent writing JSON reaches for the mappings and
+    a person writing a construction by hand reaches for the notation, and there
+    is no reason for the template to prefer one. Both arrive at the same steps,
+    so there is a single code path below this.
+    """
+    if isinstance(steps, str):
+        return parse_notation(steps)
+    if not isinstance(steps, list):
+        return []
+    out: List[Any] = []
+    for step in steps:
+        if isinstance(step, str):
+            out.extend(parse_notation(step))
+        else:
+            out.append(step)
+    return out
+
+
+def build(steps: Any, name: str = "construction") -> Construction:
     """Run every step in order. Public so a caller can check what it drew."""
     construction = Construction(name)
-    for step in steps:
+    for step in normalise_steps(steps):
         _apply(construction, step)
     return construction
 
@@ -148,10 +178,12 @@ def verify(params: Dict[str, Any]) -> List[Finding]:
     every claim held.
     """
     steps = params.get("steps") or params.get("construction") or []
-    if not isinstance(steps, list) or not steps:
+    if not steps or not isinstance(steps, (list, str)):
         return [Finding("construction:empty", "error", "no steps to build")]
     try:
         construction = build(steps, str(params.get("title") or "construction"))
+    except NotationError as exc:
+        return [Finding("construction:notation", "error", str(exc))]
     except PrecisionError as exc:
         return [Finding("construction:unbuildable", "error", exc.message)]
     except (ValueError, TypeError, KeyError, ZeroDivisionError) as exc:
@@ -171,13 +203,13 @@ class ConstructionTemplate:
         guides = str(params.get("guides") or "dashed")
         width = params.get("width") or DEFAULT_WIDTH
 
-        if not isinstance(steps, list) or not steps:
+        if not steps or not isinstance(steps, (list, str)):
             return svg_document("", width=200, height=80,
                                 class_name="diagram construction")
         try:
             construction = build(steps, title or "construction")
-        except (ValueError, TypeError, KeyError, ZeroDivisionError,
-                PrecisionError):
+        except (NotationError, ValueError, TypeError, KeyError,
+                ZeroDivisionError, PrecisionError):
             # A construction that cannot be run has no partial drawing worth
             # showing: half a figure reads as a whole one. `render_diagram`
             # reports the blank, and `count_data_marks` refuses to call it a

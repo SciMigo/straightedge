@@ -49,7 +49,7 @@ from .errors import BlankFigureError, RequestError, StraightedgeError, UnknownTe
 from .estimate import estimate
 from .planner import build_plan
 from .preconditions import blocking, validate as _validate
-from .qc import check_sidecar
+from .qc import check_sidecar, worst_severity
 from .renderer import render_scene, write_scene
 
 
@@ -101,6 +101,24 @@ def build_server():
     )
     def draw(type: str = "", params: dict | None = None) -> dict[str, Any]:
         return _guarded(lambda: _draw_payload(type, params))
+
+    @server.tool(
+        description=(
+            "Decide what a compass-and-straightedge construction asserts about "
+            "itself, without drawing it. Give the same `steps` the construction "
+            "figure takes (the notation or the structured form) plus `claims` — "
+            "for example {\"claim\": \"perpendicular\", \"of\": [\"[ C D ]\", "
+            "\"[ A B ]\"]}. Every claim is decided by exact arithmetic rather "
+            "than measured, so a result is a proof and not a tolerance. Empty "
+            "findings means every claim held; an `error` means the construction "
+            "does not satisfy it and `draw` will refuse to render it; a `warn` "
+            "means it could not be certified and is neither proved nor "
+            "disproved. Check before you draw."
+        ),
+    )
+    def verify_construction(steps: Any = None,
+                            claims: list | None = None) -> dict[str, Any]:
+        return _guarded(lambda: _verify_payload(steps, claims))
 
     @server.tool(
         description=(
@@ -169,6 +187,33 @@ def _parameters_for(name: str) -> list[dict]:
         if template.id == name:
             return template.parameters
     return []
+
+
+def _verify_payload(steps: Any, claims: list | None) -> dict[str, Any]:
+    """Decide a construction's claims, drawing nothing.
+
+    The cheap step before the cheap step: `draw` already costs milliseconds, but
+    a construction whose claim is false is refused there and comes back blank
+    with no reason attached, because a template returns a string. This returns
+    the reasons.
+    """
+    from .diagrams.templates.construction import verify as _verify
+
+    if not steps:
+        raise RequestError(
+            "no construction to verify",
+            remedy="Pass `steps` as the notation or the structured step list.",
+        )
+    findings = _verify({"steps": steps, "claims": claims or []})
+    return {
+        "ok": True,
+        "findings": [asdict(f) for f in findings],
+        "holds": not findings,
+        "worst": worst_severity(findings),
+        # An error blocks the drawing; a warning does not. Saying so here spares
+        # the caller re-deriving the policy from the severities.
+        "would_draw": worst_severity(findings) != "error",
+    }
 
 
 def _draw_payload(diagram_type: str, params: dict | None) -> dict[str, Any]:

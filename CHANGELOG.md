@@ -53,6 +53,15 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
     circles drawn whole and lines run to the frame. `to_svg_steps()` gives one
     frame per step against a fixed viewBox, which is the bridge to the
     animation lane.
+  - `straightedge.geometry.notation` — `A = 0, 0`, `[ A B ]` for the line
+    through two points, `( A B )` for the compass on the first through the
+    second. The brackets are the drawing, so a reader can tell which tool made
+    which element. Strict in the way `expr.py` is strict: one branch per form,
+    no `eval`, and an unrecognised line rejected **with its number and the form
+    it nearly was** rather than repaired into something that draws. The
+    documented forms and the accepted forms are one tuple, and a test parses
+    every one — which is how a published implementation of this idea came to
+    advertise a section syntax its parser did not accept.
   - `straightedge.geometry.claims` — twelve predicates (`on`, `collinear`,
     `parallel`, `perpendicular`, `congruent`, `midpoint`, `equilateral`,
     `tangent`, `concurrent`, `ratio`, `golden`, `harmonic`), each reducing to
@@ -67,6 +76,26 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
     but squaring twice makes it `AB⁴ == AC²·BC²` — exact, and it adjoins
     nothing. It accepts φ and rejects 1.618, which is the entire argument for
     the exact kernel in one test.
+- **`verify_construction`, an MCP tool.** `draw` refuses a construction whose
+  claim is false and returns a blank, and a template has nowhere to put the
+  reason. This returns the findings without drawing: `holds`, `worst`, and
+  `would_draw` — the last a claim about what `draw` will actually do, with a
+  test that checks the two agree. Same economics as `validate` before `render`,
+  at a smaller scale.
+- **`tools/build_site_figures.py`**, and a test behind it. `build_site_assets.py`
+  was written because every MP4 on the site was made by hand and nothing could
+  reproduce it; the SVG figures had exactly the same problem and were never
+  covered. Each declared figure now names the hint that made it, `--check` fails
+  when one drifts, and the `pages` workflow gates the deploy on it the way it
+  already gates the feed.
+
+  The eight pre-existing figures are deliberately **not** declared: their inputs
+  were never recorded, and a guess that renders something plausible would
+  replace the site's artwork and report success. They are named in the script as
+  outstanding rather than quietly implied to be covered.
+- A post, *The picture is not the proof*, and a third series on the blog. 1.618
+  is right to three places, is not φ, and every checker that compares a measured
+  ratio against a tolerance says it is.
 - `sympy` joins the `dev` extra as a **test oracle** for the exact kernel —
   never a runtime path. Random expressions are built twice and required to
   agree on sign, zero and order, which covers the mistakes nobody has made yet.

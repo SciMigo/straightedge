@@ -5,8 +5,15 @@
   <link href="https://scimigo.github.io/straightedge/posts/feed.xml" rel="self"/>
   <link href="https://scimigo.github.io/straightedge/posts/"/>
   <id>https://scimigo.github.io/straightedge/posts/</id>
-  <updated>2026-08-18T00:00:00Z</updated>
+  <updated>2026-08-20T00:00:00Z</updated>
   <author><name>SciMigo</name></author>
+  <entry>
+    <title>The picture is not the proof</title>
+    <link href="https://scimigo.github.io/straightedge/posts/the-picture-is-not-the-proof.html"/>
+    <id>https://scimigo.github.io/straightedge/posts/the-picture-is-not-the-proof.html</id>
+    <updated>2026-08-20T00:00:00Z</updated>
+    <summary>1.618 is not the golden ratio, and every diagram tool that measures its own drawing says it is. Straightedge computes ruler-and-compass constructions in exact arithmetic, so a claim about a figure is decided rather than estimated.</summary>
+  </entry>
   <entry>
     <title>Matrix multiplication, four ways</title>
     <link href="https://scimigo.github.io/straightedge/posts/matrix-product-four-ways.html"/>

@@ -36,6 +36,12 @@ jobs:
       - name: The Atom feed matches the posts
         run: python3 tools/build_blog_feed.py --check
 
+      # Same argument as the feed above, for the same reason: a figure whose
+      # template has changed would be published before the test noticed. Also
+      # pure stdlib — the figure lane has no runtime dependencies.
+      - name: The declared figures match what the library draws
+        run: python3 tools/build_site_figures.py --check
+
       - name: Upload gallery
         uses: actions/upload-pages-artifact@v5
         with:

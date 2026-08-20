@@ -138,7 +138,8 @@ class TestTheServer:
         import asyncio
         server = self._server()
         names = {t.name for t in asyncio.run(server.list_tools())}
-        assert names == {"list_templates", "draw", "plan", "validate", "render"}
+        assert names == {"list_templates", "draw", "verify_construction",
+                         "plan", "validate", "render"}
 
     def test_render_is_the_only_tool_with_a_force_switch(self):
         """A tool set an agent can read: the expensive one is the one you force."""
@@ -383,3 +384,51 @@ class TestTemplatesDeclareTheirParameterShapes:
         for template in list_templates():
             named = {p["name"] for p in template.parameters}
             assert set(template.params) <= named
+
+
+class TestConstructionsCanBeCheckedBeforeTheyAreDrawn:
+    """`draw` refuses a construction whose claim is false and returns a blank.
+
+    A template returns a string and has nowhere to put findings, so the refusal
+    arrives with no reason attached. `verify_construction` is where the reasons
+    live — the same economics as `validate` before `render`, at a smaller scale.
+    """
+
+    VESICA = "A = 0, 0\nB = 1, 0\n( A B )\n( B A )\n[ C D ]\n[ A B ]\n"
+
+    def test_a_true_claim_holds_and_would_draw(self):
+        result = mcp_server._verify_payload(
+            self.VESICA, [{"claim": "perpendicular", "of": ["[ C D ]", "[ A B ]"]}])
+        assert result["ok"] and result["holds"] and result["would_draw"]
+        assert result["findings"] == [] and result["worst"] is None
+
+    def test_a_false_claim_says_so_and_says_draw_will_refuse(self):
+        result = mcp_server._verify_payload(
+            self.VESICA, [{"claim": "parallel", "of": ["[ C D ]", "[ A B ]"]}])
+        assert not result["holds"] and result["worst"] == "error"
+        assert result["would_draw"] is False
+
+    def test_the_verdict_agrees_with_what_draw_actually_does(self):
+        """`would_draw` is a claim about another tool; it has to be true."""
+        from straightedge.diagrams.registry import count_data_marks
+        for claim, expected in (("perpendicular", True), ("parallel", False)):
+            claims = [{"claim": claim, "of": ["[ C D ]", "[ A B ]"]}]
+            verdict = mcp_server._verify_payload(self.VESICA, claims)["would_draw"]
+            drawn = count_data_marks(mcp_server._draw_payload(
+                "construction", {"steps": self.VESICA, "claims": claims})["svg"]) > 0
+            assert verdict is expected and drawn is expected
+
+    def test_a_notation_error_comes_back_as_a_finding_with_its_line(self):
+        result = mcp_server._verify_payload("A = 0, 0\n[ A ", [])
+        assert result["findings"][0]["check"] == "construction:notation"
+        assert "line 2" in result["findings"][0]["message"]
+
+    def test_no_steps_is_a_typed_refusal(self):
+        with pytest.raises(StraightedgeError) as excinfo:
+            mcp_server._verify_payload(None, [])
+        assert excinfo.value.code == "no_request"
+
+    def test_verifying_costs_no_drawing(self):
+        """It returns findings, never an SVG — that is the point of it."""
+        result = mcp_server._verify_payload(self.VESICA, [])
+        assert "svg" not in result
