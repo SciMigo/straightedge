@@ -28,6 +28,8 @@ MARGIN = 24
 TITLE_H = 34
 AXIS_H = 22
 MIN_UNIT_PX = 26
+MAX_CHART_W = 900     # a long schedule scales down rather than growing without bound
+MAX_TICKS = 24        # beyond this the axis is a grey block, not a scale
 
 _CSS = """
 .g-label{font:14px 'Noto Sans SC',sans-serif;fill:#334155}
@@ -42,6 +44,16 @@ _CSS = """
 
 def _fmt(v: float) -> str:
     return str(int(v)) if abs(v - round(v)) < 1e-9 else f"{v:g}"
+
+
+def _fit(name: str, width: float = LABEL_W - 10, size: float = 14) -> str:
+    """Trim a row label to the label gutter, with an ellipsis when it is cut.
+
+    The previous fixed ``[:8]`` was blind to the gutter it was cutting for, and
+    silently truncated mid-word with no sign anything had been dropped.
+    """
+    budget = max(4, int(width / (size * 0.55)))
+    return name if len(name) <= budget else name[: budget - 1].rstrip() + "\u2026"
 
 
 def _tasks_from_params(params: Dict[str, Any]) -> List[Dict[str, Any]]:
@@ -82,6 +94,11 @@ class GanttTemplate:
         title = str(params.get("title") or "").strip()
         max_t = max((t["start"] + t["duration"] for t in tasks), default=0) or 1
         scale = max(MIN_UNIT_PX, min(60, 560 / max_t))
+        # MIN_UNIT_PX alone means the chart grows linearly with the unit count: a
+        # schedule expressed in days rather than weeks rendered ~4,800px wide with
+        # one gridline per day. Below the floor the units are dense, so fit them.
+        if max_t * scale > MAX_CHART_W:
+            scale = MAX_CHART_W / max_t
 
         chart_x = MARGIN + LABEL_W
         width = int(chart_x + max_t * scale + MARGIN)
@@ -96,7 +113,8 @@ class GanttTemplate:
         grid_top = top + AXIS_H
         grid_bot = grid_top + len(tasks) * ROW_H
         n_ticks = int(max_t) + 1
-        for u in range(n_ticks):
+        step = max(1, -(-n_ticks // MAX_TICKS))
+        for u in range(0, n_ticks, step):
             gx = chart_x + u * scale
             parts.append(f'<line x1="{gx}" y1="{grid_top}" x2="{gx}" y2="{grid_bot}" class="g-grid"/>')
             parts.append(text(gx, top + 14, _fmt(u), text_anchor="middle", **{"class": "g-axis"}))
@@ -104,7 +122,7 @@ class GanttTemplate:
         # Rows.
         for i, t in enumerate(tasks):
             ry = grid_top + i * ROW_H
-            parts.append(text(MARGIN, ry + ROW_H / 2 + 4, t["name"][:8], **{"class": "g-label"}))
+            parts.append(text(MARGIN, ry + ROW_H / 2 + 4, _fit(t["name"]), **{"class": "g-label"}))
             bx = chart_x + t["start"] * scale
             bw = max(2, t["duration"] * scale)
             by = ry + (ROW_H - BAR_H) / 2

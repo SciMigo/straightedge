@@ -27,6 +27,22 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   on every PR, and `--check` in the `pages` workflow before it uploads, because
   those two workflows race on a push to main and only the second is between a
   stale feed and a subscriber.
+- **`roadmap`, a calendar diagram for dated work in swim lanes.** `gantt` places
+  bars on a *unit* axis for a CPM exercise: ticks are integers, every task owns a
+  row, and there is nowhere to put a track or a milestone. A product roadmap is
+  none of those things, and expressing one through `gantt` loses the lane, the
+  milestone and the date — a six-month plan handed over as day units rendered
+  ~4,800px wide with a 0..180 axis, captions cut at eight characters. The new
+  template takes `start_date`/`end_date`, `tracks`, dated `items` with a
+  `status`, `milestones` and `depends_on`; it packs overlapping items in a track
+  into sub-rows so bars never collide, labels the axis with calendar dates, and
+  draws a dependency whose target starts before its source finishes by routing
+  around rather than backwards through the lane. Width is fixed, so a five-year
+  plan and a one-month plan produce the same shape.
+- A legibility check for the above, rather than a smoke test: the suite parses
+  the emitted SVG and asserts no caption is drawn outside the viewBox, in any
+  anchoring. A label that overflows is clipped, so it reads as *missing* — the
+  failure a byte-count or element-count assertion cannot see.
 
 ### Changed
 - The linear-algebra post is titled "Matrix multiplication, four ways". The
@@ -233,6 +249,16 @@ Review findings on PR #2, all reproduced before being fixed.
   matrix fits the frame, rather than drawing a fixed grid that a large
   eigenvalue then pushes off-screen. QC measured 11.8 units outside a 14.2-unit
   frame before; the same scene now reports no errors.
+
+- **`gantt` no longer grows without bound.** `MIN_UNIT_PX` floored the scale at
+  26px per unit with no ceiling on the total, so width grew linearly with the
+  unit count — fine for a 12-week textbook schedule, ~4,800px for the same plan
+  expressed in days, with one gridline and one tick label per day. The scale now
+  falls below the floor when the units are dense enough to need it, and the axis
+  draws at most 24 ticks. A 180-unit schedule went from 4,844px to 1,064px.
+- `gantt` row labels are trimmed to the width of the gutter they are drawn in,
+  with an ellipsis when they are cut. The fixed `[:8]` was blind to the gutter
+  and truncated mid-word with no sign anything had been dropped.
 
 ## [0.2.0] - 2026-08-17
 
