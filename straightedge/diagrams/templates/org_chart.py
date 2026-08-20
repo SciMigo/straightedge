@@ -54,7 +54,13 @@ MAX_WIDTH = 1160
 MARGIN = 28
 HEADER_H = 62
 
+#: A column is at least this wide and grows to fill the canvas. It used to be
+#: the fixed width, which left a third of the page blank while five labels were
+#: trimmed for want of the room sitting beside them — the layout was bounded by
+#: a constant rather than by the space it actually had.
 CARD_W = 206
+#: …and no wider, so a single unit does not become one 1,100px-wide card.
+CARD_W_MAX = 392
 CARD_H = 56          # a manager card: name over role
 ROW_H = 36           # a stacked report row
 COL_GAP = 22
@@ -197,6 +203,18 @@ def _flatten(node: Dict[str, Any], depth: int = 0) -> List[Tuple[Dict[str, Any],
     return out
 
 
+def column_width(columns: int, width: int = MAX_WIDTH) -> float:
+    """How wide each column may be, given how many share the row.
+
+    Fills the canvas rather than leaving it: with three units on a 1,160px page
+    there is room for 370px a column, and pinning them to 206 trimmed names that
+    would otherwise have fitted whole.
+    """
+    columns = max(1, columns)
+    usable = width - 2 * MARGIN - (columns - 1) * COL_GAP
+    return max(CARD_W, min(CARD_W_MAX, usable / columns))
+
+
 def columns_per_bank(count: int, width: int = MAX_WIDTH) -> int:
     """How many columns fit across, so width is bounded however wide the org is.
 
@@ -245,7 +263,10 @@ class OrgChartTemplate:
             tallest = max((len(stacks[i]) for i in bank), default=0)
             bank_heights.append(CARD_H + STACK_TOP_GAP + tallest * ROW_H)
 
-        width = MAX_WIDTH if len(units) > 1 else max(420, CARD_W + 2 * MARGIN + 120)
+        widest = max((len(bank) for bank in banks), default=1)
+        card_w = column_width(widest)
+        width = (MAX_WIDTH if len(units) > 1
+                 else max(420, int(card_w) + 2 * MARGIN + 120))
         height = int(bank_top + sum(bank_heights) + BANK_GAP * max(0, len(banks) - 1)
                      + MARGIN + 30)
 
@@ -256,7 +277,7 @@ class OrgChartTemplate:
                           **{"class": "oc-title"}))
 
         centre = width / 2
-        p.extend(self._card(root, centre - CARD_W / 2, root_y, root=True))
+        p.extend(self._card(root, centre - card_w / 2, root_y, card_w, root=True))
 
         # Assistants: on a side line below the principal, above their reports.
         for i, raw in enumerate(assistants):
@@ -264,38 +285,43 @@ class OrgChartTemplate:
             if node is None:
                 continue
             ay = root_y + CARD_H + 8 + i * ROW_H
-            ax = centre + CARD_W / 2 + 26
+            ax = centre + card_w / 2 + 26
+            available = width - MARGIN - ax
             p.append(path(f"M {centre:.1f} {ay + ROW_H / 2:.1f} H {ax:.1f}",
                           **{"class": "oc-edge"}))
-            p.extend(self._row(node, ax, ay, CARD_W))
+            p.extend(self._row(node, ax, ay, min(card_w, available)))
 
         placed: Dict[str, Tuple[float, float]] = {}
         y = bank_top
         for bank_i, bank in enumerate(banks):
-            span = len(bank) * CARD_W + (len(bank) - 1) * COL_GAP
+            span = len(bank) * card_w + (len(bank) - 1) * COL_GAP
             x0 = (width - span) / 2
             if bank:
                 p.append(path(f"M {centre:.1f} {bus_y - SPINE_DROP / 2:.1f} "
                               f"V {y - STACK_TOP_GAP / 2:.1f}", **{"class": "oc-edge"}))
-                left = x0 + CARD_W / 2
-                right = x0 + span - CARD_W / 2
+                left = x0 + card_w / 2
+                right = x0 + span - card_w / 2
                 p.append(path(f"M {left:.1f} {y - STACK_TOP_GAP / 2:.1f} "
                               f"H {right:.1f}", **{"class": "oc-edge"}))
             for slot, unit_i in enumerate(bank):
-                cx = x0 + slot * (CARD_W + COL_GAP)
+                cx = x0 + slot * (card_w + COL_GAP)
                 unit = units[unit_i]
-                p.append(path(f"M {cx + CARD_W / 2:.1f} {y - STACK_TOP_GAP / 2:.1f} "
+                p.append(path(f"M {cx + card_w / 2:.1f} {y - STACK_TOP_GAP / 2:.1f} "
                               f"V {y:.1f}", **{"class": "oc-edge"}))
-                p.extend(self._card(unit, cx, y, root=False))
-                placed[unit["name"]] = (cx + CARD_W / 2, y + CARD_H / 2)
+                p.extend(self._card(unit, cx, y, card_w, root=False))
+                # The *top* edge, not the centre. A dotted line drawn to the
+                # centre crosses the card's own name on the way in, so it
+                # obscures the person it is pointing at; arcing above and
+                # meeting the edge leaves both labels clear.
+                placed[unit["name"]] = (cx + card_w / 2, y)
                 ry = y + CARD_H + STACK_TOP_GAP
                 for node, depth in stacks[unit_i]:
                     ix = cx + (depth - 1) * INDENT
-                    w = CARD_W - (depth - 1) * INDENT
+                    w = card_w - (depth - 1) * INDENT
                     p.append(path(f"M {ix - 8:.1f} {ry - 4:.1f} V {ry + ROW_H / 2:.1f} "
                                   f"H {ix:.1f}", **{"class": "oc-edge"}))
                     p.extend(self._row(node, ix, ry, w))
-                    placed[node["name"]] = (ix + w / 2, ry + ROW_H / 2)
+                    placed[node["name"]] = (ix + w / 2, ry)
                     ry += ROW_H
             y += bank_heights[bank_i] + BANK_GAP
 
@@ -306,21 +332,22 @@ class OrgChartTemplate:
                             class_name="diagram org-chart")
 
     # -- pieces ----------------------------------------------------------
-    def _card(self, node: Dict[str, Any], x: float, y: float, root: bool) -> List[str]:
+    def _card(self, node: Dict[str, Any], x: float, y: float, width: float,
+              root: bool) -> List[str]:
         status = node["status"]
         vacant = status == "vacant"
         cls = ("oc-card root" if root else
                "oc-card" + (f" {status}" if status in ("vacant", "interim") else ""))
-        out = [rect(x, y, CARD_W, CARD_H, rx=7, **{"class": cls})]
+        out = [rect(x, y, width, CARD_H, rx=7, **{"class": cls})]
         pad = 12
-        name = fit_text(node["name"], CARD_W - 2 * pad, NAME_PX, bold=True)
-        out.append(text(x + CARD_W / 2, y + 23, name, text_anchor="middle",
+        name = fit_text(node["name"], width - 2 * pad, NAME_PX, bold=True)
+        out.append(text(x + width / 2, y + 23, name, text_anchor="middle",
                         **{"class": "oc-name root" if root else "oc-name"}))
         role = node["role"] or ("Vacant" if vacant else "")
         if role:
             rcls = "oc-role root" if root else ("oc-role vacant" if vacant else "oc-role")
-            out.append(text(x + CARD_W / 2, y + 41,
-                            fit_text(role, CARD_W - 2 * pad, ROLE_PX),
+            out.append(text(x + width / 2, y + 41,
+                            fit_text(role, width - 2 * pad, ROLE_PX),
                             text_anchor="middle", **{"class": rcls}))
         return out
 
@@ -367,19 +394,22 @@ class OrgChartTemplate:
             b = placed.get(str(link.get("to") or ""))
             if not a or not b or a == b:
                 continue
-            # Bowed clear of the card band. A 26px rise left the curve inside
-            # the cards it joined, so it crossed "Radia Perlman" rather than
-            # reaching it, and the label sat on the card edge. A quadratic sits
-            # at half its control offset, so the control point goes twice the
-            # clearance we actually want.
-            lift = CARD_H + 22
-            mx, my = (a[0] + b[0]) / 2, min(a[1], b[1]) - 2 * lift
+            # A quadratic passes at half its control offset, so the control
+            # point is solved for the apex we actually want rather than guessed
+            # at: apex = (start + 2·control + end)/4. Bowing by a fixed multiple
+            # put the control 156px above the cards to raise the curve by 63,
+            # and left the label floating over the root card labelling nothing.
+            clearance = 26.0
+            apex_y = min(a[1], b[1]) - clearance
+            mx = (a[0] + b[0]) / 2
+            my = (4 * apex_y - a[1] - b[1]) / 2
             out.append(path(f"M {a[0]:.1f} {a[1]:.1f} Q {mx:.1f} {my:.1f} "
                             f"{b[0]:.1f} {b[1]:.1f}", **{"class": "oc-dotted"}))
             label = str(link.get("label") or "")
             if label:
-                out.append(text(mx, min(a[1], b[1]) - lift - 5, label,
-                                text_anchor="middle",
+                # On the curve it names, not above where the curve might have
+                # gone: the apex is where the two are closest to each other.
+                out.append(text(mx, apex_y - 5, label, text_anchor="middle",
                                 **{"class": "oc-dotted-label"}))
         return out
 

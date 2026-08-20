@@ -95,3 +95,16 @@ class DependencyError(StraightedgeError):
     """A capability this host lacks — Manim for rendering, a backend for the STT."""
 
     code = "dependency_missing"
+
+
+class UnknownTemplateError(StraightedgeError):
+    """A template was named by an id the registry does not hold.
+
+    Distinct from :class:`RequestError`, whose ``no_request`` code means there
+    was nothing to work from at all. An agent that named `orgchart` instead of
+    `org_chart` has a request; it has a typo, and a code saying "no request"
+    sends it looking in the wrong place. ``details["known"]`` carries the ids
+    that do exist, so the fix is in the reply rather than one call away.
+    """
+
+    code = "unknown_template"

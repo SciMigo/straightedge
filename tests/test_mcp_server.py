@@ -149,3 +149,54 @@ class TestTheServer:
         with pytest.raises(StraightedgeError) as exc:
             mcp_server.build_server()
         assert "straightedge[mcp]" in (exc.value.remedy or "")
+
+
+class TestTheFigureLaneIsReachable:
+    """`list_templates` advertised both lanes; only one could be drawn.
+
+    Every tool but `list_templates` reached the animation lane, so an agent saw
+    the figure templates listed and had no way to draw any of them. Reported
+    from a downstream plugin that had promised users those figures.
+    """
+
+    def test_a_figure_can_be_drawn(self):
+        result = mcp_server._draw_payload("org_chart", {"root": {
+            "name": "Ada Lovelace", "title": "CEO",
+            "children": [{"name": "Grace Hopper", "title": "VP Engineering"}]}})
+        assert result["ok"] and result["svg"].startswith("<svg")
+        assert result["data_marks"] > 0 and result["blank"] is False
+
+    def test_every_advertised_figure_template_is_drawable(self):
+        """The listing and the draw tool read the same registry, so a template
+        cannot be advertised by one and unreachable by the other."""
+        from straightedge.diagrams import DIAGRAM_REGISTRY
+        listed = {t["id"] for t in mcp_server.as_dicts() if t["lane"] == "figure"}
+        assert listed == set(DIAGRAM_REGISTRY)
+        for name in sorted(listed):
+            assert mcp_server._draw_payload(name, {})["ok"]
+
+    def test_an_empty_figure_is_reported_rather_than_hidden(self):
+        """Chrome with no data reads exactly like a successful render."""
+        result = mcp_server._draw_payload("org_chart", {"nothing": "usable"})
+        assert result["ok"] and result["blank"] is True
+        assert result["data_marks"] == 0 and result["bytes"] > 0
+
+    def test_an_unknown_id_says_so_and_lists_the_real_ones(self):
+        with pytest.raises(StraightedgeError) as excinfo:
+            mcp_server._draw_payload("orgchart", {})
+        error = excinfo.value
+        assert error.code == "unknown_template"
+        assert "org_chart" in error.details["known"]
+
+    def test_a_missing_id_is_a_different_failure_from_a_wrong_one(self):
+        """`no_request` sends an agent looking for a missing request; a typo is
+        not that, and the two must not share a code."""
+        with pytest.raises(StraightedgeError) as excinfo:
+            mcp_server._draw_payload("", {})
+        assert excinfo.value.code == "no_request"
+
+    def test_drawing_needs_no_manim(self):
+        """The figure lane is stdlib; this is what makes `draw` milliseconds."""
+        import sys
+        assert "manim" not in sys.modules
+        assert mcp_server._draw_payload("unit_circle", {"angle": 30})["ok"]
