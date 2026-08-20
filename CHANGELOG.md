@@ -4,7 +4,11 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project aims to
 follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.3.1] - 2026-08-20
+
+A patch release in effect and a small feature in fact: the figure lane became
+reachable over MCP, where it had been listed but not drawable since the server
+was written. Everything else here is a fix. Nothing was removed.
 
 ### Added
 - **`draw`, an MCP tool for the figure lane.** `list_templates` advertised both
