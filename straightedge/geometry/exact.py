@@ -70,8 +70,10 @@ __all__ = [
 MAX_DEPTH = 6
 
 #: Bit ceiling on any single numerator or denominator. Depth alone does not
-#: bound cost: repeated division inside one level grows integers without
-#: adjoining anything.
+#: bound cost: repeated division grows integers without adjoining anything, and
+#: a construction of large rational coordinates never leaves level 0 at all — so
+#: the check applies to plain rationals as much as to tower values. It did not
+#: at first, which left the commonest growth path the only unguarded one.
 MAX_BITS = 4096
 
 Rationalish = Union[int, Fraction, "Exact"]
@@ -358,7 +360,7 @@ class Exact:
             return NotImplemented
         tower, x, y = self._common(rhs)
         if x._level == 0:
-            return Exact.rational(x._a + y._a)           # type: ignore[operator]
+            return Exact.rational(x._a + y._a)._check_bits()   # type: ignore[operator]
         return Exact(tower, x._level, x._a + y._a, x._b + y._b)._check_bits()
 
     __radd__ = __add__
@@ -382,7 +384,7 @@ class Exact:
             return NotImplemented
         tower, x, y = self._common(rhs)
         if x._level == 0:
-            return Exact.rational(x._a * y._a)           # type: ignore[operator]
+            return Exact.rational(x._a * y._a)._check_bits()   # type: ignore[operator]
         gen = tower.generator(x._level)._embed(tower, x._level - 1)  # type: ignore[union-attr]
         # (a + b√g)(c + d√g) = (ac + bdg) + (ad + bc)√g
         return Exact(tower, x._level,
@@ -396,7 +398,7 @@ class Exact:
         if self.is_zero():
             raise ZeroDivisionError("inverse of an exact zero")
         if self._level == 0:
-            return Exact.rational(1 / self._a)           # type: ignore[operator]
+            return Exact.rational(1 / self._a)._check_bits()   # type: ignore[operator]
         tower = self._tower
         gen = tower.generator(self._level)._embed(tower, self._level - 1)  # type: ignore[union-attr]
         # 1/(a + b√g) = (a − b√g) / (a² − b²g)

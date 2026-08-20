@@ -7,6 +7,11 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Fixed
+- The exact kernel's bit ceiling was not enforced on plain rationals. `__add__`,
+  `__mul__` and `inverse` returned early on the level-0 path without checking,
+  so a construction of large rational coordinates — the commonest way integers
+  grow at all — was the one case the cap did not cover. Found by a test written
+  to exercise the cap, which reported no finding because nothing had raised.
 - **`draw` answered `ok: true` for a figure with nothing on it.** Asked for the
   unit circle at `"pi/4"`, it returned zero bytes, zero data marks and
   `blank: true` — alongside `ok: true`. The mark count is the tool's own
@@ -48,6 +53,20 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
     circles drawn whole and lines run to the frame. `to_svg_steps()` gives one
     frame per step against a fixed viewBox, which is the bridge to the
     animation lane.
+  - `straightedge.geometry.claims` — twelve predicates (`on`, `collinear`,
+    `parallel`, `perpendicular`, `congruent`, `midpoint`, `equilateral`,
+    `tangent`, `concurrent`, `ratio`, `golden`, `harmonic`), each reducing to
+    `is_zero` on an exact value and returning `qc.Finding`, so every existing
+    consumer reports them unchanged. A claim that holds is silent, a claim that
+    fails is an `error`, and one that could not be certified is a `warn` that
+    says so — never a pass. A `construction` whose claim is false does not get
+    drawn, which is the rule `AGENTS.md` states for the example scenes applied
+    to a figure.
+
+    `golden` is the one worth reading: `AB/BC == φ` looks like it needs `√5`,
+    but squaring twice makes it `AB⁴ == AC²·BC²` — exact, and it adjoins
+    nothing. It accepts φ and rejects 1.618, which is the entire argument for
+    the exact kernel in one test.
 - `sympy` joins the `dev` extra as a **test oracle** for the exact kernel —
   never a runtime path. Random expressions are built twice and required to
   agree on sign, zero and order, which covers the mistakes nobody has made yet.

@@ -44,10 +44,17 @@ from __future__ import annotations
 from fractions import Fraction
 from typing import Any, Dict, List
 
+import logging
+
+from ...errors import PrecisionError
+from ...geometry.claims import check as check_claims
 from ...geometry.draw import DEFAULT_WIDTH, to_svg
 from ...geometry.model import Construction
+from ...qc import Finding, worst_severity
 from ..registry import register
 from ..renderer import svg_document
+
+logger = logging.getLogger(__name__)
 
 _POINT_KEYS = ("point", "set_point", "p")
 _LINE_KEYS = ("line", "construct_line", "l")
@@ -125,11 +132,32 @@ def _apply(construction: Construction, step: Any) -> None:
 
 
 def build(steps: List[Any], name: str = "construction") -> Construction:
-    """Run every step in order. Public so Phase 5 can check what Phase 4 drew."""
+    """Run every step in order. Public so a caller can check what it drew."""
     construction = Construction(name)
     for step in steps:
         _apply(construction, step)
     return construction
+
+
+def verify(params: Dict[str, Any]) -> List[Finding]:
+    """Build the construction and decide its claims, without drawing anything.
+
+    The cheap step, and the one worth doing first: deciding a claim costs
+    arithmetic, drawing costs a document, and a construction whose claim is false
+    should never reach the second. Returns the findings — an empty list means
+    every claim held.
+    """
+    steps = params.get("steps") or params.get("construction") or []
+    if not isinstance(steps, list) or not steps:
+        return [Finding("construction:empty", "error", "no steps to build")]
+    try:
+        construction = build(steps, str(params.get("title") or "construction"))
+    except PrecisionError as exc:
+        return [Finding("construction:unbuildable", "error", exc.message)]
+    except (ValueError, TypeError, KeyError, ZeroDivisionError) as exc:
+        return [Finding("construction:unbuildable", "error", str(exc))]
+    claims = params.get("claims") or []
+    return check_claims(construction, claims) if isinstance(claims, list) else []
 
 
 @register("construction")
@@ -148,11 +176,26 @@ class ConstructionTemplate:
                                 class_name="diagram construction")
         try:
             construction = build(steps, title or "construction")
-        except (ValueError, TypeError, KeyError, ZeroDivisionError):
+        except (ValueError, TypeError, KeyError, ZeroDivisionError,
+                PrecisionError):
             # A construction that cannot be run has no partial drawing worth
             # showing: half a figure reads as a whole one. `render_diagram`
             # reports the blank, and `count_data_marks` refuses to call it a
             # render.
+            return svg_document("", width=200, height=80,
+                                class_name="diagram construction")
+
+        claims = params.get("claims") or []
+        findings = check_claims(construction, claims) if isinstance(claims, list) else []
+        if worst_severity(findings) == "error":
+            # A construction that asserts something false does not get drawn.
+            # This is the rule `AGENTS.md` states for the example scenes, applied
+            # where it belongs: a figure whose claim stops being true should fail
+            # rather than produce a convincing picture of something false. Call
+            # `verify()` for the findings themselves — a template returns a
+            # string and has nowhere to put them.
+            for finding in findings:
+                logger.warning("construction claim failed: %s", finding)
             return svg_document("", width=200, height=80,
                                 class_name="diagram construction")
 
