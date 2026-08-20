@@ -23,10 +23,15 @@ from straightedge.diagrams.renderer import (
     wrap_units,
 )
 from straightedge.diagrams.templates.org_chart import (
+    CARD_W,
+    CARD_W_MAX,
+    COL_GAP,
+    MARGIN,
     MAX_WIDTH,
     NAME_PX,
     ROLE_PX,
     TITLE_PX,
+    column_width,
     columns_per_bank,
 )
 
@@ -186,9 +191,12 @@ class TestLegibility:
 
     def test_a_long_name_is_marked_where_it_is_cut(self):
         svg = render_diagram({"type": "org_chart", "params": {"root": {
-            "name": "Dr. Alexandra Whitfield-Montgomery", "title": "Chief Executive",
-            "children": [{"name": "Someone With An Extremely Long Name Indeed",
-                          "title": "Principal Engineer, Platform"}]}}})
+            "name": "Dr. Alexandra Whitfield-Montgomery-Fotheringay-Ashby-de-la-Zouch",
+            "title": "Chief Executive Officer and Chair of the Supervisory Board",
+            "children": [{"name": "Someone With An Extremely Long Name Indeed Who "
+                                  "Also Has Several Additional Middle Names",
+                          "title": "Principal Engineer, Platform Infrastructure "
+                                   "and Developer Experience"}]}}})
         assert ELLIPSIS in svg
 
 
@@ -287,3 +295,100 @@ class TestNeighbouringTemplatesNoLongerCutSilently:
         so the caption went inside a bar it overflowed."""
         from straightedge.diagrams.templates.roadmap import text_width as rm_width
         assert rm_width("渲染引擎与托管服务", 11.5) > 90
+
+
+class TestColumnsFillTheCanvas:
+    """Reported from a real re-org: five labels trimmed with 498px unused.
+
+    The columns were pinned to a constant instead of to the space they had, so
+    the layout trimmed names while a third of the page stayed blank. Trimming is
+    correct only when there is nothing left to trim into.
+    """
+
+    def test_a_few_columns_use_the_width_available(self):
+        svg = render_diagram({"type": "org_chart", "params": ORG})
+        width, _ = _dims(svg)
+        root = ET.fromstring(svg)
+        edges = []
+        for node in root.iter(f"{SVG_NS}rect"):
+            if node.get("class") == "grid-paper":
+                continue
+            x = float(node.get("x"))
+            edges += [x, x + float(node.get("width"))]
+        assert max(edges) >= width - MARGIN - 1, (
+            f"content stops at {max(edges):.0f} of {width}, leaving "
+            f"{width - max(edges):.0f}px unused while labels are trimmed")
+
+    def test_nothing_is_trimmed_when_there_is_room_for_it(self):
+        svg = render_diagram({"type": "org_chart", "params": ORG})
+        trimmed = [node.text for node in ET.fromstring(svg).iter(f"{SVG_NS}text")
+                   if node.text and ELLIPSIS in node.text]
+        assert trimmed == [], f"trimmed with room to spare: {trimmed}"
+
+    def test_a_column_never_exceeds_the_readable_maximum(self):
+        """One unit must not become a single page-wide card."""
+        assert column_width(1) == CARD_W_MAX
+        assert CARD_W <= column_width(3) <= CARD_W_MAX
+
+    def test_many_columns_fall_back_to_the_minimum(self):
+        assert column_width(20) == CARD_W
+
+    def test_widths_fit_for_every_count_a_bank_can_hold(self):
+        """The floor and the cap are one invariant, not two settings.
+
+        `column_width` never goes below `CARD_W`, so a large enough column count
+        would overflow the canvas — `columns_per_bank` is what stops that count
+        ever being asked for. The two constants have to agree, and this is where
+        they are checked against each other rather than tuned apart.
+        """
+        widest = columns_per_bank(99)
+        for columns in range(1, widest + 1):
+            span = columns * column_width(columns) + (columns - 1) * COL_GAP
+            assert span <= MAX_WIDTH - 2 * MARGIN + 1, (
+                f"{columns} columns span {span:.0f} of "
+                f"{MAX_WIDTH - 2 * MARGIN} usable")
+
+
+class TestTheDottedLineLandsWhereItPoints:
+    """Also reported: 'security' rendered beside the CEO, labelling nothing."""
+
+    @staticmethod
+    def _curve(svg):
+        for node in ET.fromstring(svg).iter(f"{SVG_NS}path"):
+            if (node.get("class") or "") == "oc-dotted":
+                found = re.match(
+                    r"M ([\d.-]+) ([\d.-]+) Q ([\d.-]+) ([\d.-]+) "
+                    r"([\d.-]+) ([\d.-]+)", node.get("d") or "")
+                if found:
+                    return [float(v) for v in found.groups()]
+        return None
+
+    @staticmethod
+    def _label_y(svg):
+        for node in ET.fromstring(svg).iter(f"{SVG_NS}text"):
+            if (node.get("class") or "") == "oc-dotted-label":
+                return float(node.get("y"))
+        return None
+
+    def test_the_label_sits_on_the_curve_it_names(self):
+        svg = render_diagram({"type": "org_chart", "params": ORG})
+        x0, y0, cx, cy, x1, y1 = self._curve(svg)
+        apex = (y0 + 2 * cy + y1) / 4          # a quadratic at t = 1/2
+        label = self._label_y(svg)
+        assert abs(label - apex) <= 12, (
+            f"label at y={label} but the curve peaks at y={apex}")
+
+    def test_the_curve_clears_both_boxes_it_joins(self):
+        """Ending at a box's centre draws the line through its own name."""
+        svg = render_diagram({"type": "org_chart", "params": ORG})
+        x0, y0, cx, cy, x1, y1 = self._curve(svg)
+        boxes = []
+        for node in ET.fromstring(svg).iter(f"{SVG_NS}rect"):
+            if node.get("class") == "grid-paper":
+                continue
+            boxes.append((float(node.get("x")), float(node.get("y")),
+                          float(node.get("width")), float(node.get("height"))))
+        for x, y in ((x0, y0), (x1, y1)):
+            for bx, by, bw, bh in boxes:
+                inside = (bx + 1 < x < bx + bw - 1) and (by + 1 < y < by + bh - 1)
+                assert not inside, f"endpoint ({x}, {y}) is inside a card"

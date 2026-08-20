@@ -30,7 +30,7 @@ from .aspect import ASPECTS, LANDSCAPE, VERTICAL
 from .catalog import Template, list_templates
 from .errors import (
     DependencyError, FontError, InputFileError, PreconditionError, RenderError,
-    RequestError, StraightedgeError,
+    RequestError, StraightedgeError, UnknownTemplateError,
 )
 from .estimate import Estimate, estimate
 from .expr import parse_function, to_latex_expr, to_numpy_expr
@@ -70,6 +70,7 @@ __all__ = [
     "FontError",
     "RenderError",
     "DependencyError",
+    "UnknownTemplateError",
     # Plan
     "AnimationPlan",
     "Topic",

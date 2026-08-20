@@ -4,6 +4,42 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project aims to
 follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **`draw`, an MCP tool for the figure lane.** `list_templates` advertised both
+  lanes from the start while every other tool reached only the animation one, so
+  an agent could see all 37 figure templates listed and had no way to draw a
+  single one — the only drawing tool was `render`, which is Manim, ten minutes
+  of a core, and fails outright without the `render` extra. `draw` takes a
+  template id and its params and returns the SVG in milliseconds with no Manim
+  at all. It reports `data_marks` alongside, because a template handed
+  parameters it cannot read still draws its axes and frame, and several
+  kilobytes of empty chrome is the one failure that looks exactly like success.
+  Reported by a downstream plugin that had promised users those figures.
+- `UnknownTemplateError` (`unknown_template`), so naming a template that does
+  not exist is distinguishable from having named nothing at all. `RequestError`
+  means "no request to work from"; an agent that typed `orgchart` has a request
+  and a typo, and a code saying otherwise sends it looking in the wrong place.
+  `details["known"]` carries the ids that do exist.
+
+### Fixed
+- **`org_chart` trimmed labels while a third of the canvas stayed empty.**
+  Columns were pinned to a 206px constant rather than to the space they had, so
+  a three-unit chart used 662px of 1,160 and cut five names that would have
+  fitted whole. Columns now fill the width, bounded by a readable maximum so a
+  single unit does not become one page-wide card; the same chart now spans the
+  full canvas and trims nothing. Trimming is correct only when there is nothing
+  left to trim into.
+- **`org_chart` drew a dotted-line label nowhere near its line.** The curve was
+  bowed by a fixed multiple of the card height and the label placed against that
+  multiple rather than against the curve, so "security" rendered beside the CEO
+  while the line it named arced far below. The control point is now solved for
+  the apex the curve should actually reach, and the label sits on it.
+- **`org_chart` dotted lines ended at the centre of the card they pointed at**,
+  drawing themselves through that person's own name. They attach to the edge
+  now, so an arc between two people obscures neither.
+
 ## [0.3.0] - 2026-08-20
 
 A minor release on both lanes. The animation lane gains its first topic outside

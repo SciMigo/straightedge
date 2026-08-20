@@ -12,6 +12,15 @@ can call the cheap ones first stops before wasting the expensive one, which is
 the whole reason plan/validate/render are separate calls rather than one
 ``make_video`` that fuses them and discovers the plan was wrong too late.
 
+``draw`` is the figure lane's counterpart to ``render`` and is nothing like it
+in cost: milliseconds, pure standard library, no Manim and no video. It exists
+because ``list_templates`` advertised both lanes from the beginning while every
+other tool reached only the animation one — so an agent could see thirty-eight
+figure templates listed and had no way to draw a single one of them. It returns
+the SVG together with ``data_marks``, because a template handed parameters it
+cannot interpret renders its chrome and nothing else, and several kilobytes of
+empty axes is the one failure that looks exactly like success.
+
 Failures come back as data, not exceptions. Every tool catches
 :class:`~straightedge.errors.StraightedgeError` and returns the same
 ``{ok: false, error: {code, message, remedy, details}}`` shape the CLI's
@@ -33,7 +42,9 @@ from typing import Any
 
 from . import __version__
 from .catalog import as_dicts
-from .errors import StraightedgeError
+from .diagrams import DIAGRAM_REGISTRY, render_diagram
+from .diagrams.registry import count_data_marks
+from .errors import RequestError, StraightedgeError, UnknownTemplateError
 from .estimate import estimate
 from .planner import build_plan
 from .preconditions import blocking, validate as _validate
@@ -74,6 +85,21 @@ def build_server():
     )
     def list_templates() -> dict[str, Any]:
         return {"ok": True, "templates": as_dicts()}
+
+    @server.tool(
+        description=(
+            "Draw a figure — one of the SVG templates from list_templates — and "
+            "return the SVG. Cheap: milliseconds, pure standard library, no "
+            "Manim and no video, so this is the tool for diagrams rather than "
+            "animations. Give the template id as `type` and its parameters as "
+            "`params` (list_templates reports which parameters each one reads). "
+            "Check `data_marks` in the reply: a template given parameters it "
+            "cannot interpret still draws its axes and frame, so zero marks "
+            "means the figure is empty however many bytes came back."
+        ),
+    )
+    def draw(type: str = "", params: dict | None = None) -> dict[str, Any]:
+        return _guarded(lambda: _draw_payload(type, params))
 
     @server.tool(
         description=(
@@ -132,6 +158,35 @@ def build_server():
 
 
 # --------------------------------------------------------------- tool bodies
+
+
+def _draw_payload(diagram_type: str, params: dict | None) -> dict[str, Any]:
+    """Render one figure, and say whether anything actually landed on it."""
+    name = (diagram_type or "").strip()
+    if not name:
+        raise RequestError(
+            "no figure named",
+            remedy="Pass `type` as one of the figure template ids from list_templates.",
+        )
+    if name not in DIAGRAM_REGISTRY:
+        raise UnknownTemplateError(
+            f"unknown figure template: {name!r}",
+            remedy="Call list_templates and use an id whose lane is 'figure'.",
+            details={"known": sorted(DIAGRAM_REGISTRY)},
+        )
+    svg = render_diagram({"type": name, "params": params or {}})
+    marks = count_data_marks(svg)
+    return {
+        "ok": True,
+        "type": name,
+        "svg": svg,
+        "bytes": len(svg),
+        "data_marks": marks,
+        # Reported rather than raised: an empty figure is a parameter-shape
+        # mismatch the caller can fix, and it is the caller who knows what the
+        # figure was meant to show.
+        "blank": marks == 0,
+    }
 
 
 def _plan_for(request: str, template: str, params: dict | None):

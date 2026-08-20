@@ -57,8 +57,11 @@ A runnable version of exactly this is `examples/agent_loop.py`.
   result object on stdout instead of prose; failures come back as
   `{"ok": false, "error": {"code", "message", "remedy", "details"}}`.
 - **MCP** — `pip install 'straightedge[mcp]'`, run `straightedge-mcp`. Tools:
-  `list_templates`, `plan`, `validate`, `render`. Same granularity as the loop,
-  same error shape.
+  `list_templates`, `draw`, `plan`, `validate`, `render`. Same granularity as
+  the loop, and `draw` is the figure lane's whole loop in one call — it costs
+  milliseconds rather than minutes, so the plan/validate economics above do not
+  apply to it. Read `data_marks` in its reply: zero means the template could not
+  read the parameters and drew only its chrome. Same error shape throughout.
 
 ## Reading a failure
 
