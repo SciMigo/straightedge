@@ -1,8 +1,15 @@
 # Straightedge
 
-Straightedge is an open-source Python library for generating deterministic,
-machine-checkable SVG diagrams and Manim animations — from structured data,
-formulas, templates, or a natural-language prompt.
+Straightedge generates **deterministic, machine-checkable SVG diagrams** from
+structured data — safe to commit, diff, and regenerate. The same input renders
+the same bytes on any machine. Draw one through the CLI or the MCP server and
+it comes back with its own legibility findings — labels that collide, or run
+off the canvas, reported with coordinates rather than left for a human to
+notice — and a compass-and-straightedge construction whose claims are false is
+refused rather than drawn.
+
+Pure Python standard library: no Manim, no LaTeX, no browser, no network.
+A figure takes milliseconds.
 
 [![PyPI](https://img.shields.io/pypi/v/straightedge.svg)](https://pypi.org/project/straightedge/)
 [![Python versions](https://img.shields.io/pypi/pyversions/straightedge.svg)](https://pypi.org/project/straightedge/)
@@ -13,24 +20,36 @@ formulas, templates, or a natural-language prompt.
   <a href="https://scimigo.github.io/straightedge/#figures"><img src="https://raw.githubusercontent.com/SciMigo/straightedge/main/site/assets/svg/architecture.svg" width="48%" alt="A visual pipeline architecture diagram"></a>
   <a href="https://scimigo.github.io/straightedge/#figures"><img src="https://raw.githubusercontent.com/SciMigo/straightedge/main/site/assets/svg/binary-tree.svg" width="48%" alt="A binary-tree traversal diagram"></a>
 </p>
+<p align="center"><a href="https://scimigo.github.io/straightedge/">Explore all figures and videos →</a></p>
+
+The constraint the whole library is built around: **a visual can render
+successfully and still be wrong.** Straightedge validates input before drawing,
+and reads its own output back as geometry afterwards — so a label that collides
+with another, or runs off the canvas, is a finding with coordinates rather than
+something a human has to notice.
+
+---
+
+There is also an **animation lane** — Manim scene builders that turn a plan or a
+prompt into an MP4. It is an addon in the real sense, not the packaging sense:
+
+```bash
+pip install 'straightedge[render]'
+```
+
+installs Manim, and Manim then needs **ffmpeg, a LaTeX distribution and
+dvisvgm** on the host, none of which pip can put there. A render costs about ten
+minutes of one CPU core. Every template in `list_templates` says which lane it
+belongs to and what running it requires, and the MCP server does not offer its
+`render` tool on a host that cannot run it.
+
 <p align="center">
   <a href="https://scimigo.github.io/straightedge/#prompt-heading"><img src="https://raw.githubusercontent.com/SciMigo/straightedge/main/site/assets/gif/derivative-tangent.gif" width="48%" alt="A secant line converging to the tangent of a parabola"></a>
   <a href="https://scimigo.github.io/straightedge/#prompt-heading"><img src="https://raw.githubusercontent.com/SciMigo/straightedge/main/site/assets/gif/unit-circle-sine.gif" width="48%" alt="A point on the unit circle tracing a sine curve"></a>
 </p>
-<p align="center"><a href="https://scimigo.github.io/straightedge/">Explore all figures and videos →</a></p>
 
-Straightedge turns structured intent into deterministic visuals. It provides two
-independent output lanes:
-
-| lane | input → output | install |
-|---|---|---|
-| **Figures** — `straightedge.diagrams` | structured dictionary → SVG string | base package; no runtime dependencies |
-| **Animation** — scene builders and agent | plan or prompt → Manim scene → MP4 | `straightedge[render]` |
-
-Both lanes are designed around the same constraint: a visual can render
-successfully and still be wrong. Straightedge validates inputs before drawing and
-exposes geometry and findings that callers can use to reject or repair visible
-defects.
+If you are here for diagrams, you do not need any of that, and the rest of this
+page is the figure lane.
 
 ## Install
 
@@ -38,8 +57,8 @@ defects.
 pip install straightedge
 ```
 
-That is the figure lane, which uses only the Python standard library and pulls in
-nothing else. The other lanes are extras:
+That is the figure lane, complete — only the Python standard library, nothing
+pulled in. The rest are extras:
 
 ```bash
 pip install 'straightedge[render]'   # Manim animation → MP4

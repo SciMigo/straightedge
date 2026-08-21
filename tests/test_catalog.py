@@ -138,7 +138,8 @@ def test_the_shape_is_stable():
     t = list_templates()[0]
     assert isinstance(t, Template)
     assert set(vars(t)) == {"id", "lane", "output", "invocation", "params",
-                            "parameters", "example", "example_request", "summary"}
+                            "parameters", "example", "example_request", "summary",
+                            "requires"}
 
 
 def test_a_collection_default_keeps_its_contents():
@@ -389,3 +390,37 @@ class TestTheConstructorStaysCompatible:
         assert t.summary == "a summary"
         assert t.example == {}
         assert t.example_request == ""
+
+
+class TestATemplateSaysWhatItCosts:
+    """`lane` and `output` said an animation is an MP4. Neither said that
+    producing one needs Manim, ffmpeg, LaTeX and dvisvgm on the host, three of
+    which pip cannot install. An agent choosing between a figure and an
+    animation was choosing between milliseconds and a dependency error it could
+    only discover by hitting it."""
+
+    def test_the_figure_lane_requires_nothing(self):
+        for t in list_templates():
+            if t.lane == "figure":
+                assert t.requires == [], f"{t.id} claims to need {t.requires}"
+
+    def test_every_animation_says_what_it_needs(self):
+        from straightedge.catalog import ANIMATION_REQUIRES
+
+        for t in list_templates():
+            if t.lane == "animation":
+                assert t.requires == list(ANIMATION_REQUIRES)
+
+    def test_it_matches_what_the_server_actually_probes(self):
+        """Two lists of the same four things drift. This is the one that would
+        drift silently: the probe fails loudly, the catalog just lies."""
+        import inspect
+
+        from straightedge import mcp_server
+        from straightedge.catalog import ANIMATION_REQUIRES
+
+        source = inspect.getsource(mcp_server._missing_render_runtime)
+        for name in ANIMATION_REQUIRES:
+            assert name in source, (
+                f"the catalog says an animation needs {name!r} and the runtime "
+                "probe never looks for it")

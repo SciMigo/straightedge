@@ -134,20 +134,72 @@ class TestTheServer:
 
         An exact set is the point: a tool added without a thought for the shape
         of the whole fails here rather than quietly widening the surface.
+
+        `render` is in the set only where it can run. Everything else needs
+        nothing but the standard library, which is why the rest is unconditional.
         """
         import asyncio
         server = self._server()
         names = {t.name for t in asyncio.run(server.list_tools())}
-        assert names == {"list_templates", "draw", "verify_construction",
-                         "plan", "validate", "render"}
+        expected = {"list_templates", "draw", "verify_construction",
+                    "plan", "validate"}
+        if not mcp_server._missing_render_runtime():
+            expected.add("render")
+        assert names == expected
 
     def test_render_is_the_only_tool_with_a_force_switch(self):
         """A tool set an agent can read: the expensive one is the one you force."""
         import asyncio
         server = self._server()
         tools = {t.name: t for t in asyncio.run(server.list_tools())}
+        if "render" not in tools:
+            pytest.skip("this host cannot render; the tool is not offered")
         assert "force" in tools["render"].input_schema["properties"]
         assert "force" not in tools["plan"].input_schema.get("properties", {})
+
+
+class TestRenderIsOfferedOnlyWhereItRuns:
+    """A tool that cannot work is worse than a tool that is not there.
+
+    The animation lane needs Manim, ffmpeg, LaTeX and dvisvgm; pip installs one
+    of them. Advertised regardless, `render` was a tool an agent picks because
+    it is listed, waits on, and gets a dependency error from. The guard that
+    raises that error already existed -- it fired after the caller had
+    committed, which is the wrong end of the call.
+    """
+
+    def _names(self, monkeypatch, missing):
+        import asyncio
+        pytest.importorskip("mcp")
+        monkeypatch.setattr(mcp_server, "_missing_render_runtime", lambda: missing)
+        return {t.name for t in asyncio.run(mcp_server.build_server().list_tools())}
+
+    def test_it_is_absent_when_the_runtime_is(self, monkeypatch):
+        names = self._names(monkeypatch, ["manim", "ffmpeg"])
+        assert "render" not in names
+
+    def test_it_is_there_when_the_runtime_is(self, monkeypatch):
+        assert "render" in self._names(monkeypatch, [])
+
+    def test_the_figure_lane_never_depends_on_it(self, monkeypatch):
+        """`draw` is pure standard library, and `plan` and `validate` only
+        decide things. None of them should vanish with the renderer."""
+        names = self._names(monkeypatch, ["manim", "ffmpeg", "a LaTeX distribution"])
+        assert {"list_templates", "draw", "verify_construction",
+                "plan", "validate"} <= names
+
+    def test_the_absence_is_explained_rather_than_silent(self, monkeypatch):
+        """An agent reading five tools and no renderer should not have to
+        work out why, or conclude the lane does not exist."""
+        monkeypatch.setattr(mcp_server, "_missing_render_runtime",
+                            lambda: ["manim", "ffmpeg"])
+        note = mcp_server._lane_note()
+        assert "manim" in note and "ffmpeg" in note
+        assert "draw" in note, "it should say what still works"
+
+    def test_nothing_is_said_when_everything_is_present(self, monkeypatch):
+        monkeypatch.setattr(mcp_server, "_missing_render_runtime", lambda: [])
+        assert mcp_server._lane_note() == ""
 
     def test_missing_sdk_names_the_extra(self, monkeypatch):
         """If the SDK is absent, the error says which extra to install."""

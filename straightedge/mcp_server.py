@@ -75,6 +75,7 @@ def build_server():
             "turn a request into a plan cheaply, validate to check a plan will "
             "draw what was asked before spending a render, and render only once "
             "the plan looks right — render is the expensive step."
+            + _lane_note()
         ),
     )
 
@@ -175,25 +176,56 @@ def build_server():
             }
         return _guarded(go)
 
-    @server.tool(
-        description=(
-            "Render to an MP4 and check the result. Expensive — about ten "
-            "minutes of one CPU core. Give a request or a template id (see "
-            "plan); a template renders in any language with no keyword routing. "
-            "Refuses a plan with a blocking precondition unless force=True. "
-            "Returns the output path and the QC findings on the finished frame."
-        ),
-    )
-    def render(request: str = "", language: str = "en", quality: str = "l",
-               force: bool = False, template: str = "",
-               params: dict | None = None) -> dict[str, Any]:
-        return _guarded(
-            lambda: _render(request, language, quality, force, template, params))
+    # Only where it can actually run. The animation lane needs Manim, ffmpeg,
+    # LaTeX and dvisvgm — none of which pip installs for you, and three of which
+    # are system packages. Advertising `render` on a host without them offers a
+    # tool whose every call fails: an agent picks it because it is there, waits,
+    # and gets a dependency error instead of a video. The guard that produces
+    # that error already existed; it just fired after the caller had committed.
+    #
+    # The lane is not hidden — `list_templates` still reports every animation
+    # template and now says what running one costs, and `plan` and `validate`
+    # still work on them, because neither needs the runtime. What goes away is
+    # the one tool that cannot keep its promise on this host.
+    missing = _missing_render_runtime()
+    if not missing:
+        @server.tool(
+            description=(
+                "Render to an MP4 and check the result. Expensive — about ten "
+                "minutes of one CPU core. Give a request or a template id (see "
+                "plan); a template renders in any language with no keyword "
+                "routing. Refuses a plan with a blocking precondition unless "
+                "force=True. Returns the output path and the QC findings on the "
+                "finished frame."
+            ),
+        )
+        def render(request: str = "", language: str = "en", quality: str = "l",
+                   force: bool = False, template: str = "",
+                   params: dict | None = None) -> dict[str, Any]:
+            return _guarded(
+                lambda: _render(request, language, quality, force, template, params))
 
     return server
 
 
 # --------------------------------------------------------------- tool bodies
+
+
+def _lane_note() -> str:
+    """What this host can and cannot do, said once, up front.
+
+    An agent that reads five tools and no `render` should not have to work out
+    why. The figure lane is always available: pure standard library, no Manim,
+    no LaTeX, milliseconds.
+    """
+    missing = _missing_render_runtime()
+    if not missing:
+        return ""
+    return (" This host cannot render animations — it is missing "
+            + ", ".join(missing)
+            + " — so the render tool is not offered. The figure lane (draw) is "
+              "unaffected: it is pure standard library and needs none of them, "
+              "and plan and validate still work on animation templates.")
 
 
 def _parameters_for(name: str) -> list[dict]:

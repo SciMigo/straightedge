@@ -6,6 +6,32 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **The MCP server offers `render` only where it can run.** The animation lane
+  needs Manim, ffmpeg, LaTeX and dvisvgm; pip installs one of them. Advertised
+  regardless, `render` was a tool an agent picks because it is listed, waits on,
+  and gets a dependency error from — the guard that raises that error already
+  existed, it just fired after the caller had committed. A host without the
+  runtime now sees five tools that all work rather than six with a trap, and the
+  server's instructions say what is missing and that `draw`, `plan` and
+  `validate` are unaffected.
+
+- **A template says what running it costs.** `lane` and `output` said an
+  animation is an MP4; neither said producing one needs four things on the host.
+  Every entry now carries `requires` — empty for the figure lane, the four
+  packages for the animation lane — so an agent can choose between milliseconds
+  and a ten-minute render without discovering the difference by failing. A test
+  ties the list to what the runtime probe actually looks for, because two lists
+  of the same four things drift and only one of them fails loudly.
+
+- **The README leads with the figure lane.** It is the part that needs nothing,
+  runs in milliseconds and checks its own output; the animation lane is now
+  below a rule, with its real host dependencies stated rather than implied by an
+  extras name. The claim about checking is narrowed to what actually happens:
+  the CLI and the MCP server return legibility findings with a drawn figure,
+  which is not the same as every call to `render_diagram` doing so.
+
 ### Fixed
 
 - **`architecture_diagram` drew every unanchored note at the same coordinates.**
