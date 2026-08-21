@@ -152,6 +152,13 @@ straightedge render --template calculus/riemann_integral \
 `--template` takes any id from `list-templates` and skips the keyword router
 entirely — it is how the animations in the gallery above are drawn.
 
+Every template in `list-templates` carries a worked `example`: arguments ready
+to paste, `type` + `params` for a figure and `template` + `params` for an
+animation, plus an `example_request` showing a phrasing that actually reaches
+that template through the keyword router. They are checked by the test suite
+rather than written by hand and hoped over — a figure example has to draw
+something a bare call does not, and a request has to route where it claims.
+
 A **formula** is another language-neutral path to the deterministic scenes:
 
 ```bash

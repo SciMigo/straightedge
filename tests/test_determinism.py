@@ -28,7 +28,7 @@ from straightedge.catalog import list_templates
 from straightedge.diagrams import DIAGRAM_REGISTRY
 from straightedge.diagrams.registry import count_data_marks
 
-from tests.figure_payloads import PAYLOADS
+from straightedge.examples import EXAMPLES
 
 REPO = Path(__file__).resolve().parents[1]
 
@@ -49,7 +49,7 @@ def _payload(template):
     where ordering could vary, so a sweep over bare renders agrees with itself
     however badly ordered the code beneath it is.
     """
-    return dict(PAYLOADS[template.id])
+    return dict(EXAMPLES[template.id]["params"])
 
 
 # The program run under two different hash seeds. Kept as source rather than a
@@ -111,7 +111,7 @@ class TestDeterminism:
         document and not a drawing, so the payload has to put marks on it.
         """
         for t in _figures():
-            assert t.id in PAYLOADS, f"{t.id} has no payload"
+            assert t.id in EXAMPLES, f"{t.id} has no example"
             impl = DIAGRAM_REGISTRY[t.id]
             drawn = impl.render(_payload(t))
             assert drawn != impl.render({}), (

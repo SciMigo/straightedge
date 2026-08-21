@@ -159,7 +159,42 @@ The subtlety worth knowing if you extend this: a figure rendered with `{}` takes
 its empty defaults and never enters the loops where ordering could vary. A sweep
 over bare renders therefore agrees with itself no matter how badly ordered the
 code beneath it is — it is a test that cannot fail. So every template has a real
-payload in `tests/figure_payloads.py`, and a separate test asserts that each one
+example in `straightedge/examples.py`, and a separate test asserts that each one
 actually changes the output. Verified the only way that means anything: with a
 `set` deliberately introduced into `roadmap`'s legend ordering, the bare sweep
 passed and the payload sweep failed.
+
+## Examples
+
+Every template publishes a worked `example` — arguments ready to paste, `type` +
+`params` for a figure (the `draw` tool) and `template` + `params` for an
+animation (`plan`, then `render`). Prompt-routed animations also publish an
+`example_request`: routing is by keyword and Chinese-first, so the phrasing that
+reaches a template is worth more to a caller than the rule that decides it.
+
+They exist because types were not enough. `parameters` says `solid_spec` is an
+object; it does not say the object is `{"kind", "params", "name"}` rather than
+the string `"cube"`, and passing the string raises a bare `TypeError`. It says a
+roadmap takes `tracks` and `items`; it does not say the figure draws an empty
+frame until it is *also* given a top-level `start_date`. Both were found by
+sitting down to write these, which is most of the argument for having written
+them.
+
+An unchecked example is worse than none — it is a wrong answer with the
+library's name on it. So `tests/test_examples.py` holds each one to its claim:
+
+- a figure example must render *differently* from the same template called with
+  no parameters, so an example that quietly stopped being consumed fails
+- an animation example must produce a plan with no blocking violations
+- an `example_request` must route to the template it is filed under, not to a
+  neighbour that would render something plausible and wrong
+- no example may pass a parameter its template never reads
+
+That last one is not hypothetical: the tests caught seven defects in these
+examples before they were ever published — `x^2` where the parser wants `x**2`,
+`sin(x)` where the Taylor precondition wants `sin`, a `half_angle_tan` of
+`"1/2"` where a number was required, two parameters no template read, and two
+request strings that routed to the wrong template.
+
+`list_templates` grew about a third with examples in it. An agent that only
+needs names can pass `examples=false`.
