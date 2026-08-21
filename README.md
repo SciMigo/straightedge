@@ -37,11 +37,12 @@ prompt into an MP4. It is an addon in the real sense, not the packaging sense:
 pip install 'straightedge[render]'
 ```
 
-installs Manim, and Manim then needs **ffmpeg, a LaTeX distribution and
-dvisvgm** on the host, none of which pip can put there. A render costs about ten
-minutes of one CPU core. Every template in `list_templates` says which lane it
-belongs to and what running it requires, and the MCP server does not offer its
-`render` tool on a host that cannot run it.
+installs Manim, and Manim then needs **ffmpeg, a LaTeX distribution, dvisvgm
+and the `standalone` document class** on the host — none of which pip can put
+there. A render costs about ten minutes of one CPU core. Every template in
+`list_templates` says which lane it belongs to and what running it requires,
+and the MCP server does not offer its `render` tool on a host that cannot run
+it.
 
 <p align="center">
   <a href="https://scimigo.github.io/straightedge/#prompt-heading"><img src="https://raw.githubusercontent.com/SciMigo/straightedge/main/site/assets/gif/derivative-tangent.gif" width="48%" alt="A secant line converging to the tangent of a parabola"></a>

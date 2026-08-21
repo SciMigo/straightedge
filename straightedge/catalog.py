@@ -104,7 +104,7 @@ class Template:
     # against an earlier version has to keep meaning what it did.
     #
     # The figure lane requires nothing — pure standard library, milliseconds, no
-    # subprocess. The animation lane needs four things, and pip installs one of
+    # subprocess. The animation lane needs five things, and pip installs one of
     # them, so a caller who picks an animation template on a bare host finds out
     # by failing. Saying it here lets them choose instead.
     requires: list[str] = field(default_factory=list)

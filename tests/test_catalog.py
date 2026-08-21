@@ -436,3 +436,39 @@ class TestATemplateSaysWhatItCosts:
         for name, check in mcp_server._CHECKS.items():
             note = check()
             assert note is None or note.strip(), f"{name} returned an empty note"
+
+
+class TestTheProseMatchesThePublishedList:
+    """The counts in the README and the changelog said four while the catalog
+    published five, because `texlive-latex-extra` was added to the list and not
+    to the sentences describing it.
+
+    The numeral is cosmetic; the *list* is not. A reader who installs what the
+    README names and finds `render` still withheld has been told something
+    untrue by the document that was supposed to save them the trip.
+    """
+
+    def test_the_readme_names_every_requirement(self):
+        """Scoped to the paragraph that makes the promise, not the whole file.
+
+        Searching the whole README passed with the requirement deleted, because
+        the word "standalone" also appears two hundred lines away describing
+        example scenes. A substring check against a document long enough is a
+        check against nothing.
+        """
+        import pathlib
+
+        from straightedge.catalog import ANIMATION_REQUIRES
+
+        readme = (pathlib.Path(__file__).resolve().parent.parent
+                  / "README.md").read_text()
+        start = readme.index("There is also an **animation lane**")
+        section = readme[start:readme.index("\n## ", start)].lower()
+        for name in ANIMATION_REQUIRES:
+            # `texlive-latex-extra` is the Debian package name; the README names
+            # the class it provides, which is what a reader on another
+            # distribution needs to recognise.
+            token = "`standalone`" if name == "texlive-latex-extra" else name
+            assert token.lower() in section, (
+                f"the catalog requires {name!r} and the README's animation "
+                "section never says so")
