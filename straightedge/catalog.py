@@ -52,6 +52,8 @@ from dataclasses import asdict, dataclass, field
 from typing import Callable
 
 
+from .examples import EXAMPLES, REQUESTS
+
 @dataclass(frozen=True)
 class Template:
     """One thing the library can draw."""
@@ -65,6 +67,17 @@ class Template:
     # circle at "pi/4" because nothing said `angle` is a number of degrees, and
     # got a blank figure. Kept beside `params` rather than replacing it.
     parameters: list[dict] = field(default_factory=list)
+    # Types told a caller what shape to send; they still did not say what a
+    # working call looks like. Nothing in `parameters` reveals that `solid_spec`
+    # is a dict of {kind, params, name} rather than the string "cube", or that a
+    # roadmap with tracks and items draws an empty frame until it is also given
+    # a top-level `start_date`. Both were found by writing these.
+    example: dict = field(default_factory=dict)
+    # The animation lane's other door: routing is by keyword and Chinese-first,
+    # so a phrasing that reaches this template is worth more than the rule that
+    # decides it. Empty for figures, and for the two templates reachable only
+    # by id.
+    example_request: str = ""
     summary: str = ""
 
     def to_dict(self) -> dict:
@@ -104,6 +117,8 @@ def _animation_templates() -> list[Template]:
             invocation="prompt",
             params=[],
             parameters=[],
+            example=EXAMPLES.get(topic, {}),
+            example_request=REQUESTS.get(topic, ""),
             summary=f"{topic} (generic)",
         ))
 
@@ -122,6 +137,8 @@ def _animation_templates() -> list[Template]:
             # cone_slice and tangent_shift went unnoticed until a sweep.
             invocation="prompt" if reach else "concept-id",
             params=param_names.get(concept, []),
+            example=EXAMPLES.get(concept, {}),
+            example_request=REQUESTS.get(concept, ""),
             # Names only in this lane: an animation parameter is declared by a
             # precondition, which states the name and not a default to read a
             # type off. Saying nothing beats guessing.
@@ -244,6 +261,7 @@ def _figure_templates() -> list[Template]:
             invocation="name",
             params=sorted(_dict_get_keys(template.render, receiver="params")),
             parameters=_dict_get_parameters(template.render, receiver="params"),
+            example=EXAMPLES.get(name, {}),
             summary=_first_docline(type(template)),
         ))
     return templates

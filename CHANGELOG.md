@@ -58,13 +58,30 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   report success. It refuses instead — on a version with no section, naming the
   ones that exist, and on a section that is empty — and a test asserts every
   shipped version still has notes to publish.
+- A worked example for every one of the 58 templates, published through the
+  catalog as `example` (arguments ready to paste — `type` + `params` for a
+  figure, `template` + `params` for an animation) and `example_request` (a
+  phrasing that actually reaches a prompt-routed animation through the keyword
+  router). Types said what shape to send; they did not say what a working call
+  looks like. Nothing in `parameters` reveals that `solid_spec` is a dict of
+  `{kind, params, name}` rather than the string `"cube"`, or that a roadmap
+  given tracks and items draws an empty frame until it also gets a top-level
+  `start_date` — both found by writing the examples.
+
+  Every example is checked rather than illustrative: a figure example must
+  render differently from a bare call, an animation example must plan without
+  blocking violations, a request must route to the template it is filed under,
+  and no example may use a parameter its template never reads. The `draw` and
+  `plan` tools and the CLI all read the same catalog, so all of them gained it.
+  `list_templates` grew about a third; MCP callers that only need names can pass
+  `examples=false`.
 - A stated determinism guarantee (`docs/agent-interface.md`) and the tests that
   hold it: the same template and parameters produce byte-identical SVG on any
   machine, in any process, on any day. Checked across two hash seeds in separate
   interpreters, because Python randomises string hashing per process and a
   `set` that reaches output reorders between runs while looking stable inside
   one.
-- `tests/figure_payloads.py`, a real parameter payload for every figure
+- `straightedge/examples.py`, a real parameter payload for every figure
   template. Determinism checked against bare `{}` renders is a test that cannot
   fail — a template given no parameters takes its empty defaults and never
   enters the loops where ordering could vary. Each payload is asserted to put

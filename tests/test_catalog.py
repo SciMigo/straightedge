@@ -138,7 +138,7 @@ def test_the_shape_is_stable():
     t = list_templates()[0]
     assert isinstance(t, Template)
     assert set(vars(t)) == {"id", "lane", "output", "invocation", "params",
-                            "parameters", "summary"}
+                            "parameters", "example", "example_request", "summary"}
 
 
 def test_a_collection_default_keeps_its_contents():
