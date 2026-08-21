@@ -35,7 +35,7 @@ import re
 import xml.etree.ElementTree as ET
 from typing import Iterable
 
-from ..qc import Box, Finding, check as check_boxes
+from ..qc import _EDGE_TOLERANCE, Box, Finding, check as check_boxes
 from .renderer import text_width
 
 __all__ = ["boxes_from_svg", "check_figure", "styles_from_svg", "unfilled_classes"]
@@ -420,8 +420,29 @@ def _clip_segment(p, q, clip):
     return ((x0 + t0 * dx, y0 + t0 * dy), (x0 + t1 * dx, y0 + t1 * dy))
 
 
+def _hidden_by(box: Box, clip) -> float:
+    """How far ``box`` reaches past ``clip``, in user units.
+
+    The same measure ``qc`` applies to the frame, because it is the same defect:
+    a label the reader cannot finish. Only the *amount* differs in where it is
+    measured against.
+    """
+    if clip is None:
+        return 0.0
+    return max(clip[0] - box.x0, box.x1 - clip[2],
+               clip[1] - box.y0, box.y1 - clip[3])
+
+
 def _clipped(box: Box, clip) -> Box | None:
-    """``box`` reduced to the part the figure actually shows."""
+    """``box`` reduced to the part the figure actually shows.
+
+    Callers must ask :func:`_hidden_by` *before* this for text: reducing a label
+    to its visible fragment is right for deciding what it overlaps, and wrong as
+    the whole story. A label running from x=40 to x=120 under a clip ending at
+    50 becomes an unremarkable ten-unit box sitting well inside the frame, and
+    nothing downstream can tell it from a label that is simply short — which
+    would quietly turn the one check this module exists for into a pass.
+    """
     if clip is None:
         return box
     x0, x1 = max(box.x0, clip[0]), min(box.x1, clip[2])
@@ -449,7 +470,7 @@ def _clipped(box: Box, clip) -> Box | None:
     return Box(box.label, x0, x1, y0, y1, kind=box.kind, path=tuple(strokes))
 
 
-def _collect(node, matrix, boxes, styles, unfilled, clips, clip=None) -> None:
+def _collect(node, matrix, boxes, styles, unfilled, clips, clip, truncated) -> None:
     for child in node:
         tag = child.tag.replace(_SVG, "")
         if tag in _DEFINITIONS:
@@ -479,24 +500,41 @@ def _collect(node, matrix, boxes, styles, unfilled, clips, clip=None) -> None:
         box = (_text_box(child, styles) if tag == "text"
                else _shape_box(child, unfilled) if tag in _SHAPES else None)
         if box is not None:
-            visible = _clipped(_mapped(box, here), active)
+            placed = _mapped(box, here)
+            if placed.kind == "text":
+                over = _hidden_by(placed, active)
+                if over > _EDGE_TOLERANCE:
+                    truncated.append((placed, over))
+            visible = _clipped(placed, active)
             if visible is not None:
                 boxes.append(visible)
-        _collect(child, here, boxes, styles, unfilled, clips, active)
+        _collect(child, here, boxes, styles, unfilled, clips, active, truncated)
 
 
 def boxes_from_svg(svg: str) -> list[Box]:
     """Every drawn element of an emitted figure, as boxes the checker understands."""
+    return _geometry(svg)[0]
+
+
+def _geometry(svg: str) -> tuple[list[Box], list[tuple[Box, float]]]:
+    """Every drawn element, and every text box a clip path cut short.
+
+    The truncations travel beside the boxes rather than inside them because a
+    clipped label is two different things at once: a small box for deciding what
+    it overlaps, and a full-length one for saying how much of it the reader
+    never sees.
+    """
     if not svg or not svg.strip().startswith("<svg"):
-        return []
+        return [], []
     try:
         root = ET.fromstring(svg)
     except ET.ParseError:
-        return []
+        return [], []
     boxes: list[Box] = []
+    truncated: list[tuple[Box, float]] = []
     _collect(root, _IDENTITY, boxes, styles_from_svg(svg), unfilled_classes(svg),
-             _clip_shapes(root))
-    return boxes
+             _clip_shapes(root), None, truncated)
+    return boxes, truncated
 
 
 def _canvas(svg: str) -> tuple[float, float, float, float]:
@@ -543,7 +581,8 @@ def check_figure(svg: str, *, tolerance: float | None = None) -> list[Finding]:
     min_x, min_y, width, height = _canvas(svg)
     if width <= 0 or height <= 0:
         return []
-    boxes = [b for b in boxes_from_svg(svg)
+    drawn, truncated = _geometry(svg)
+    boxes = [b for b in drawn
              if not any(hint in b.label for hint in _BACKGROUND)]
     if not boxes:
         return []
@@ -558,4 +597,21 @@ def check_figure(svg: str, *, tolerance: float | None = None) -> list[Finding]:
         for b in boxes
     ]
     kwargs = {} if tolerance is None else {"overlap_tolerance": tolerance}
-    return check_boxes(centred, frame=(width, height), **kwargs)
+    findings = check_boxes(centred, frame=(width, height), **kwargs)
+    # A label cut off by a clip path is cut off exactly as a label past the edge
+    # of the frame is, and the reader loses it the same way — so it is reported
+    # under the same name, at the same severity, with the boundary it ran past
+    # being the only difference. Measured on the full label rather than on the
+    # fragment left behind, and located there too, because the fragment is not
+    # where the missing glyphs were meant to be.
+    findings += [
+        Finding("text_clipped", "error",
+                f"extends {over:.2f} units beyond the clip path it is drawn in,"
+                " so most of it may never be painted",
+                box.label,
+                box=(box.x0 - half_w, box.x1 - half_w,
+                     box.y0 - half_h, box.y1 - half_h))
+        for box, over in truncated
+        if not any(hint in box.label for hint in _BACKGROUND)
+    ]
+    return findings

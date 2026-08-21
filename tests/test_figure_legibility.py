@@ -373,3 +373,59 @@ class TestClipsAreHonoured:
                    '<line x1="0" y1="10" x2="400" y2="10"/></g></g>')
         box = next(b for b in boxes_from_svg(svg) if b.label == "line")
         assert box.x1 == 40
+
+
+class TestAClipDoesNotHideTruncation:
+    """Clipping a label to its visible fragment is right for deciding what it
+    overlaps and wrong as the whole story.
+
+    A label running x=40..120 under a clip ending at x=50 becomes an
+    unremarkable ten-unit box sitting well inside the frame, indistinguishable
+    from a label that is simply short — which turns the one check this module
+    exists for into a pass. The clip is a boundary the reader loses text at,
+    exactly as the frame edge is.
+    """
+
+    CLIP = '<clipPath id="c"><rect x="0" y="0" width="50" height="100"/></clipPath>'
+    OTHER = '<text x="10" y="90" font-size="10">elsewhere</text>'
+
+    def _findings(self, label_x: float, text: str = "a long truncated label"):
+        body = (self.CLIP + self.OTHER +
+                f'<g clip-path="url(#c)"><text x="{label_x}" y="50" '
+                f'font-size="10">{text}</text></g>')
+        return check_figure(_svg(body))
+
+    def test_a_label_cut_off_by_a_clip_is_an_error(self):
+        cut = [f for f in self._findings(40) if f.check == "text_clipped"]
+        assert cut, "a label with most of its glyphs unpainted reported nothing"
+        assert cut[0].severity == "error"
+        assert cut[0].label == "a long truncated label"
+
+    def test_a_label_inside_its_clip_is_not_reported(self):
+        assert not [f for f in self._findings(5, "ok") if f.check == "text_clipped"]
+
+    def test_the_fragment_being_inside_the_frame_is_not_a_defence(self):
+        """The visible ten units sit comfortably in a 200x100 frame. That is
+        precisely why the frame check cannot see this one."""
+        boxes = [b for b in boxes_from_svg(_svg(
+            self.CLIP + self.OTHER +
+            '<g clip-path="url(#c)"><text x="40" y="50" font-size="10">'
+            'a long truncated label</text></g>'))
+            if b.kind == "text" and b.x0 >= 40]
+        assert boxes and boxes[0].x1 <= 50, "fragment should still be clipped for overlap"
+        assert [f for f in self._findings(40) if f.check == "text_clipped"]
+
+    def test_it_is_located_where_the_missing_glyphs_were(self):
+        """Not at the fragment: the fragment is not where the reader is looking
+        for the rest of the word."""
+        cut = [f for f in self._findings(40) if f.check == "text_clipped"][0]
+        assert cut.box is not None and cut.box[1] - cut.box[0] > 50, (
+            "reported the surviving fragment rather than the whole label")
+
+    def test_a_clipped_shape_is_still_not_a_defect(self):
+        """Geometry deliberately runs past its panel — that is what the clip is
+        for. Only text going missing is a legibility defect."""
+        body = (self.CLIP + self.OTHER +
+                '<g clip-path="url(#c)"><line x1="10" y1="10" x2="400" y2="90"/></g>')
+        assert not [f for f in check_figure(_svg(body))
+                    if f.check in ("text_clipped", "out_of_frame")]
