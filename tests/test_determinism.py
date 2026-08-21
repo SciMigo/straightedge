@@ -36,6 +36,10 @@ def _figures():
     return [t for t in list_templates() if t.lane == "figure"]
 
 
+def _figure(template_id):
+    return next(t for t in _figures() if t.id == template_id)
+
+
 def _payload(template):
     """Real parameters for this template, from the shared corpus.
 
@@ -107,10 +111,23 @@ class TestDeterminism:
                 "refusal, standing in for a figure")
 
     def test_a_render_repeats_itself(self):
+        """Both ways round, and the populated one is the half that can fail.
+
+        The seed sweep renders each populated input exactly once per
+        interpreter, so it compares two *first* renders and cannot see a
+        template that mutates module-level state as it goes — a cache keyed on
+        the last figure's extent, a list built at import and appended to. That
+        drifts on the second call within one process and agrees perfectly
+        across seeds. This is the test that catches it, and it was watching the
+        empty case, where no such loop is entered.
+        """
         for t in _figures():
             impl = DIAGRAM_REGISTRY[t.id]
-            first = impl.render({})
-            assert first == impl.render({}) == impl.render({}), f"{t.id} drifts between renders"
+            for params in ({}, _payload(t)):
+                where = " (with parameters)" if params else ""
+                first = impl.render(dict(params))
+                assert first == impl.render(dict(params)) == impl.render(dict(params)), (
+                    f"{t.id} drifts between renders{where}")
 
     def test_the_hash_seed_does_not_change_a_render(self):
         """The one that can actually fail. Two interpreters, two seeds, and
@@ -143,10 +160,13 @@ class TestDeterminism:
     def test_a_seeded_figure_ignores_the_callers_seed(self):
         """The other half: its own output must not depend on global state."""
         impl = DIAGRAM_REGISTRY["dirichlet_function"]
-        random.seed(1)
-        first = impl.render({})
-        random.seed(9999)
-        assert impl.render({}) == first
+        for params in ({}, _payload(_figure("dirichlet_function"))):
+            random.seed(1)
+            first = impl.render(dict(params))
+            random.seed(9999)
+            assert impl.render(dict(params)) == first, (
+                "the figure changed with the caller's seed"
+                f"{' (with parameters)' if params else ''}")
 
     def test_no_figure_embeds_a_clock_or_a_machine_path(self):
         """Reproducible across time and across machines, not merely across runs
@@ -157,8 +177,12 @@ class TestDeterminism:
         any_date = re.compile(r"20\d\d-[01]\d-[0-3]\d")
         wall_clock = re.compile(r"T\d\d:\d\d:|\d\d:\d\d:\d\d")
         today = datetime.date.today()
+        # Built without `%-d`: that directive is a glibc extension and raises
+        # ValueError on Windows, so the suite would fail before rendering
+        # anything rather than reporting on a figure.
         todays = (today.isoformat(), today.strftime("%Y/%m/%d"),
-                  today.strftime("%d %b %Y"), today.strftime("%B %-d, %Y"))
+                  today.strftime("%d %b %Y"),
+                  f"{today:%B} {today.day}, {today.year}")
 
         for t in _figures():
             # The populated render is the one that matters: a date reaches the
