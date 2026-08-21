@@ -9,6 +9,7 @@ that and nothing else::
     ( A B )         the circle on A through B
     < A B C >       a polygon on those points
     / A B C /       a section: three collinear points
+    ( O A ~ B )     the arc of that circle, counterclockwise from A to B
     ( A B ) -> C D  name the points it produces, upper first
     ( A B ) guide   drawn, but excluded from intersection
     # anything      a comment
@@ -78,6 +79,8 @@ _CIRCLE = re.compile(rf"^\(\s*({_NAME})\s+({_NAME})\s*\){_GUIDE}{_NAMES}$")
 # Three names at minimum: two points bound a segment, not a polygon, and the
 # model refuses it downstream — better to say so here, with the line number.
 _POLYGON = re.compile(rf"^<\s*({_NAME}(?:\s+{_NAME}){{2,}})\s*>{_GUIDE}$")
+_ARC = re.compile(
+    rf"^\(\s*({_NAME})\s+({_NAME})\s*~\s*({_NAME})\s*\){_GUIDE}{_NAMES}$")
 _SECTION = re.compile(rf"^/\s*({_NAME})\s+({_NAME})\s+({_NAME})\s*/{_GUIDE}$")
 
 #: Every form, with the line that documents it. The test suite parses each of
@@ -91,6 +94,7 @@ FORMS: tuple[tuple[str, str], ...] = (
     ("( A B )", "the circle on A through B"),
     ("< A B C >", "a polygon on those points"),
     ("/ A B C /", "a section: three collinear points"),
+    ("( O A ~ B )", "the arc of that circle, counterclockwise from A to B"),
     ("( A B ) -> C D", "name the points it produces, upper first"),
     ("( A B ) guide", "drawn, but excluded from intersection"),
     ("# anything", "a comment"),
@@ -122,6 +126,11 @@ def parse_line(line: str, number: int = 1) -> Dict[str, Any] | None:
     if match:
         return _named(_with_guide(
             {"line": [match.group(1), match.group(2)]}, guide), match)
+
+    match = _ARC.match(text)
+    if match:
+        return _named(_with_guide(
+            {"arc": [match.group(1), match.group(2), match.group(3)]}, guide), match)
 
     match = _CIRCLE.match(text)
     if match:
@@ -170,6 +179,8 @@ def _diagnose(text: str) -> str:
         if head == "[":
             return f"a line takes two point names, got {len(names)}"
         if head == "(":
+            if "~" in text:
+                return f"an arc takes a centre and two points on it, got {len(names)}"
             return f"a circle takes a centre and a point on it, got {len(names)}"
         if head == "/":
             return f"a section takes three collinear points, got {len(names)}"

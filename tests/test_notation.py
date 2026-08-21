@@ -53,7 +53,7 @@ class TestTheDocumentationIsTheGrammar:
             step = parse_line(form)
             if step:
                 kinds |= {k for k in step if k not in ("id", "guide", "names")}
-        assert kinds == {"point", "line", "circle", "polygon", "section"}
+        assert kinds == {"point", "line", "circle", "arc", "polygon", "section"}
 
 
 class TestTheForms:
@@ -75,6 +75,11 @@ class TestTheForms:
         assert parse_line("( B A ) -> C D") == {
             "circle": ["B", "A"], "names": ["C", "D"]}
         assert parse_line("[ A B ] -> M") == {"line": ["A", "B"], "names": ["M"]}
+
+    def test_an_arc(self):
+        assert parse_line("( O A ~ B )") == {"arc": ["O", "A", "B"]}
+        assert parse_line("( O A ~ B ) guide") == {"arc": ["O", "A", "B"],
+                                                   "guide": True}
 
     def test_a_guide(self):
         assert parse_line("( A B ) guide") == {"circle": ["A", "B"], "guide": True}

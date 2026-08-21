@@ -301,3 +301,73 @@ class TestPerpendicularBisector:
         ab = Line.through(a, b)
         dot = bisector.a * ab.a + bisector.b * ab.b
         assert dot.is_zero()
+
+
+class TestArcs:
+    """Circles are drawn whole everywhere else, and deliberately.
+
+    An arc is the exception a sectional figure needs: a hemisphere in section is
+    a semicircle, and drawing the whole circle says something false about the
+    solid.
+    """
+
+    @staticmethod
+    def _hemisphere():
+        c = Construction()
+        o, right, left = c.set_point(0, 0), c.set_point(200, 0), c.set_point(-200, 0)
+        return c, c.construct_arc(o, right, left)
+
+    def test_an_arc_is_named_for_its_notation(self):
+        c, arc = self._hemisphere()
+        assert arc == "( A B ~ C )"
+
+    def test_both_ends_must_be_on_the_circle(self):
+        """An arbitrary direction would need the square root of a length, which
+        is not in general constructible — so an arc could only be placed
+        approximately, in the one lane where nothing is approximate."""
+        c = Construction()
+        o, right = c.set_point(0, 0), c.set_point(200, 0)
+        with pytest.raises(ValueError, match="ends on its own circle"):
+            c.construct_arc(o, right, c.set_point(0, 150))
+
+    def test_an_arc_needs_a_radius(self):
+        c = Construction()
+        o = c.set_point(0, 0)
+        with pytest.raises(ValueError, match="radius"):
+            c.construct_arc(o, o, c.set_point(1, 0))
+
+    def test_a_half_turn_is_not_reflex(self):
+        c, arc = self._hemisphere()
+        assert c[arc].geometry.reflex is False
+
+    def test_more_than_a_half_turn_is_reflex(self):
+        c = Construction()
+        o = c.set_point(0, 0)
+        arc = c.construct_arc(o, c.set_point(1, 0), c.set_point(0, -1))
+        assert c[arc].geometry.reflex is True
+
+    def test_an_arc_intersects_as_its_whole_circle(self):
+        """It restricts what is drawn, never what is known. A point on the
+        hidden part is still a fact about the construction."""
+        c, _ = self._hemisphere()
+        c.construct_line(c.set_point(0, -50), c.set_point(1, -50))
+        # The two points that *defined* the line sit at y = -50 as well, so count
+        # only the ones the crossing produced.
+        found = [e for e in c
+                 if e.kind == "point" and "intersection" in e.classes
+                 and float(e.geometry.y) < -49]
+        assert len(found) == 2, "the line met the circle where the arc is not drawn"
+
+    def test_the_extent_is_the_sweep_not_the_circle(self):
+        """Reserving the whole circle for a semicircle wastes half the page."""
+        c, _ = self._hemisphere()
+        min_x, min_y, max_x, max_y = c.limits()
+        assert max_y == pytest.approx(200.0)
+        assert min_y == pytest.approx(0.0), "the lower half is not part of the arc"
+
+    def test_a_full_circle_still_bounds_all_four_ways(self):
+        c = Construction()
+        o = c.set_point(0, 0)
+        c.construct_circle(o, c.set_point(200, 0))
+        _, min_y, _, max_y = c.limits()
+        assert min_y == pytest.approx(-200.0) and max_y == pytest.approx(200.0)

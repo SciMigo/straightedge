@@ -108,6 +108,27 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   single-tick pair that was never there. A tick whose midpoint lands on a
   right-angle corner slides along its own segment: in the vesica the midpoint of
   `AB` *is* that corner, and both marks are correct and together unreadable.
+- **Arcs**, written `( O A ~ B )` — the arc of the circle on `O`, counterclockwise
+  from `A` to `B`. Circles are drawn whole everywhere else in this lane and
+  deliberately so, because a clipped element hides the relationships it is not
+  currently being used for; an arc is the exception a *sectional* figure needs.
+  A hemisphere in section is a semicircle, and drawing the whole circle says
+  something false about the solid.
+
+  Both ends must lie on the circle. Taking an arbitrary direction and finding
+  where it meets the circle needs the square root of a length, which is not in
+  general constructible — so such an arc could only be placed approximately, in
+  the one lane where nothing is approximate. An arc restricts what is *drawn*,
+  never what is known: intersections and claims run against the whole circle, so
+  a point on the hidden part is still found and still drawn. Its extent, though,
+  is its own sweep — reserving the whole circle for a semicircle wasted half the
+  page on nothing, which is the reason arcs were wanted.
+- **A mark needs something to mark on.** `congruent` claimed on four radii that
+  were never drawn put four ticks in the middle of empty space, which reads as a
+  rendering fault rather than as a proof. A segment is not an element — it exists
+  where a drawn line passes through both ends, or where two adjacent corners of a
+  drawn polygon are. The claim still holds and is still reported; it simply earns
+  no annotation when there is nothing on the page for one to sit against.
 - **Labels are placed in the first free slot** rather than always to the right.
   `P` and `Q`, one unit apart on a 200-unit figure, were drawn in the same pixels
   — and a figure that cannot tell you which point is which has lost the thing

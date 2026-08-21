@@ -46,6 +46,7 @@ __all__ = [
     "Point",
     "Line",
     "Circle",
+    "Arc",
     "Segment",
     "Section",
     "Polygon",
@@ -165,6 +166,58 @@ class Circle:
 
 
 @dataclass(frozen=True)
+class Arc:
+    """Part of a circle, counterclockwise from ``start`` to ``end``.
+
+    Circles are drawn whole everywhere else in this lane, and deliberately: a
+    clipped element hides the relationships it is not currently being used for.
+    An arc is the exception a *sectional* figure needs — a hemisphere in section
+    is a semicircle, and drawing the whole circle says something false about the
+    solid.
+
+    Both ends must lie on the circle, and that is a constraint rather than a
+    convenience. Taking an arbitrary direction and finding where it meets the
+    circle needs a square root of a length, which is not in general constructible
+    — so an arc given a direction could only be placed approximately, in the one
+    lane where nothing is approximate. Two points on the circle keep it exact.
+
+    The underlying circle is what the model reasons with: an arc restricts what
+    is *drawn*, not what is *known*, so intersections are found against the whole
+    circle. A point on the hidden part is still a real point and still appears —
+    it is a fact about the construction, and hiding it because of a drawing
+    choice would be the drawing lying to the model.
+    """
+
+    center: Point
+    start: Point
+    end: Point
+
+    @property
+    def circle(self) -> "Circle":
+        return Circle.through(self.center, self.start)
+
+    @property
+    def radius_sq(self) -> Exact:
+        dx, dy = self.start.x - self.center.x, self.start.y - self.center.y
+        return dx * dx + dy * dy
+
+    @property
+    def reflex(self) -> bool:
+        """Does the counterclockwise sweep exceed half a turn?"""
+        sx, sy = self.start.x - self.center.x, self.start.y - self.center.y
+        ex, ey = self.end.x - self.center.x, self.end.y - self.center.y
+        return (sx * ey - sy * ex).sign() < 0
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, Arc):
+            return NotImplemented
+        return (self.center == other.center and self.start == other.start
+                and self.end == other.end)
+
+    __hash__ = None       # type: ignore[assignment]
+
+
+@dataclass(frozen=True)
 class Segment:
     """Two points and the span between them. Length is kept squared, as above."""
 
@@ -204,7 +257,7 @@ class Polygon:
                      for i in range(len(pts)))
 
 
-Geometry = Point | Line | Circle | Segment | Section | Polygon
+Geometry = Point | Line | Circle | Arc | Segment | Section | Polygon
 
 
 # ---------------------------------------------------------------------------
@@ -398,6 +451,9 @@ class Construction:
             return f"[ {joined} ]"
         if isinstance(geometry, Circle):
             return f"( {joined} )"
+        if isinstance(geometry, Arc):
+            names = list(parents)
+            return f"( {names[0]} {names[1]} ~ {names[2]} )"
         if isinstance(geometry, Section):
             return f"/ {joined} /"
         if isinstance(geometry, Polygon):
@@ -430,6 +486,23 @@ class Construction:
             raise ValueError(
                 f"a circle needs a radius; {center} and {through} coincide")
         element_id = self._add(Circle.through(c, p), id, classes, (center, through), guide)
+        self._intersect_new(element_id, names)
+        return element_id
+
+    def construct_arc(self, center: str, start: str, end: str, *,
+                      id: str | None = None, classes: Sequence[str] = (),
+                      guide: bool = False, names: Sequence[str] = ()) -> str:
+        """The arc of the circle on ``center``, counterclockwise from ``start``."""
+        o = self._require_point(center)
+        a, b = self._require_point(start), self._require_point(end)
+        if o == a:
+            raise ValueError(f"an arc needs a radius; {center} and {start} coincide")
+        arc = Arc(o, a, b)
+        if not arc.circle.contains(b):
+            raise ValueError(
+                f"an arc ends on its own circle; {end} is not the same distance "
+                f"from {center} as {start} is")
+        element_id = self._add(arc, id, classes, (center, start, end), guide)
         self._intersect_new(element_id, names)
         return element_id
 
@@ -495,6 +568,9 @@ class Construction:
         return found
 
     def _crossings(self, one: Geometry, two: Geometry) -> list[Point]:
+        # An arc restricts the drawing, never the mathematics.
+        one = one.circle if isinstance(one, Arc) else one
+        two = two.circle if isinstance(two, Arc) else two
         if isinstance(one, Line) and isinstance(two, Line):
             return intersect_lines(one, two)
         if isinstance(one, Line) and isinstance(two, Circle):
@@ -547,6 +623,13 @@ class Construction:
                 r = max(float(geometry.radius_sq), 0.0) ** 0.5
                 xs.extend((cx - r, cx + r))
                 ys.extend((cy - r, cy + r))
+            elif isinstance(geometry, Arc):
+                # Its own sweep, not the circle it came from. Reserving the whole
+                # circle for a semicircle wastes half the page on nothing, and
+                # the framing is the reason arcs were wanted at all.
+                for x, y in _arc_extremes(geometry):
+                    xs.append(x)
+                    ys.append(y)
         if not xs:
             return (0.0, 0.0, 1.0, 1.0)
         return (min(xs), min(ys), max(xs), max(ys))
@@ -554,6 +637,30 @@ class Construction:
     def __repr__(self) -> str:
         return (f"Construction({self.name!r}, {len(self._elements)} elements, "
                 f"tower depth {self.tower.depth})")
+
+
+def _arc_extremes(arc: Arc) -> list[tuple[float, float]]:
+    """The points that bound an arc: its ends, plus any cardinal it sweeps past.
+
+    A circle's extent is four cardinal points; an arc's is its two ends plus
+    whichever of those four it actually passes through. Floats are enough — this
+    answers a question about the viewBox, and an exact bound would need the
+    square root of a radius, which is not what a page size is worth.
+    """
+    import math
+
+    cx, cy = arc.center.as_floats()
+    sx, sy = arc.start.as_floats()
+    ex, ey = arc.end.as_floats()
+    radius = math.hypot(sx - cx, sy - cy)
+    start = math.atan2(sy - cy, sx - cx)
+    span = (math.atan2(ey - cy, ex - cx) - start) % (2 * math.pi)
+    out = [(sx, sy), (ex, ey)]
+    for quarter in range(4):
+        angle = quarter * math.pi / 2
+        if (angle - start) % (2 * math.pi) <= span:
+            out.append((cx + radius * math.cos(angle), cy + radius * math.sin(angle)))
+    return out
 
 
 def _upper_then_left(point: Point) -> tuple[Fraction, Fraction]:

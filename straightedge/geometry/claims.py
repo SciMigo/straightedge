@@ -38,7 +38,8 @@ from typing import Any, Callable, Sequence
 from ..errors import PrecisionError
 from ..qc import Finding
 from .exact import Exact
-from .model import Circle, Construction, Line, Point, Polygon, Section, Segment
+from .model import (
+    Arc, Circle, Construction, Line, Point, Polygon, Section, Segment)
 
 __all__ = ["Claim", "check", "marks", "Mark", "CLAIMS", "ARITY"]
 
@@ -91,10 +92,19 @@ class _Unresolved(Exception):
 
 
 def _element(c: Construction, name: Any):
+    """The geometry behind an id, with an arc resolved to its circle.
+
+    An arc restricts what is *drawn*, not what is known — so every predicate
+    reasons about the whole circle, and `on(P, arc)` asks whether P is on that
+    circle rather than on the visible portion. Deciding against the drawn part
+    would make a claim depend on a presentation choice, which is the one thing a
+    proof must not do.
+    """
     key = str(name)
     if key not in c:
         raise _Unresolved(f"no element named {key!r}")
-    return c[key].geometry
+    geometry = c[key].geometry
+    return geometry.circle if isinstance(geometry, Arc) else geometry
 
 
 def _point(c: Construction, name: Any) -> Point:
@@ -535,6 +545,34 @@ def _midpoint(a: Point, b: Point) -> Point:
     return Point((a.x + b.x) / 2, (a.y + b.y) / 2)
 
 
+def _is_drawn(c: Construction, segment: Segment) -> bool:
+    """Is there ink where this segment is?
+
+    A tick sits on a segment, and a segment is not an element — it exists only
+    where a drawn line passes through both ends, or where two adjacent corners of
+    a drawn polygon are. Claiming `congruent` on four radii that were never drawn
+    put four dashes in the middle of empty space, which reads as a rendering
+    fault rather than as a proof.
+
+    So a mark needs something to be a mark *on*. The claim still holds and is
+    still reported; it simply earns no annotation, because there is nothing on
+    the page for the annotation to sit against.
+    """
+    for element in c:
+        geometry = element.geometry
+        if isinstance(geometry, Line):
+            if geometry.contains(segment.start) and geometry.contains(segment.end):
+                return True
+        elif isinstance(geometry, Polygon):
+            points = geometry.points
+            for i, corner in enumerate(points):
+                nxt = points[(i + 1) % len(points)]
+                if ((corner == segment.start and nxt == segment.end)
+                        or (corner == segment.end and nxt == segment.start)):
+                    return True
+    return False
+
+
 def _marks_for(c: Construction, claim: Claim, group: int) -> list[Mark]:
     """The marks one *proved* claim earns. Never called for a claim that failed."""
     kind = claim.kind
@@ -565,7 +603,7 @@ def _marks_for(c: Construction, claim: Claim, group: int) -> list[Mark]:
         return out
 
     if kind in ("congruent", "equilateral", "midpoint"):
-        segments = _segments_of(c, claim)
+        segments = [seg for seg in _segments_of(c, claim) if _is_drawn(c, seg)]
         return [Mark("tick", _midpoint(seg.start, seg.end), seg.start, seg.end,
                      group, tag) for seg in segments]
     return []

@@ -29,7 +29,8 @@ list of lines::
         "A = 0, 0", "B = 1, 0", "( A B )", "( B A )", "[ C D ]"]}}
 
 A step is one of ``point`` (a coordinate pair), ``line`` (two point ids),
-``circle`` (centre id then a point id the circle passes through), ``polygon``
+``circle`` (centre id then a point id the circle passes through), ``arc``
+(centre then two points on the circle, drawn counterclockwise), ``polygon``
 (three or more point ids) or ``section`` (three collinear point ids). Any step
 may carry ``"guide": true``, which draws it dashed and excludes it from
 intersection --- scaffolding a reader is meant to see and the model is meant to
@@ -67,6 +68,7 @@ logger = logging.getLogger(__name__)
 _POINT_KEYS = ("point", "set_point", "p")
 _LINE_KEYS = ("line", "construct_line", "l")
 _CIRCLE_KEYS = ("circle", "construct_circle", "c")
+_ARC_KEYS = ("arc", "construct_arc")
 _POLYGON_KEYS = ("polygon", "poly")
 _SECTION_KEYS = ("section", "sect")
 
@@ -137,6 +139,13 @@ def _apply(construction: Construction, step: Any) -> None:
         center, through = around
         construction.construct_circle(str(center), str(through),
                                       id=element_id, guide=guide, names=names)
+        return
+
+    sweep = _first(step, _ARC_KEYS)
+    if sweep is not None:
+        center, start, end = sweep
+        construction.construct_arc(str(center), str(start), str(end),
+                                   id=element_id, guide=guide, names=names)
         return
 
     corners = _first(step, _POLYGON_KEYS)

@@ -46,9 +46,10 @@ VESICA_STEPS = [
     "A = 0, 0",
     "B = 1, 0",
     "( A B )",
-    "( B A )",
+    "( B A ) -> C D",       # named, so the line below cannot drift onto other points
     "[ C D ]",
     "[ A B ]",
+    "< A B C >",            # the equilateral triangle the congruence claim is about
 ]
 
 @dataclass(frozen=True)

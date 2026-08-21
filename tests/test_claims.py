@@ -408,10 +408,17 @@ class TestAProvedClaimEarnsItsMark:
     def test_an_unknown_claim_earns_nothing(self):
         assert marks(vesica(), [{"claim": "wobbly", "of": ["A"]}]) == []
 
-    def test_congruent_ticks_every_segment(self):
+    def test_congruent_ticks_every_drawn_segment(self):
+        """Only `AB` lies on a drawn line in the plain vesica; `AC` and `BC` are
+        real segments of a true claim with no ink to sit on."""
         found = marks(vesica(), [self.SIDES])
-        assert len(found) == 3 and {m.kind for m in found} == {"tick"}
-        assert {m.count for m in found} == {1}          # one group, one stroke
+        assert len(found) == 1 and found[0].kind == "tick"
+        assert found[0].count == 1                      # one group, one stroke
+
+    def test_drawing_the_triangle_brings_the_other_two_back(self):
+        c = vesica()
+        c.set_polygon("A", "B", "C")
+        assert len(marks(c, [self.SIDES])) == 3
 
     def test_only_a_claim_that_draws_groups_consumes_a_group(self):
         """`perpendicular` draws a square and no ticks.
@@ -444,6 +451,49 @@ class TestAProvedClaimEarnsItsMark:
         found = marks(vesica(), [self.PERP])
         assert isinstance(found[0], Mark)
         assert (found[0].at.x - Fraction(1, 2)).is_zero()
+
+
+class TestAMarkNeedsSomethingToMarkOn:
+    """Four ticks appeared in the middle of empty space.
+
+    `congruent` was claimed on four radii of a circumcircle that were never
+    drawn. The claim held, so the marks were drawn — onto nothing, which reads
+    as a rendering fault rather than as a proof. A segment is not an element; it
+    exists where a drawn line passes through both ends, or where two adjacent
+    corners of a drawn polygon are.
+    """
+
+    RADII = {"claim": "congruent", "of": [["O", "A"], ["O", "B"], ["O", "C"]]}
+
+    @staticmethod
+    def _triangle(*extra):
+        from straightedge.diagrams.templates.construction import build
+        return build(["B = 0, 0", "C = 14, 0", "A = 5, 12", "O = 7, 33/8",
+                      "< A B C >", *extra])
+
+    def test_an_undrawn_segment_earns_no_mark(self):
+        c = self._triangle()
+        assert check(c, [self.RADII]) == []          # the claim itself holds
+        assert marks(c, [self.RADII]) == []          # and earns nothing
+
+    def test_drawing_the_segments_brings_the_marks_back(self):
+        c = self._triangle("[ O A ]", "[ O B ]", "[ O C ]")
+        assert len(marks(c, [self.RADII])) == 3
+
+    def test_a_polygon_side_counts_as_drawn(self):
+        """The vesica's triangle is equilateral, so its sides really are equal
+        — and they are drawn as polygon edges rather than as lines."""
+        from straightedge.diagrams.templates.construction import build
+        c = build(["A = 0, 0", "B = 1, 0", "( A B )", "( B A ) -> C D",
+                   "< A B C >"])
+        found = marks(c, [{"claim": "congruent",
+                           "of": [["A", "B"], ["A", "C"], ["B", "C"]]}])
+        assert len(found) == 3
+
+    def test_a_guide_line_still_counts(self):
+        """A guide is dashed, not absent — there is ink to mark against."""
+        c = self._triangle("[ O A ] guide", "[ O B ] guide", "[ O C ] guide")
+        assert len(marks(c, [self.RADII])) == 3
 
 
 class TestCirclesCanBeTangentToEachOther:

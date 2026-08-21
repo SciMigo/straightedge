@@ -34,7 +34,7 @@ from ..diagrams.renderer import (
     text_width,
 )
 from .claims import Mark, marks as marks_for
-from .model import Circle, Construction, Element, Line, Point, Polygon
+from .model import Arc, Circle, Construction, Element, Line, Point, Polygon
 
 __all__ = ["to_svg", "to_svg_steps", "DEFAULT_WIDTH"]
 
@@ -230,6 +230,22 @@ def _draw_element(element: Element, view: _Viewport, labels: bool,
         r = max(float(geometry.radius_sq), 0.0) ** 0.5 * view.scale
         out.append(svg_circle(round(cx, 2), round(cy, 2), round(r, 2),
                               **{"class": klass or "gc-circle"}))
+        return out
+
+    if isinstance(geometry, Arc):
+        cx, cy = view.project(*geometry.center.as_floats())
+        sx, sy = view.project(*geometry.start.as_floats())
+        ex, ey = view.project(*geometry.end.as_floats())
+        r = ((sx - cx) ** 2 + (sy - cy) ** 2) ** 0.5
+        # Sweep-flag 0, not 1. SVG's positive angle direction runs from +x toward
+        # +y, and +y is *down* — so a mathematically counterclockwise arc, which
+        # after the projection's y-flip still reads counterclockwise to a viewer,
+        # is SVG's negative direction. Getting this backwards drew every
+        # hemisphere as the half it is not.
+        large = 1 if geometry.reflex else 0
+        out.append(path(f"M {sx:.2f} {sy:.2f} "
+                        f"A {r:.2f} {r:.2f} 0 {large} 0 {ex:.2f} {ey:.2f}",
+                        **{"class": klass or "gc-circle"}))
         return out
 
     if isinstance(geometry, Polygon):
