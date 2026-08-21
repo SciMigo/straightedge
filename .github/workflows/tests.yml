@@ -47,3 +47,35 @@ jobs:
 
       - name: Pytest
         run: python -m pytest -q
+
+  # CONTRIBUTING.md tells contributors the suite is process-parallel safe.
+  # Nothing enforced that, so a test that began writing a shared path, or
+  # depending on another's ordering, would have broken `-n auto` for everyone
+  # while CI stayed green.
+  #
+  # A job of its own rather than a step guarded by
+  # `if: matrix.python-version == '3.12'`: a guarded step stops running the day
+  # that version leaves the matrix, and stops silently, which is the failure
+  # this job exists to prevent happening one level up. One version is enough --
+  # what it catches is coupling between tests, and an interpreter release does
+  # not change that -- and the matrix above still runs every version serially.
+  parallel:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[dev]'
+
+      - name: Pytest across every core
+        run: python -m pytest -q -n auto
