@@ -82,11 +82,23 @@ def build_server():
         description=(
             "List every template the library can draw, across both lanes — "
             "animation (Manim → MP4) and figure (Python → SVG) — each with how "
-            "it is invoked and the parameters it reads. Call this first."
+            "it is invoked, the parameters it reads, and a worked `example` "
+            "that is arguments ready to paste: `type` + `params` into draw for "
+            "a figure, `template` + `params` into plan or render for an "
+            "animation. `example_request` is the other door into the animation "
+            "lane — routing is by keyword and Chinese-first, so it is the "
+            "phrasing that actually reaches that template. Every example is "
+            "checked by the test suite, so it draws. Call this first. Pass "
+            "examples=false for a listing about a third smaller, if the "
+            "parameter names alone are enough."
         ),
     )
-    def list_templates() -> dict[str, Any]:
-        return {"ok": True, "templates": as_dicts()}
+    def list_templates(examples: bool = True) -> dict[str, Any]:
+        rows = as_dicts()
+        if not examples:
+            rows = [{k: v for k, v in row.items()
+                     if k not in ("example", "example_request")} for row in rows]
+        return {"ok": True, "templates": rows}
 
     @server.tool(
         description=(
