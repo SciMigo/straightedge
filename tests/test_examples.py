@@ -52,14 +52,27 @@ class TestEveryTemplateHasOne:
 class TestFigureExamples:
 
     def test_each_one_draws_something(self):
-        """The check that keeps an example honest. A template called with no
-        parameters still returns a frame, so 'it rendered' proves nothing —
-        the example has to produce a *different* figure than calling it bare."""
+        """The check that keeps an example honest, and it took two goes.
+
+        A template called with no parameters still returns a frame, so "it
+        rendered" proves nothing — hence the comparison against a bare call.
+        But a template handed something it *cannot use* also returns a frame,
+        and a different one: `project_network` was harvested with a dependency
+        cycle and answered "网络图存在循环依赖，无法计算", satisfying "different
+        from bare" while drawing nothing whatever. An example that teaches a
+        caller how to get a refusal is worse than no example, so it has to put
+        marks on the page.
+        """
+        from straightedge.diagrams.registry import count_data_marks
+
         for t in _figures():
             impl = DIAGRAM_REGISTRY[t.id]
             drawn = impl.render(dict(t.example["params"]))
             assert drawn != impl.render({}), (
                 f"{t.id}'s example renders the same as no parameters at all")
+            assert count_data_marks(drawn) > 0, (
+                f"{t.id}'s example draws no data marks — it is chrome, or a "
+                "refusal, standing in for a figure")
 
     def test_no_example_uses_a_parameter_its_template_never_reads(self):
         """A key the template ignores teaches a caller a habit that does
@@ -98,8 +111,17 @@ class TestAnimationExamples:
         for t in _animations():
             result = _plan_payload("", t.id, dict(t.example["params"]))
             assert result.get("ok"), f"{t.id}: {result}"
-            assert not result["plan"].get("violations"), (
-                f"{t.id} example violates: {result['plan']['violations']}")
+            plan = result["plan"]
+            assert not plan.get("violations"), (
+                f"{t.id} example violates: {plan['violations']}")
+            # And it reached the builder it names. A plan that fell back to a
+            # generic one still validates and still renders -- it just renders
+            # something else, which is the quietest way for an example to be
+            # wrong. (Planning by id gives a thin plan by design: the named
+            # builder does the work, so `elements` and narration stay empty and
+            # `match` is the thing worth asserting.)
+            assert plan.get("match") in ("concept", "topic-fallback"), (
+                f"{t.id} example did not reach a builder: match={plan.get('match')!r}")
 
     def test_a_request_reaches_the_template_it_is_filed_under(self):
         """Routing is by keyword and Chinese-first. A phrasing that lands on a

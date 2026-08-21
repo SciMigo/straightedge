@@ -8,8 +8,13 @@ Both of those were found by writing these examples, which is the argument for
 having them.
 
 Every entry here is checked by the suite, so an example cannot rot into a lie:
-- a figure example must render, and must render something *different* from the
-  same template called with no parameters at all
+- a figure example must draw: not merely render, and not merely differ from the
+  same template called bare. A template handed something it cannot use still
+  returns a document — `project_network`, harvested from a test that meant it
+  as a *negative* case, was given a dependency cycle and answered with a figure
+  reading "cyclic dependency, cannot compute". That differs from a bare render
+  while putting nothing on the page, so an example has to clear
+  `count_data_marks`
 - an animation example must produce a plan with no blocking violations
 - an example may only use parameters the template actually reads
 - `REQUESTS` must route to the template it is filed under
@@ -332,12 +337,26 @@ EXAMPLES = {'3d/cube_section': {'params': {'section_points': ['A', 'B1', 'D1'],
                                           {'color': '#00FF00',
                                            'expr': '1-cos(theta)'}]},
                  'type': 'polar_graph'},
- 'project_network': {'params': {'activities': [{'duration': 1,
-                                                'id': 'X',
-                                                'predecessors': ['Y']},
+ 'project_network': {'params': {'activities': [{'duration': 3,
+                                                'id': 'A',
+                                                'name': 'Survey',
+                                                'predecessors': []},
+                                               {'duration': 5,
+                                                'id': 'B',
+                                                'name': 'Design',
+                                                'predecessors': ['A']},
+                                               {'duration': 2,
+                                                'id': 'C',
+                                                'name': 'Procure',
+                                                'predecessors': ['A']},
+                                               {'duration': 4,
+                                                'id': 'D',
+                                                'name': 'Build',
+                                                'predecessors': ['B', 'C']},
                                                {'duration': 1,
-                                                'id': 'Y',
-                                                'predecessors': ['X']}]},
+                                                'id': 'E',
+                                                'name': 'Handover',
+                                                'predecessors': ['D']}]},
                      'type': 'project_network'},
  'queue': {'params': {'back_label': 'back',
                       'caption': 'Dequeue from front, enqueue 5 at back',
