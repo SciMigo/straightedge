@@ -291,26 +291,46 @@ def _dict_get_keys(func: Callable, *, receiver: str) -> set[str]:
     return keys
 
 
-_LITERAL_TYPES: dict[type, str] = {bool: "boolean", int: "number", float: "number",
-                                   str: "string"}
+# A default that cannot be represented faithfully is omitted rather than
+# flattened: publishing `[]` for a matrix whose default is [[1, 0], [0, 1]] is
+# a wrong answer where no answer was available.
+_OMIT = object()
+
+
+def _plain(value):
+    """Tuples become lists, so the published default is JSON-shaped."""
+    if isinstance(value, (list, tuple)):
+        return [_plain(item) for item in value]
+    if isinstance(value, dict):
+        return {key: _plain(item) for key, item in value.items()}
+    return value
 
 
 def _default_shape(node) -> tuple[str, object] | None:
-    """Classify a literal default so a caller can tell a number from a string."""
-    if isinstance(node, ast.Constant):
-        if node.value is None:
-            return None
-        name = _LITERAL_TYPES.get(type(node.value))
-        return (name, node.value) if name else None
-    if isinstance(node, (ast.List, ast.Tuple)):
-        return "array", []
-    if isinstance(node, ast.Dict):
-        return "object", {}
-    if isinstance(node, ast.UnaryOp) and isinstance(node.operand, ast.Constant):
-        shape = _default_shape(node.operand)
-        if shape and shape[0] == "number" and isinstance(node.op, ast.USub):
-            return "number", -shape[1]
-        return shape
+    """Classify a literal default, keeping its contents where they are literal."""
+    try:
+        value = ast.literal_eval(node)
+    except (ValueError, SyntaxError, TypeError):
+        # Not a literal — a name or a call. The kind is still worth saying when
+        # the node itself declares it; the value is not knowable from here.
+        if isinstance(node, (ast.List, ast.Tuple)):
+            return "array", _OMIT
+        if isinstance(node, ast.Dict):
+            return "object", _OMIT
+        return None
+    if value is None:
+        return None
+    value = _plain(value)
+    if isinstance(value, bool):
+        return "boolean", value
+    if isinstance(value, (int, float)):
+        return "number", value
+    if isinstance(value, str):
+        return "string", value
+    if isinstance(value, list):
+        return "array", value
+    if isinstance(value, dict):
+        return "object", value
     return None
 
 
@@ -341,7 +361,9 @@ def _dict_get_parameters(func: Callable, *, receiver: str) -> list[dict]:
             continue
         shape = _default_shape(node.args[1])
         if shape:
-            entry["type"], entry["default"] = shape
+            entry["type"] = shape[0]
+            if shape[1] is not _OMIT:
+                entry["default"] = shape[1]
     for name in _dict_get_keys(func, receiver=receiver):
         found.setdefault(name, {"name": name})
     return [found[name] for name in sorted(found)]

@@ -13,6 +13,7 @@ than exceptions, and each render is isolated so concurrent calls cannot collide.
 from __future__ import annotations
 
 import pathlib
+import sys
 
 import pytest
 
@@ -327,6 +328,43 @@ class TestTheAnimationLaneNamesWhatItNeeds:
 
         assert any("ffmpeg" in item for item in missing)
         assert any("LaTeX" in item for item in missing)
+
+    def test_the_whole_latex_chain_is_checked_not_just_its_headline(self, monkeypatch):
+        """Scenes use MathTex, so Manim goes LaTeX -> DVI -> SVG. A host with
+        manim, ffmpeg and latex but no dvisvgm passed the guard and still failed
+        deep in the render — the failure it exists to pre-empt."""
+        monkeypatch.setitem(sys.modules, "manim", object())
+        monkeypatch.setattr(mcp_server.shutil, "which",
+                            lambda binary: None if binary == "dvisvgm" else "/usr/bin/" + binary)
+        monkeypatch.setattr(mcp_server, "_tex_has", lambda _cls: True)
+
+        assert mcp_server._missing_render_runtime() == [
+            "dvisvgm (Manim's DVI to SVG step)"]
+
+    def test_a_tex_install_missing_the_class_the_preamble_asks_for(self, monkeypatch):
+        monkeypatch.setitem(sys.modules, "manim", object())
+        monkeypatch.setattr(mcp_server.shutil, "which", lambda binary: "/usr/bin/" + binary)
+        monkeypatch.setattr(mcp_server, "_tex_has", lambda _cls: False)
+
+        assert mcp_server._missing_render_runtime() == [
+            "standalone.cls (texlive-latex-extra)"]
+
+    def test_an_unanswerable_probe_is_not_reported_as_missing(self, monkeypatch):
+        """kpsewhich absent means unknown, not absent. Reporting a guess sends a
+        caller to install something they may already have."""
+        monkeypatch.setitem(sys.modules, "manim", object())
+        monkeypatch.setattr(
+            mcp_server.shutil, "which",
+            lambda binary: None if binary == "kpsewhich" else "/usr/bin/" + binary)
+
+        assert mcp_server._missing_render_runtime() == []
+
+    def test_a_probe_that_cannot_run_answers_unknown(self, monkeypatch):
+        def boom(*_a, **_k):
+            raise OSError("kpsewhich exploded")
+
+        monkeypatch.setattr(mcp_server.subprocess, "run", boom)
+        assert mcp_server._tex_has("standalone.cls") is True
 
 
 class TestTemplatesDeclareTheirParameterShapes:

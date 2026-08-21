@@ -34,6 +34,7 @@ Install: ``pip install 'straightedge[mcp]'``
 from __future__ import annotations
 
 import shutil
+import subprocess
 import sys
 import tempfile
 from dataclasses import asdict
@@ -245,16 +246,39 @@ def _plan_payload(request: str, template: str = "",
     return {"ok": True, "plan": payload}
 
 
+def _tex_has(cls: str) -> bool:
+    """Whether this TeX installation can find one class or package file."""
+    try:
+        found = subprocess.run(["kpsewhich", cls], capture_output=True, timeout=10)
+    except (OSError, subprocess.SubprocessError):
+        return True          # cannot tell; absence of evidence is not evidence
+    return found.returncode == 0 and bool(found.stdout.strip())
+
+
 def _missing_render_runtime() -> list[str]:
-    """What the animation lane needs and this host does not have."""
+    """What the animation lane needs and this host does not have.
+
+    The whole chain, not the headline parts: scenes use MathTex, so Manim goes
+    LaTeX -> DVI -> SVG, and a host with manim, ffmpeg and latex but no dvisvgm
+    fails deep in the render — the failure this check exists to pre-empt. The
+    same is true of a TeX installation missing the class the emitted preamble
+    asks for, which is why the smoke workflow installs texlive-latex-extra.
+    """
     missing: list[str] = []
     try:
         import manim  # noqa: F401
     except ImportError:
         missing.append("manim (pip install 'straightedge[render]')")
-    for binary, note in (("ffmpeg", "ffmpeg"), ("latex", "a LaTeX distribution")):
+    for binary, note in (("ffmpeg", "ffmpeg"),
+                         ("latex", "a LaTeX distribution"),
+                         ("dvisvgm", "dvisvgm (Manim's DVI to SVG step)")):
         if shutil.which(binary) is None:
             missing.append(note)
+    # Only probed when TeX is present enough to answer: kpsewhich missing means
+    # unknown, not absent, and reporting a guess would send a caller to install
+    # something they may already have.
+    if shutil.which("kpsewhich") and not _tex_has("standalone.cls"):
+        missing.append("standalone.cls (texlive-latex-extra)")
     return missing
 
 

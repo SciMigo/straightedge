@@ -21,7 +21,12 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   refuse first, because an invalid plan is the caller's to fix whatever the host
   has — and names each missing piece. `pip install 'straightedge[render]'` is
   not the whole answer either: ffmpeg and LaTeX are system packages, and the
-  error says so.
+  error says so. The whole chain is checked rather than its headline parts —
+  scenes use `MathTex`, so Manim goes LaTeX → DVI → SVG, and a host with manim,
+  ffmpeg and latex but no `dvisvgm` failed deep in the render exactly as before.
+  A TeX installation that cannot find `standalone.cls` is reported too, and only
+  when `kpsewhich` is there to answer: absent, it means unknown rather than
+  missing, and a guess would send a caller to install what they already have.
 
 ### Added
 - **Parameter shapes in the catalog.** `Template.parameters` reports each
@@ -32,7 +37,9 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   that is the one place a template says what it expects. A parameter read
   without a usable default is reported by name alone rather than with a guess,
   because saying nothing is recoverable and saying "string" about a number is
-  not. The animation lane reports names only — its parameters are declared by
+  not — and a default whose contents cannot be read literally keeps its type and
+  drops its value, since publishing `[]` for a matrix that defaults to
+  `[[1, 0], [0, 1]]` is a wrong answer where no answer was available. The animation lane reports names only — its parameters are declared by
   preconditions, which carry no default to read a type from.
 
 ## [0.3.2] - 2026-08-20
