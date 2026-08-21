@@ -131,4 +131,5 @@ def test_the_shape_is_stable():
     """The fields an agent parses. A rename here breaks every consumer silently."""
     t = list_templates()[0]
     assert isinstance(t, Template)
-    assert set(vars(t)) == {"id", "lane", "output", "invocation", "params", "summary"}
+    assert set(vars(t)) == {"id", "lane", "output", "invocation", "params",
+                            "parameters", "summary"}

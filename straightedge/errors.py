@@ -97,6 +97,17 @@ class DependencyError(StraightedgeError):
     code = "dependency_missing"
 
 
+class BlankFigureError(StraightedgeError):
+    """A figure drew its frame and no data.
+
+    Reported as a failure rather than a successful empty result: the tool can
+    tell from its own mark count that nothing landed, and `ok: true` beside zero
+    marks is a claim of success it has already disproved.
+    """
+
+    code = "blank_figure"
+
+
 class UnknownTemplateError(StraightedgeError):
     """A template was named by an id the registry does not hold.
 

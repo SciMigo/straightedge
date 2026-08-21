@@ -61,6 +61,10 @@ class Template:
     output: str                 # "mp4" | "svg"
     invocation: str             # "prompt" | "concept-id" | "name"
     params: list[str] = field(default_factory=list)
+    # Names alone left a caller guessing the shape: an agent asked for the unit
+    # circle at "pi/4" because nothing said `angle` is a number of degrees, and
+    # got a blank figure. Kept beside `params` rather than replacing it.
+    parameters: list[dict] = field(default_factory=list)
     summary: str = ""
 
     def to_dict(self) -> dict:
@@ -99,6 +103,7 @@ def _animation_templates() -> list[Template]:
             output="mp4",
             invocation="prompt",
             params=[],
+            parameters=[],
             summary=f"{topic} (generic)",
         ))
 
@@ -117,6 +122,10 @@ def _animation_templates() -> list[Template]:
             # cone_slice and tangent_shift went unnoticed until a sweep.
             invocation="prompt" if reach else "concept-id",
             params=param_names.get(concept, []),
+            # Names only in this lane: an animation parameter is declared by a
+            # precondition, which states the name and not a default to read a
+            # type off. Saying nothing beats guessing.
+            parameters=[{"name": name} for name in param_names.get(concept, [])],
             summary=_concept_summary(concept),
         ))
     return templates
@@ -234,6 +243,7 @@ def _figure_templates() -> list[Template]:
             output="svg",
             invocation="name",
             params=sorted(_dict_get_keys(template.render, receiver="params")),
+            parameters=_dict_get_parameters(template.render, receiver="params"),
             summary=_first_docline(type(template)),
         ))
     return templates
@@ -279,6 +289,62 @@ def _dict_get_keys(func: Callable, *, receiver: str) -> set[str]:
               and isinstance(node.slice.value, str)):
             keys.add(node.slice.value)
     return keys
+
+
+_LITERAL_TYPES: dict[type, str] = {bool: "boolean", int: "number", float: "number",
+                                   str: "string"}
+
+
+def _default_shape(node) -> tuple[str, object] | None:
+    """Classify a literal default so a caller can tell a number from a string."""
+    if isinstance(node, ast.Constant):
+        if node.value is None:
+            return None
+        name = _LITERAL_TYPES.get(type(node.value))
+        return (name, node.value) if name else None
+    if isinstance(node, (ast.List, ast.Tuple)):
+        return "array", []
+    if isinstance(node, ast.Dict):
+        return "object", {}
+    if isinstance(node, ast.UnaryOp) and isinstance(node.operand, ast.Constant):
+        shape = _default_shape(node.operand)
+        if shape and shape[0] == "number" and isinstance(node.op, ast.USub):
+            return "number", -shape[1]
+        return shape
+    return None
+
+
+def _dict_get_parameters(func: Callable, *, receiver: str) -> list[dict]:
+    """The parameters ``func`` reads, with a type and default where the code says.
+
+    Inferred from the default in ``params.get(name, default)``, because that is
+    the one place the template states what it expects. A parameter read without
+    a usable default is reported with its name alone rather than a guess: saying
+    nothing is recoverable, and saying "string" about a number is not.
+    """
+    node = _func_node(func)
+    if node is None:
+        return []
+    found: dict[str, dict] = {}
+    for node in ast.walk(node):
+        if not (isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Attribute)
+                and node.func.attr == "get"
+                and _names(node.func.value) == receiver
+                and node.args
+                and isinstance(node.args[0], ast.Constant)
+                and isinstance(node.args[0].value, str)):
+            continue
+        name = node.args[0].value
+        entry = found.setdefault(name, {"name": name})
+        if "type" in entry or len(node.args) < 2:
+            continue
+        shape = _default_shape(node.args[1])
+        if shape:
+            entry["type"], entry["default"] = shape
+    for name in _dict_get_keys(func, receiver=receiver):
+        found.setdefault(name, {"name": name})
+    return [found[name] for name in sorted(found)]
 
 
 def _names(node) -> str | None:
