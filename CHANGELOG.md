@@ -67,8 +67,10 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `tests/figure_payloads.py`, a real parameter payload for every figure
   template. Determinism checked against bare `{}` renders is a test that cannot
   fail — a template given no parameters takes its empty defaults and never
-  enters the loops where ordering could vary. Each payload is asserted to change
-  its figure's output, so the sweep cannot go hollow.
+  enters the loops where ordering could vary. Each payload is asserted to put
+  data marks on its figure, not merely to change the output — a template handed
+  something it cannot use still returns a document, and refusal chrome differs
+  from a bare render while drawing nothing at all.
 
 ### Changed
 

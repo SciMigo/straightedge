@@ -25,6 +25,7 @@ from pathlib import Path
 
 from straightedge.catalog import list_templates
 from straightedge.diagrams import DIAGRAM_REGISTRY
+from straightedge.diagrams.registry import count_data_marks
 
 from tests.figure_payloads import PAYLOADS
 
@@ -86,12 +87,24 @@ class TestDeterminism:
     def test_every_figure_has_a_payload_that_draws(self):
         """Guards the sweep below from going quietly hollow. If a template
         loses its payload, or its payload stops being consumed, the seed sweep
-        still passes -- it would simply be comparing empty figures."""
+        still passes -- it would simply be comparing empty figures.
+
+        "Differs from a bare render" is not enough on its own, and this test
+        used to say only that. A template handed something it cannot use still
+        returns a document: `project_network` was harvested with a dependency
+        cycle and answered "网络图存在循环依赖，无法计算", which differs from the
+        bare figure while drawing nothing whatever. Refusal chrome is a
+        document and not a drawing, so the payload has to put marks on it.
+        """
         for t in _figures():
             assert t.id in PAYLOADS, f"{t.id} has no payload"
             impl = DIAGRAM_REGISTRY[t.id]
-            assert impl.render(_payload(t)) != impl.render({}), (
+            drawn = impl.render(_payload(t))
+            assert drawn != impl.render({}), (
                 f"{t.id}'s payload renders the same as no payload at all")
+            assert count_data_marks(drawn) > 0, (
+                f"{t.id}'s payload draws no data marks -- it is chrome, or a "
+                "refusal, standing in for a figure")
 
     def test_a_render_repeats_itself(self):
         for t in _figures():
@@ -116,10 +129,16 @@ class TestDeterminism:
         random.seed(1234)
         expected = [random.random() for _ in range(5)]
         for t in _figures():
-            random.seed(1234)
-            DIAGRAM_REGISTRY[t.id].render({})
-            assert [random.random() for _ in range(5)] == expected, (
-                f"{t.id} disturbed the caller's random stream")
+            # Both ways round. A template that reaches for `random` only while
+            # laying out actual items would leak through a bare render exactly
+            # as it would through the seed sweep -- the same blind spot, in the
+            # same file, one test further down.
+            for params in ({}, _payload(t)):
+                random.seed(1234)
+                DIAGRAM_REGISTRY[t.id].render(dict(params))
+                assert [random.random() for _ in range(5)] == expected, (
+                    f"{t.id} disturbed the caller's random stream"
+                    f"{' (with parameters)' if params else ''}")
 
     def test_a_seeded_figure_ignores_the_callers_seed(self):
         """The other half: its own output must not depend on global state."""
@@ -133,12 +152,36 @@ class TestDeterminism:
         """Reproducible across time and across machines, not merely across runs
         on this one — a committed SVG carrying a build date diffs every day."""
         import re
-        clock = re.compile(r"20\d\d-[01]\d-[0-3]\d|T\d\d:\d\d:")
+        import datetime
+
+        any_date = re.compile(r"20\d\d-[01]\d-[0-3]\d")
+        wall_clock = re.compile(r"T\d\d:\d\d:|\d\d:\d\d:\d\d")
+        today = datetime.date.today()
+        todays = (today.isoformat(), today.strftime("%Y/%m/%d"),
+                  today.strftime("%d %b %Y"), today.strftime("%B %-d, %Y"))
+
         for t in _figures():
-            svg = DIAGRAM_REGISTRY[t.id].render({})
-            assert not clock.search(svg), f"{t.id} embeds a timestamp"
-            for root in ("/home/", "/mnt/", "/tmp/", "/Users/"):
-                assert root not in svg, f"{t.id} embeds a machine path ({root})"
+            # The populated render is the one that matters: a date reaches the
+            # page through a title, an item loop or a legend, none of which a
+            # bare call enters. It is also the output people commit.
+            for params in ({}, _payload(t)):
+                svg = DIAGRAM_REGISTRY[t.id].render(dict(params))
+                where = " (with parameters)" if params else ""
+                for root in ("/home/", "/mnt/", "/tmp/", "/Users/"):
+                    assert root not in svg, (
+                        f"{t.id} embeds a machine path ({root}){where}")
+                assert not wall_clock.search(svg), (
+                    f"{t.id} embeds a wall-clock time{where}")
+                assert not any(stamp in svg for stamp in todays), (
+                    f"{t.id} embeds today's date{where} — it will render "
+                    "differently tomorrow")
+                if not params:
+                    # Nothing was supplied, so no date is legitimate. Once
+                    # parameters are given, a date on the page is usually one
+                    # of *theirs* — `roadmap` draws the range it was handed —
+                    # and only a date the caller never supplied is a defect.
+                    assert not any_date.search(svg), (
+                        f"{t.id} embeds a date though it was given none")
 
     def test_the_catalog_itself_is_stable(self):
         first = json.dumps([t.to_dict() for t in list_templates()])

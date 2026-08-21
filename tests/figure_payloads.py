@@ -6,6 +6,14 @@ so determinism is checked against figures that actually draw something: a
 template rendered with `{}` takes its empty defaults and never reaches the
 loops where ordering could vary, so a sweep over bare renders agrees with
 itself no matter how badly ordered the code beneath it is.
+
+Harvesting them from the suite had one trap worth naming, because it caught
+this file. Tests contain deliberately *bad* inputs, and a template handed one
+still returns a document — `project_network` was given a dependency cycle and
+answered with a figure reading "网络图存在循环依赖，无法计算". That differs from
+the bare render, so it satisfied "the payload changed the output" while drawing
+nothing at all. An example must therefore clear `count_data_marks`, not merely
+differ: refusal chrome is a document, and it is not a drawing.
 """
 
 PAYLOADS = {'aoa_work': {'arcs': [{'duration': 3, 'from': 1, 'label': 'A', 'to': 2},
@@ -222,8 +230,26 @@ PAYLOADS = {'aoa_work': {'arcs': [{'duration': 3, 'from': 1, 'label': 'A', 'to':
                                  'Board'}},
  'polar_graph': {'functions': [{'color': '#FF0000', 'expr': '1+cos(theta)'},
                                {'color': '#00FF00', 'expr': '1-cos(theta)'}]},
- 'project_network': {'activities': [{'duration': 1, 'id': 'X', 'predecessors': ['Y']},
-                                    {'duration': 1, 'id': 'Y', 'predecessors': ['X']}]},
+ 'project_network': {'activities': [{'duration': 3,
+                                     'id': 'A',
+                                     'name': 'Survey',
+                                     'predecessors': []},
+                                    {'duration': 5,
+                                     'id': 'B',
+                                     'name': 'Design',
+                                     'predecessors': ['A']},
+                                    {'duration': 2,
+                                     'id': 'C',
+                                     'name': 'Procure',
+                                     'predecessors': ['A']},
+                                    {'duration': 4,
+                                     'id': 'D',
+                                     'name': 'Build',
+                                     'predecessors': ['B', 'C']},
+                                    {'duration': 1,
+                                     'id': 'E',
+                                     'name': 'Handover',
+                                     'predecessors': ['D']}]},
  'queue': {'back_label': 'back',
            'caption': 'Dequeue from front, enqueue 5 at back',
            'front_label': 'front',
