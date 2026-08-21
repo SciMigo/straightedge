@@ -4,7 +4,36 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project aims to
 follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.6.0] - 2026-08-21
+
+A minor release about telling the truth: about what a figure looks like, and
+about what running one costs.
+
+0.5.0 shipped a legibility check and eight errors it had found. Six of those are
+fixed here — `architecture_diagram` drew every unanchored note at the same
+coordinates, so two notes were painted over each other on the template this
+project offers as its answer to Mermaid for system architecture; `unit_circle`
+drew an axis name through its own tick label and labelled the shown angle twice;
+`matrix_transform` let a guide cross the gutter and leave the figure. Two remain
+and are listed as known.
+
+The check itself was wrong about a ninth. It skipped boxes with no *area*, and a
+level line is zero-area however long it is — so a guide, an axis, a gridline or
+a connector could leave the canvas entirely and go unreported. Fixing that
+immediately found a `riemann_sum` gridline 8px off the right edge, which had
+been there all along.
+
+The other half is the animation lane admitting what it is. It needs Manim,
+ffmpeg, LaTeX, dvisvgm and the `standalone` class, and pip installs one of the
+five. The MCP server used to advertise `render` regardless, so on a bare host it
+was a tool an agent picks because it is listed and gets a dependency error from.
+It is now offered only where it runs, every template publishes what running it
+requires, and the README leads with the lane that needs nothing.
+
+New public surface — `requires` on `Template`, `diagrams.renderer.title` — and a
+checker that reports findings it used to skip, so a minor rather than a patch.
+`requires` is appended after the existing fields, so positional construction
+written against 0.5 still means what it did.
 
 ### Changed
 
