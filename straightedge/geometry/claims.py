@@ -137,6 +137,25 @@ def _section(c: Construction, spec: Any) -> Section:
     raise _Unresolved(f"{spec!r} is not a section")
 
 
+def _nondegenerate(section: Section, claim: str) -> None:
+    """Refuse a section whose parts have no length.
+
+    Exact arithmetic on a degenerate figure proves undefined statements with
+    total confidence: for a section on one repeated point every squared length
+    is zero, so ``AB² == r²·BC²`` holds for *every* r and ``AB⁴ == AC²·BC²``
+    holds trivially — the collapsed section was reported as being in ratio
+    12345 and as golden. A predicate has to own its domain; 0 == 0 is not
+    evidence about a ratio that does not exist.
+    """
+    first, second = section.segments
+    whole = Segment(section.points[0], section.points[2])
+    for name, segment in (("AB", first), ("BC", second), ("AC", whole)):
+        if segment.length_sq.is_zero():
+            raise _Unresolved(
+                f"{claim} is undefined here: {name} has zero length, so the "
+                f"section is three points in one place")
+
+
 def _rational(value: Any) -> Exact:
     if isinstance(value, Exact):
         return value
@@ -264,6 +283,12 @@ def _ratio(c: Construction, claim: Claim) -> tuple[bool, str]:
     if claim.value is None:
         raise _Unresolved("ratio needs a value")
     wanted = _rational(claim.value)
+    # Squaring loses the sign, so a negative target would be satisfied by its
+    # own absolute value. A ratio of lengths is positive by construction.
+    if wanted.sign() <= 0:
+        raise _Unresolved(
+            f"a ratio of lengths must be positive, got {claim.value}")
+    _nondegenerate(section, "ratio")
     first, second = section.segments
     return (_is_zero(first.length_sq - wanted * wanted * second.length_sq),
             f"in ratio {claim.value}")
@@ -278,6 +303,7 @@ def _golden(c: Construction, claim: Claim) -> tuple[bool, str]:
     which the model already holds exactly. Either part may be the greater one.
     """
     section = _section(c, claim.of[0])
+    _nondegenerate(section, "golden")
     a, b, d = section.points
     ab = Segment(a, b).length_sq
     bc = Segment(b, d).length_sq
@@ -297,6 +323,16 @@ def _harmonic(c: Construction, claim: Claim) -> tuple[bool, str]:
     affine parameter along the line, which preserves cross ratio exactly.
     """
     a, b, d, e = (_point(c, name) for name in claim.of[:4])
+    # The cross ratio needs four *distinct* points: with any two coincident its
+    # numerator and denominator both vanish, and `0 + 0 == 0` reported the
+    # degenerate range (A,A;A,A) as harmonic.
+    names = [str(n) for n in claim.of[:4]]
+    for i, first in enumerate((a, b, d, e)):
+        for j, second in enumerate((a, b, d, e)):
+            if i < j and first == second:
+                raise _Unresolved(
+                    f"a harmonic range needs four distinct points; "
+                    f"{names[i]} and {names[j]} coincide")
     scale = _scale_of(a, b, d, e)
     dx, dy = b.x - a.x, b.y - a.y
     for other in (d, e):
@@ -310,6 +346,28 @@ def _harmonic(c: Construction, claim: Claim) -> tuple[bool, str]:
     ta, tb, tc, td = (parameter(p) for p in (a, b, d, e))
     return _is_zero((tc - ta) * (td - tb) + (td - ta) * (tc - tb)), "harmonic"
 
+
+#: How many arguments each claim needs: ``(minimum, maximum or None)``.
+#:
+#: Checked before dispatch, because the predicates read ``claim.of`` positionally
+#: and an argument that is not there raises out of an unpacking rather than
+#: returning a finding — `midpoint` with one name came back as a ValueError
+#: through the MCP tool instead of an error a caller could act on. Arity is part
+#: of what a claim *is*, so it belongs beside the table that names them.
+ARITY: dict[str, tuple[int, int | None]] = {
+    "on": (2, 2),
+    "collinear": (3, 3),
+    "parallel": (2, 2),
+    "perpendicular": (2, 2),
+    "congruent": (2, None),
+    "midpoint": (3, 3),
+    "equilateral": (1, 1),
+    "tangent": (2, 2),
+    "concurrent": (3, None),
+    "ratio": (1, 1),
+    "golden": (1, 1),
+    "harmonic": (4, 4),
+}
 
 #: Every claim this version can decide. The table is the documented vocabulary.
 CLAIMS: dict[str, Callable[[Construction, Claim], tuple[bool, str]]] = {
@@ -388,6 +446,16 @@ def check(construction: Construction, claims: Sequence[Any]) -> list[Finding]:
                 f"claim:{claim.kind}", "error",
                 f"unknown claim {claim.kind!r}; known claims are "
                 f"{', '.join(sorted(CLAIMS))}", str(claim)))
+            continue
+
+        low, high = ARITY[claim.kind]
+        if len(claim.of) < low or (high is not None and len(claim.of) > high):
+            expected = f"{low}" if high == low else (
+                f"{low} or more" if high is None else f"{low} to {high}")
+            findings.append(Finding(
+                f"claim:{claim.kind}", "error",
+                f"takes {expected} argument(s), got {len(claim.of)}",
+                str(claim)))
             continue
 
         try:

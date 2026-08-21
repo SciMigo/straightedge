@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import re
 import xml.etree.ElementTree as ET
+from fractions import Fraction
 
 import pytest
 
@@ -234,3 +235,36 @@ class TestStepFrames:
         stable picture rather than the camera lurching on every step."""
         frames = to_svg_steps(build(BISECTOR["steps"]))
         assert len({_dims(frame) for frame in frames}) == 1
+
+
+class TestFloatCoordinatesAreNotApproximated:
+    """`limit_denominator` was an approximation in the lane that forbids them.
+
+    It turned `0.333333333334` into exactly `1/3`, `1.000000000001` into `1`
+    and `1e-12` into `0` — so a claim false of the number supplied could be
+    proved, exactly, of a number nobody supplied.
+    """
+
+    @pytest.mark.parametrize("value,expected", [
+        (0.1, Fraction(1, 10)),
+        (0.5, Fraction(1, 2)),
+        (-2.25, Fraction(-9, 4)),
+        (0.333333333334, Fraction(333333333334, 10 ** 12)),
+        (1.000000000001, Fraction(1000000000001, 10 ** 12)),
+        (1e-12, Fraction(1, 10 ** 12)),
+    ])
+    def test_a_float_is_the_decimal_it_prints_as(self, value, expected):
+        from straightedge.diagrams.templates.construction import _coordinate
+        assert _coordinate(value) == expected
+
+    @pytest.mark.parametrize("value", [0.333333333334, 1.000000000001, 1e-12])
+    def test_it_does_not_collapse_onto_a_neighbour(self, value):
+        from straightedge.diagrams.templates.construction import _coordinate
+        assert _coordinate(value) != Fraction(round(value))
+        assert float(_coordinate(value)) == value
+
+    @pytest.mark.parametrize("value", [float("nan"), float("inf"), float("-inf")])
+    def test_a_non_finite_float_is_refused(self, value):
+        from straightedge.diagrams.templates.construction import _coordinate
+        with pytest.raises(ValueError):
+            _coordinate(value)

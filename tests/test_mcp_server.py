@@ -410,13 +410,38 @@ class TestConstructionsCanBeCheckedBeforeTheyAreDrawn:
 
     def test_the_verdict_agrees_with_what_draw_actually_does(self):
         """`would_draw` is a claim about another tool; it has to be true."""
-        from straightedge.diagrams.registry import count_data_marks
         for claim, expected in (("perpendicular", True), ("parallel", False)):
             claims = [{"claim": claim, "of": ["[ C D ]", "[ A B ]"]}]
             verdict = mcp_server._verify_payload(self.VESICA, claims)["would_draw"]
-            drawn = count_data_marks(mcp_server._draw_payload(
-                "construction", {"steps": self.VESICA, "claims": claims})["svg"]) > 0
-            assert verdict is expected and drawn is expected
+            out = mcp_server._guarded(lambda: mcp_server._draw_payload(
+                "construction", {"steps": self.VESICA, "claims": claims}))
+            assert verdict is expected and out["ok"] is expected
+
+    def test_a_refusal_is_not_reported_as_a_parameter_mistake(self):
+        """A construction blocked by a false claim has correct parameters.
+
+        `draw` raises `blank_figure` for anything with no marks, and its remedy
+        sends the caller to check parameter shapes — right for a template handed
+        a value it cannot read, and wrong here, where the input is fine and the
+        assertion is not. The refusal says which claim failed instead.
+        """
+        out = mcp_server._guarded(lambda: mcp_server._draw_payload(
+            "construction", {"steps": self.VESICA, "claims": [
+                {"claim": "parallel", "of": ["[ C D ]", "[ A B ]"]}]}))
+        error = out["error"]
+        assert error["code"] == "blank_figure"
+        assert "refused" in error["message"]
+        assert "parameter" not in error["remedy"].split("The parameters")[0]
+        assert "verify_construction" in error["remedy"]
+        [finding] = error["details"]["findings"]
+        assert finding["check"] == "claim:parallel"
+
+    def test_an_unreadable_parameter_still_reports_the_shapes(self):
+        """The other branch must keep #9's behaviour intact."""
+        out = mcp_server._guarded(lambda: mcp_server._draw_payload(
+            "construction", {"steps": "this is not a construction"}))
+        assert out["error"]["code"] == "blank_figure"
+        assert "parameters" in out["error"]["details"]
 
     def test_a_notation_error_comes_back_as_a_finding_with_its_line(self):
         result = mcp_server._verify_payload("A = 0, 0\n[ A ", [])

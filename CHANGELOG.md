@@ -96,6 +96,43 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - A post, *The picture is not the proof*, and a third series on the blog. 1.618
   is right to three places, is not φ, and every checker that compares a measured
   ratio against a tolerance says it is.
+- Five review findings on the lane above, all reproduced before being fixed and
+  all gaps the suite could not see:
+  - **Float coordinates were silently approximated.** `limit_denominator(10**9)`
+    turned `0.333333333334` into exactly `1/3`, `1.000000000001` into `1` and
+    `1e-12` into `0` — an approximation in the one lane whose premise is that
+    nothing is approximated, and enough to prove a claim exactly of a number
+    nobody supplied. A float is now read through its `repr`, the shortest
+    decimal that round-trips, so `0.1` is one tenth and `0.333333333334` stays
+    itself. A non-finite float is refused.
+  - **Degenerate figures proved arbitrary claims.** Every squared length of a
+    section on one repeated point is zero, so `AB² == r²·BC²` held for *every*
+    `r`: the collapsed section was reported as being in ratio 12345 and as
+    golden, by exact arithmetic, with total confidence. A predicate now owns its
+    domain — sections need parts with length, harmonic ranges need four distinct
+    points, and a ratio of lengths must be positive, since squaring loses the
+    sign and `-2` was satisfied by `2`.
+  - **A malformed claim crashed instead of reporting.** The predicates read
+    `claim.of` positionally, so `midpoint` with one name raised out of an
+    unpacking and reached the MCP tool as a `ValueError`. Arity is declared per
+    claim and checked before dispatch.
+  - **Square-free reduction could run effectively forever.** Trial division to
+    `√n` is unbounded on an integer this class carries to `MAX_BITS`: a 50-bit
+    prime took four seconds, and a construction with a large coordinate reaches
+    it through a circle intersection — so an ordinary request could pin the
+    process. The search is bounded now; an unreduced radicand is still a
+    radicand, so the cost is a generator that might have been shared, never an
+    answer. 4.4s to 0.012s on the reported case.
+  - **Hashing disagreed with equality.** `Exact.rational(Fraction(1, 3))` equals
+    `Fraction(1, 3)` while their rounded-float hashes differed, so a dict keyed
+    on one could not be read with the other — a silent loss of membership rather
+    than an error. `Exact`, `Point`, `Line` and `Circle` are unhashable; nothing
+    hashed them, and no cheap hash agrees with exact algebraic equality.
+- `draw` distinguishes a **refusal** from a parameter mistake. A construction
+  blocked by a false claim has correct parameters, and the blank-figure remedy
+  sent its caller to check them; it now names the failing claim and points at
+  `verify_construction`. A construction that could not be *built* still reports
+  parameter shapes, because that is what is wrong with it.
 - `sympy` joins the `dev` extra as a **test oracle** for the exact kernel —
   never a runtime path. Random expressions are built twice and required to
   agree on sign, zero and order, which covers the mistakes nobody has made yet.

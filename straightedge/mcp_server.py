@@ -216,6 +216,26 @@ def _verify_payload(steps: Any, claims: list | None) -> dict[str, Any]:
     }
 
 
+def _refusal_findings(name: str, params: dict | None) -> list[dict]:
+    """Why a template refused to draw, when it can say — otherwise empty.
+
+    Only `construction` can refuse on grounds other than unreadable parameters:
+    a claim it does not satisfy blocks the drawing deliberately. Everything else
+    that comes back blank came back blank because the params did not fit.
+
+    Claim failures only. A construction that could not be *built* — a notation
+    error, an unknown id — is a parameter problem after all, and belongs on the
+    branch that reports parameter shapes; sending its caller to
+    `verify_construction` would point away from the mistake.
+    """
+    if name != "construction":
+        return []
+    from .diagrams.templates.construction import verify as _verify
+
+    return [asdict(f) for f in _verify(params or {})
+            if f.severity == "error" and f.check.startswith("claim:")]
+
+
 def _draw_payload(diagram_type: str, params: dict | None) -> dict[str, Any]:
     """Render one figure, and say whether anything actually landed on it."""
     name = (diagram_type or "").strip()
@@ -239,6 +259,19 @@ def _draw_payload(diagram_type: str, params: dict | None) -> dict[str, Any]:
         # because a blank figure is almost always a parameter-shape mismatch and
         # the caller cannot fix what it cannot see: an agent asked for the unit
         # circle at "pi/4" and got an empty result reported as fine.
+        # A blank is almost always a parameter-shape mismatch — but not always.
+        # A construction that asserts something false is *refused*, and telling
+        # its caller to check parameter shapes sends them to look at input that
+        # is already correct. Where the template can say why, it says why.
+        refused = _refusal_findings(name, params)
+        if refused:
+            raise BlankFigureError(
+                f"{name!r} was refused: it asserts something it does not satisfy",
+                remedy="Fix the construction or drop the claim; call "
+                       "verify_construction with the same steps to see each "
+                       "finding. The parameters are not the problem.",
+                details={"type": name, "findings": refused},
+            )
         raise BlankFigureError(
             f"{name!r} drew no data marks",
             remedy="Check the parameter shapes in `details.parameters` — a value "

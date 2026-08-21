@@ -74,10 +74,19 @@ _SECTION_KEYS = ("section", "sect")
 def _coordinate(value: Any) -> Fraction:
     """A coordinate as the exact rational it denotes.
 
-    ``"0.1"`` is one tenth, not the binary float nearest to one tenth. A float
-    *object* is accepted and converted exactly, which is lossless but rarely what
-    a caller meant --- ``0.1`` in Python is already the wrong number by the time
-    it arrives, and there is nothing this can do about that but be honest.
+    ``"0.1"`` is one tenth, not the binary float nearest to one tenth.
+
+    A ``float`` is read through its ``repr``, which is the shortest decimal that
+    round-trips — so ``0.1`` becomes ``1/10``, the number the caller wrote,
+    while ``0.333333333334`` stays itself rather than collapsing.
+
+    It used to go through ``limit_denominator(10**9)``, and that was an
+    approximation dressed as a conversion in the one lane whose whole premise is
+    that nothing is approximated. It silently turned ``0.333333333334`` into
+    exactly ``1/3``, ``1.000000000001`` into ``1`` and ``1e-12`` into ``0`` — so
+    a claim that is false of the number given could be proved, exactly, of a
+    number nobody supplied. Reading the decimal instead never invents a value;
+    it only declines to re-derive one in binary.
     """
     if isinstance(value, Fraction):
         return value
@@ -86,7 +95,9 @@ def _coordinate(value: Any) -> Fraction:
     if isinstance(value, int):
         return Fraction(value)
     if isinstance(value, float):
-        return Fraction(value).limit_denominator(10 ** 9)
+        if value != value or value in (float("inf"), float("-inf")):
+            raise ValueError(f"not a coordinate: {value!r}")
+        return Fraction(repr(value))
     return Fraction(str(value).strip())
 
 

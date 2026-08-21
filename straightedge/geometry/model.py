@@ -71,8 +71,10 @@ class Point:
             return NotImplemented
         return (self.x - other.x).is_zero() and (self.y - other.y).is_zero()
 
-    def __hash__(self) -> int:
-        return hash((round(float(self.x), 9), round(float(self.y), 9)))
+    # Unhashable, for the reason `Exact.__hash__` records: equality here is
+    # exact and a rounded-float hash does not agree with it. Nothing hashes a
+    # Point, and a hash that silently loses membership is worse than none.
+    __hash__ = None       # type: ignore[assignment]
 
     def as_floats(self) -> tuple[float, float]:
         return float(self.x), float(self.y)
@@ -115,8 +117,10 @@ class Line:
         return ((self.a - other.a).is_zero() and (self.b - other.b).is_zero()
                 and (self.c - other.c).is_zero())
 
-    def __hash__(self) -> int:
-        return hash(tuple(round(float(v), 9) for v in (self.a, self.b, self.c)))
+    # Unhashable, for the reason `Exact.__hash__` records: equality here is
+    # exact and a rounded-float hash does not agree with it. Nothing hashes a
+    # Line, and a hash that silently loses membership is worse than none.
+    __hash__ = None       # type: ignore[assignment]
 
 
 def _normalise_line(a: Exact, b: Exact, c: Exact) -> tuple[Exact, Exact, Exact]:
@@ -154,8 +158,10 @@ class Circle:
         return (self.center == other.center
                 and (self.radius_sq - other.radius_sq).is_zero())
 
-    def __hash__(self) -> int:
-        return hash((self.center, round(float(self.radius_sq), 9)))
+    # Unhashable, for the reason `Exact.__hash__` records: equality here is
+    # exact and a rounded-float hash does not agree with it. Nothing hashes a
+    # Circle, and a hash that silently loses membership is worse than none.
+    __hash__ = None       # type: ignore[assignment]
 
 
 @dataclass(frozen=True)

@@ -364,3 +364,47 @@ def test_the_oracle_would_catch_the_aliasing_bug():
     assert mine.sign() == _sym_sign(theirs)          # sign alone does not catch it
     assert float(mine) != pytest.approx(float(sympy.N(theirs, 30)), abs=1e-9), (
         "the aliasing bug went undetected — the oracle is not doing its job")
+
+
+class TestTheThingsReviewFound:
+    def test_exact_values_are_unhashable(self):
+        """A rounded-float hash disagreed with exact equality.
+
+        `Exact.rational(Fraction(1, 3)) == Fraction(1, 3)` is true and their
+        hashes differed, so a dict keyed on one could not be read with the
+        other — a silent loss of membership rather than an error.
+        """
+        with pytest.raises(TypeError):
+            hash(Exact.rational(Fraction(1, 3)))
+        with pytest.raises(TypeError):
+            {Exact.rational(1): "x"}
+
+    def test_equality_across_operands_is_unaffected(self):
+        value = Exact.rational(Fraction(1, 3))
+        assert value == Fraction(1, 3) and value == Exact.rational(1) / 3
+
+    def test_factorisation_is_bounded(self):
+        """Trial division to √n is unbounded work on a MAX_BITS integer.
+
+        A 50-bit prime took four seconds and a construction with a large
+        coordinate reaches this through a circle intersection, so an ordinary
+        request could pin the process. Giving up early costs a generator that
+        might have been shared, never an answer.
+        """
+        import time
+        from straightedge.geometry.exact import Tower
+
+        tower = Tower()
+        start = time.perf_counter()
+        root = tower.sqrt(2 ** 127 - 1)               # a Mersenne prime
+        assert time.perf_counter() - start < 2.0
+        assert (root * root - (2 ** 127 - 1)).is_zero()
+
+    def test_small_square_factors_are_still_reduced(self):
+        """The bound must not cost the reductions that matter in practice."""
+        from straightedge.geometry.exact import Tower
+
+        tower = Tower()
+        assert (tower.sqrt(12) - 2 * tower.sqrt(3)).is_zero()
+        assert (tower.sqrt(50) - 5 * tower.sqrt(2)).is_zero()
+        assert tower.sqrt(144).as_fraction() == 12

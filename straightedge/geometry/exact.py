@@ -76,6 +76,13 @@ MAX_DEPTH = 6
 #: at first, which left the commonest growth path the only unguarded one.
 MAX_BITS = 4096
 
+#: How far :func:`_squarefree_part` trial-divides before giving up. Square
+#: factors of a radicand are found for cost, never for correctness, so a bound
+#: here trades a possible extra generator for a guaranteed finish. Covers every
+#: square factor a classroom construction produces; a 32-bit prime is the point
+#: past which the search is no longer worth its own runtime.
+TRIAL_DIVISION_LIMIT = 100_000
+
 Rationalish = Union[int, Fraction, "Exact"]
 
 
@@ -109,7 +116,16 @@ def _squarefree_part(value: Fraction) -> tuple[Fraction, Fraction]:
     n = abs(n)
     square, rest = 1, n
     d = 2
-    while d * d <= rest:
+    # Bounded. Trial division to √n is unbounded work on an integer this class
+    # will happily carry to MAX_BITS: a 50-bit prime already takes four seconds,
+    # and a construction with a large coordinate reaches this through a circle
+    # intersection — so an ordinary request could pin the process indefinitely.
+    #
+    # Giving up early costs nothing but tidiness. An unreduced radicand is still
+    # a positive radicand, so `√n` is adjoined whole rather than as `c√m`: the
+    # tower gains a generator it might have shared, which spends depth and
+    # leaves every answer exactly as correct.
+    while d * d <= rest and d <= TRIAL_DIVISION_LIMIT:
         while rest % (d * d) == 0:
             rest //= d * d
             square *= d
@@ -475,10 +491,18 @@ class Exact:
         rhs = self._coerce(other)
         return NotImplemented if rhs is None else (self - rhs).sign() >= 0
 
-    def __hash__(self) -> int:
-        # Equal values must hash equally, and two representations of the same
-        # number need not share a shape. Only the float bucket is safe.
-        return hash(round(float(self), 9))
+    #: Deliberately unhashable. Equality here is exact and holds across `int`,
+    #: `Fraction` and `Exact` alike, and no cheap hash agrees with all three:
+    #: the rounded-float bucket this used to return made
+    #: `Exact.rational(Fraction(1, 3)) == Fraction(1, 3)` true while their hashes
+    #: differed, so a dict keyed on one could not be read with the other. Two
+    #: structurally different representations of the same irrational have the
+    #: same problem at any rounding boundary.
+    #:
+    #: A wrong hash does not raise — it silently loses set membership and dict
+    #: lookups, which is a worse failure than not being hashable at all. Nothing
+    #: in this package hashes these; use the exact comparisons.
+    __hash__ = None       # type: ignore[assignment]
 
     def __float__(self) -> float:
         if self._level == 0:

@@ -285,3 +285,92 @@ class TestClaimParsing:
 
     def test_a_bare_argument_is_accepted(self):
         assert Claim.parse({"claim": "golden", "of": "/ A B C /"}).of == ("/ A B C /",)
+
+
+class TestAPredicateOwnsItsDomain:
+    """Exact arithmetic on a degenerate figure proves undefined statements.
+
+    Every squared length of a section on one repeated point is zero, so
+    `AB² == r²·BC²` holds for *every* r and `AB⁴ == AC²·BC²` holds trivially.
+    The collapsed section was reported as being in ratio 12345 *and* as golden,
+    with total confidence and by exact arithmetic — which is the failure this
+    whole lane exists to prevent, arriving through the door it was guarding.
+    """
+
+    @staticmethod
+    def _collapsed():
+        c = Construction()
+        a = c.set_point(0, 0)
+        return c, c.set_section(a, a, a), a
+
+    @pytest.mark.parametrize("claim", [
+        {"claim": "ratio", "value": 12345},
+        {"claim": "ratio", "value": 1},
+        {"claim": "golden"},
+    ])
+    def test_a_section_with_no_length_decides_nothing(self, claim):
+        c, section, _ = self._collapsed()
+        findings = check(c, [dict(claim, of=section)])
+        assert len(findings) == 1 and findings[0].severity == "error"
+        assert "zero length" in findings[0].message
+
+    def test_a_degenerate_range_is_not_harmonic(self):
+        c, _, a = self._collapsed()
+        findings = check(c, [{"claim": "harmonic", "of": [a, a, a, a]}])
+        assert len(findings) == 1
+        assert "four distinct points" in findings[0].message
+
+    def test_two_coincident_points_break_a_harmonic_range(self):
+        c = Construction()
+        names = [c.set_point(x, 0) for x in (0, 1, Fraction(1, 3), -1)]
+        findings = check(c, [{"claim": "harmonic", "of": [names[0], names[0],
+                                                          names[2], names[3]]}])
+        assert len(findings) == 1 and "coincide" in findings[0].message
+
+    def test_a_negative_ratio_is_refused_rather_than_squared_away(self):
+        """Squaring loses the sign, so -2 would be satisfied by 2."""
+        c = Construction()
+        a, b, d = c.set_point(0, 0), c.set_point(2, 0), c.set_point(3, 0)
+        section = c.set_section(a, b, d)
+        findings = check(c, [{"claim": "ratio", "of": section, "value": -2}])
+        assert len(findings) == 1 and "must be positive" in findings[0].message
+        assert check(c, [{"claim": "ratio", "of": section, "value": 2}]) == []
+
+    def test_a_real_section_is_untouched_by_the_guards(self):
+        c = Construction()
+        phi = (1 + c.tower.sqrt(5)) / 2
+        a, b, d = c.set_point(0, 0), c.set_point(phi, 0), c.set_point(phi + 1, 0)
+        assert check(c, [{"claim": "golden", "of": c.set_section(a, b, d)}]) == []
+
+
+class TestArityIsCheckedBeforeDispatch:
+    """The predicates read `claim.of` positionally.
+
+    An argument that is not there raised out of an unpacking rather than
+    returning a finding, so a malformed claim came back through the MCP tool as
+    a ValueError with a traceback instead of something a caller could act on.
+    """
+
+    @pytest.mark.parametrize("claim,given", [
+        ({"claim": "midpoint", "of": ["A"]}, 1),
+        ({"claim": "harmonic", "of": ["A", "B"]}, 2),
+        ({"claim": "on", "of": ["A"]}, 1),
+        ({"claim": "collinear", "of": ["A", "B"]}, 2),
+        ({"claim": "congruent", "of": [["A", "B"]]}, 1),
+        ({"claim": "equilateral", "of": ["A", "B"]}, 2),
+        ({"claim": "concurrent", "of": ["A", "B"]}, 2),
+        ({"claim": "tangent", "of": ["A"]}, 1),
+    ])
+    def test_the_wrong_number_of_arguments_is_a_finding(self, claim, given):
+        c = Construction()
+        c.set_point(0, 0)
+        findings = check(c, [claim])          # must not raise
+        assert len(findings) == 1 and findings[0].severity == "error"
+        assert f"got {given}" in findings[0].message
+
+    def test_every_claim_declares_its_arity(self):
+        from straightedge.geometry.claims import ARITY
+        assert set(ARITY) == set(CLAIMS)
+
+    def test_a_correct_arity_still_dispatches(self):
+        assert holds(vesica(), {"claim": "midpoint", "of": ["G", "A", "B"]})
