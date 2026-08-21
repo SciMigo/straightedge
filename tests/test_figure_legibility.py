@@ -384,41 +384,58 @@ class TestAClipDoesNotHideTruncation:
     from a label that is simply short — which turns the one check this module
     exists for into a pass. The clip is a boundary the reader loses text at,
     exactly as the frame edge is.
+
+    Every case runs twice, with and without an unrelated visible label. The
+    first version of these tests always included one, and that single shared
+    fixture hid the worst case of the lot: a label lying *entirely* outside its
+    clip leaves no visible box at all, so a figure containing nothing else took
+    an early return and reported nothing. The fixture, not the checker, is what
+    decided that path was never reached.
     """
 
     CLIP = '<clipPath id="c"><rect x="0" y="0" width="50" height="100"/></clipPath>'
     OTHER = '<text x="10" y="90" font-size="10">elsewhere</text>'
 
-    def _findings(self, label_x: float, text: str = "a long truncated label"):
-        body = (self.CLIP + self.OTHER +
-                f'<g clip-path="url(#c)"><text x="{label_x}" y="50" '
-                f'font-size="10">{text}</text></g>')
-        return check_figure(_svg(body))
+    def _svg_with(self, label_x, text, other):
+        return _svg(self.CLIP + other +
+                    f'<g clip-path="url(#c)"><text x="{label_x}" y="50" '
+                    f'font-size="10">{text}</text></g>')
 
-    def test_a_label_cut_off_by_a_clip_is_an_error(self):
-        cut = [f for f in self._findings(40) if f.check == "text_clipped"]
+    def _cut(self, label_x, text="a long truncated label", other=""):
+        return [f for f in check_figure(self._svg_with(label_x, text, other))
+                if f.check == "text_clipped"]
+
+    @pytest.mark.parametrize("other", ["", OTHER], ids=["alone", "with-other-text"])
+    def test_a_partly_clipped_label_is_an_error(self, other):
+        cut = self._cut(40, other=other)
         assert cut, "a label with most of its glyphs unpainted reported nothing"
         assert cut[0].severity == "error"
         assert cut[0].label == "a long truncated label"
 
-    def test_a_label_inside_its_clip_is_not_reported(self):
-        assert not [f for f in self._findings(5, "ok") if f.check == "text_clipped"]
+    @pytest.mark.parametrize("other", ["", OTHER], ids=["alone", "with-other-text"])
+    def test_a_wholly_clipped_label_is_an_error(self, other):
+        """The worst case, and the one that leaves no visible box behind: every
+        glyph is missing, so there is nothing for the box checks to look at."""
+        cut = self._cut(120, other=other)
+        assert cut, "a label with no visible glyphs at all reported nothing"
+        assert cut[0].severity == "error"
+
+    @pytest.mark.parametrize("other", ["", OTHER], ids=["alone", "with-other-text"])
+    def test_a_label_inside_its_clip_is_not_reported(self, other):
+        assert not self._cut(5, "ok", other=other)
 
     def test_the_fragment_being_inside_the_frame_is_not_a_defence(self):
         """The visible ten units sit comfortably in a 200x100 frame. That is
         precisely why the frame check cannot see this one."""
-        boxes = [b for b in boxes_from_svg(_svg(
-            self.CLIP + self.OTHER +
-            '<g clip-path="url(#c)"><text x="40" y="50" font-size="10">'
-            'a long truncated label</text></g>'))
-            if b.kind == "text" and b.x0 >= 40]
+        boxes = [b for b in boxes_from_svg(self._svg_with(40, "a long truncated label", ""))
+                 if b.kind == "text"]
         assert boxes and boxes[0].x1 <= 50, "fragment should still be clipped for overlap"
-        assert [f for f in self._findings(40) if f.check == "text_clipped"]
+        assert self._cut(40)
 
     def test_it_is_located_where_the_missing_glyphs_were(self):
         """Not at the fragment: the fragment is not where the reader is looking
         for the rest of the word."""
-        cut = [f for f in self._findings(40) if f.check == "text_clipped"][0]
+        cut = self._cut(40)[0]
         assert cut.box is not None and cut.box[1] - cut.box[0] > 50, (
             "reported the surviving fragment rather than the whole label")
 
@@ -429,3 +446,38 @@ class TestAClipDoesNotHideTruncation:
                 '<g clip-path="url(#c)"><line x1="10" y1="10" x2="400" y2="90"/></g>')
         assert not [f for f in check_figure(_svg(body))
                     if f.check in ("text_clipped", "out_of_frame")]
+
+    def test_a_figure_with_no_declared_size_reports_nothing(self):
+        """Deliberate, and stated here so it is a decision rather than another
+        early return nobody looked at: without a viewBox or width/height there
+        is no coordinate system to report a finding in, and every other finding
+        this module emits is positioned in one."""
+        svg = ('<svg xmlns="http://www.w3.org/2000/svg">' + self.CLIP +
+               '<g clip-path="url(#c)"><text x="120" y="50">hidden</text></g></svg>')
+        assert check_figure(svg) == []
+
+
+class TestTheFrameComesFromTheRootElement:
+    """`_canvas` used to search the raw string for the first
+    `width=... height=...` pair, which is the root's only because `<svg>` is
+    written first. Nothing enforced that."""
+
+    def test_a_size_on_an_inner_element_is_not_the_frame(self):
+        from straightedge.diagrams.legibility import _canvas
+
+        svg = ('<svg xmlns="http://www.w3.org/2000/svg">'
+               '<clipPath id="c"><rect x="0" y="0" width="50" height="100"/></clipPath>'
+               '</svg>')
+        assert _canvas(svg) == (0.0, 0.0, 0.0, 0.0), "took a clip rect for the canvas"
+
+    def test_height_written_before_width_is_still_read(self):
+        from straightedge.diagrams.legibility import _canvas
+
+        svg = '<svg xmlns="http://www.w3.org/2000/svg" height="100" width="200"></svg>'
+        assert _canvas(svg) == (0.0, 0.0, 200.0, 100.0)
+
+    def test_a_unit_suffix_is_tolerated(self):
+        from straightedge.diagrams.legibility import _canvas
+
+        svg = '<svg xmlns="http://www.w3.org/2000/svg" width="200px" height="100px"></svg>'
+        assert _canvas(svg) == (0.0, 0.0, 200.0, 100.0)

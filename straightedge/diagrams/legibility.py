@@ -540,23 +540,47 @@ def _geometry(svg: str) -> tuple[list[Box], list[tuple[Box, float]]]:
 def _canvas(svg: str) -> tuple[float, float, float, float]:
     """The drawable frame as (min_x, min_y, width, height), in user units.
 
-    The ``viewBox`` wins where there is one, because it is the coordinate system
-    the content is written in — and it need not start at the origin. `graph`
-    emits ``viewBox="53.2 94.0 521.6 152.0"``: measuring its labels against a
-    frame running from 0 reported five of them past the right edge while every
-    one of them sits comfortably inside. The width and height attributes are the
-    *display* size and can differ from both.
+    Read off the root element, not scanned for out of the document text. The
+    ``viewBox`` wins where there is one, because it is the coordinate system the
+    content is written in — and it need not start at the origin. `graph` emits
+    ``viewBox="53.2 94.0 521.6 152.0"``: measuring its labels against a frame
+    running from 0 reported five of them past the right edge while every one
+    sits comfortably inside. The width and height attributes are the *display*
+    size and can differ from both.
+
+    Searching the raw string for the first ``width=...  height=...`` pair used
+    to be enough only because ``<svg>`` is written first. On a document whose
+    root carries no size, it matched the first rectangle it found instead — a
+    ``<clipPath>``'s, in the case that turned this up — and measured the whole
+    figure against a frame taken from something that is not even drawn.
     """
-    box = re.search(r'viewBox="\s*([-\d.eE]+)[,\s]+([-\d.eE]+)[,\s]+'
-                    r'([-\d.eE]+)[,\s]+([-\d.eE]+)\s*"', svg)
-    if box:
-        min_x, min_y, width, height = (float(v) for v in box.groups())
-        if width > 0 and height > 0:
-            return (min_x, min_y, width, height)
-    found = re.search(r'width="([\d.]+)"\s+height="([\d.]+)"', svg)
-    if found:
-        return (0.0, 0.0, float(found.group(1)), float(found.group(2)))
+    try:
+        root = ET.fromstring(svg)
+    except ET.ParseError:
+        return (0.0, 0.0, 0.0, 0.0)
+
+    box = (root.get("viewBox") or "").replace(",", " ").split()
+    if len(box) == 4:
+        try:
+            min_x, min_y, width, height = (float(v) for v in box)
+        except ValueError:
+            pass
+        else:
+            if width > 0 and height > 0:
+                return (min_x, min_y, width, height)
+
+    width, height = _length(root.get("width")), _length(root.get("height"))
+    if width > 0 and height > 0:
+        return (0.0, 0.0, width, height)
     return (0.0, 0.0, 0.0, 0.0)
+
+
+def _length(value: str | None) -> float:
+    """A length attribute as a number, ignoring any unit written after it."""
+    if not value:
+        return 0.0
+    found = re.match(r"\s*(-?[\d.]+(?:[eE][-+]?\d+)?)", value)
+    return float(found.group(1)) if found else 0.0
 
 
 #: A full-bleed background is not a mark, and every template draws one. Judged as
@@ -584,27 +608,16 @@ def check_figure(svg: str, *, tolerance: float | None = None) -> list[Finding]:
     drawn, truncated = _geometry(svg)
     boxes = [b for b in drawn
              if not any(hint in b.label for hint in _BACKGROUND)]
-    if not boxes:
-        return []
     # Centre on the middle of the *viewBox*, not on half its size: an origin
     # away from zero shifts every box by exactly that offset otherwise.
     half_w, half_h = min_x + width / 2, min_y + height / 2
-    centred = [
-        Box(b.label, b.x0 - half_w, b.x1 - half_w, b.y0 - half_h, b.y1 - half_h,
-            kind=b.kind,
-            path=tuple(tuple((x - half_w, y - half_h) for x, y in stroke)
-                       for stroke in b.path))
-        for b in boxes
-    ]
-    kwargs = {} if tolerance is None else {"overlap_tolerance": tolerance}
-    findings = check_boxes(centred, frame=(width, height), **kwargs)
-    # A label cut off by a clip path is cut off exactly as a label past the edge
-    # of the frame is, and the reader loses it the same way — so it is reported
-    # under the same name, at the same severity, with the boundary it ran past
-    # being the only difference. Measured on the full label rather than on the
-    # fragment left behind, and located there too, because the fragment is not
-    # where the missing glyphs were meant to be.
-    findings += [
+
+    # Built before the nothing-was-drawn return, and independent of it. A label
+    # lying *entirely* outside its clip is the worst case this check has —
+    # every glyph missing — and it is also the one that leaves no visible box
+    # behind, so hanging these findings off the box list dropped exactly the
+    # figures that needed them most.
+    clipped_away = [
         Finding("text_clipped", "error",
                 f"extends {over:.2f} units beyond the clip path it is drawn in,"
                 " so most of it may never be painted",
@@ -614,4 +627,20 @@ def check_figure(svg: str, *, tolerance: float | None = None) -> list[Finding]:
         for box, over in truncated
         if not any(hint in box.label for hint in _BACKGROUND)
     ]
-    return findings
+    if not boxes:
+        return clipped_away
+    centred = [
+        Box(b.label, b.x0 - half_w, b.x1 - half_w, b.y0 - half_h, b.y1 - half_h,
+            kind=b.kind,
+            path=tuple(tuple((x - half_w, y - half_h) for x, y in stroke)
+                       for stroke in b.path))
+        for b in boxes
+    ]
+    kwargs = {} if tolerance is None else {"overlap_tolerance": tolerance}
+    # A label cut off by a clip path is cut off exactly as a label past the edge
+    # of the frame is, and the reader loses it the same way — so it is reported
+    # under the same name, at the same severity, with the boundary it ran past
+    # being the only difference. Measured on the full label rather than on the
+    # fragment left behind, and located there too, because the fragment is not
+    # where the missing glyphs were meant to be.
+    return check_boxes(centred, frame=(width, height), **kwargs) + clipped_away
