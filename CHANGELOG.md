@@ -4,6 +4,26 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project aims to
 follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **`publish.yml` creates the GitHub Release**, not only the PyPI upload. Those
+  were two steps and only one was automated, so the Releases page skipped 0.3.0,
+  0.3.1 and 0.3.2 — all three tagged, all three on the index — and read as though
+  the project had gone from 0.2.0 straight to 0.4.0.
+
+  It runs *after* the upload, deliberately: a release announcing a version that
+  failed to publish sends people to `pip install` something that is not there,
+  while the reverse leaves a version on the index with no notes, which can be
+  fixed by hand. Prereleases are marked as such.
+- `tools/changelog_section.py`, which the step above reads its notes from. The
+  extraction is a script rather than a `sed` in the workflow because a release
+  body is the one artifact nobody proofreads before it is public: a one-liner
+  that silently emitted an empty string would publish an empty release and
+  report success. It refuses instead — on a version with no section, naming the
+  ones that exist, and on a section that is empty — and a test asserts every
+  shipped version still has notes to publish.
+
 ## [0.4.0] - 2026-08-21
 
 A minor release, and a new lane. The library is named after a tool it could not

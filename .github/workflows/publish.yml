@@ -111,8 +111,17 @@ jobs:
       # The whole point: mint the OIDC token the index checks. Without this the
       # publish fails closed rather than falling back to a password.
       id-token: write
+      # …and create the GitHub Release once the upload has succeeded.
+      contents: write
 
     steps:
+      # Before the artifact download, not after: `checkout` runs `git clean` in
+      # the workspace, which would take `dist/` with it. Only a tag needs the
+      # tree, and only for the changelog the release notes come from.
+      - name: Checkout for the changelog
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: actions/checkout@v7
+
       - uses: actions/download-artifact@v8
         with:
           name: dist
@@ -143,3 +152,29 @@ jobs:
         if: inputs.target != 'dryrun'
         with:
           repository-url: ${{ (startsWith(github.ref, 'refs/tags/') || inputs.target == 'pypi') && 'https://upload.pypi.org/legacy/' || 'https://test.pypi.org/legacy/' }}
+
+      # The Releases page skipped 0.3.0, 0.3.1 and 0.3.2 — all three tagged, all
+      # three on the index — because publishing to PyPI and announcing it were
+      # two steps and only one was automated. The page read as though the
+      # project had gone from 0.2.0 straight to 0.4.0.
+      #
+      # *After* the upload, deliberately. A release announcing a version that
+      # failed to publish sends people to `pip install` something that is not
+      # there; the reverse leaves a version on the index with no notes, which is
+      # recoverable by hand. Only a tag gets one: a manual run has no version to
+      # announce.
+      - name: Create the GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          # Refuses rather than emitting an empty body — a release nobody
+          # proofreads is the wrong place for a silently empty string.
+          python3 tools/changelog_section.py "$TAG" > notes.md
+          flag=$(python3 -c "import sys; sys.path.insert(0, '.'); \
+            from tools.changelog_section import is_prerelease; \
+            print('--prerelease' if is_prerelease(sys.argv[1]) else '')" "$TAG")
+          gh release create "$TAG" --title "$TAG" --notes-file notes.md $flag
+          echo "::notice::published release $TAG"
