@@ -24,6 +24,25 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   ones that exist, and on a section that is empty — and a test asserts every
   shipped version still has notes to publish.
 
+### Changed
+
+- The catalog now reads four more ways a template can state a parameter's type,
+  taking typed coverage from 219 of 334 parameters to 280 of 343. It previously
+  understood only `params.get("x", default)`; the lane writes
+  `params.get("x") or default` exactly as often (72 reads each), so half of
+  every parameter was published as a bare name with nothing beside it. Also read
+  now: a coercion (`float(params.get("angle") or D)` says "number" however the
+  fallback is spelled), a named default resolved to its value
+  (`or DEFAULT_WIDTH` → `640`), and a `render` that is a one-line delegation to
+  a module-level helper — two templates read their parameters there and so had
+  been reporting *no parameters at all*, which reads as a template needing no
+  input rather than one whose input is undocumented.
+
+  A published default is verified against behaviour, not just parsed: for all
+  278 of them, passing the default renders byte-identical output to omitting the
+  parameter. Both the CLI and the MCP server read the same catalog, so both
+  gained this.
+
 ## [0.4.0] - 2026-08-21
 
 A minor release, and a new lane. The library is named after a tool it could not

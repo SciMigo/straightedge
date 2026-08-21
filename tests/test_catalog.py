@@ -114,17 +114,23 @@ class TestParameters:
         assert _by_id()["calculus/derivative_tangent"].params == ["expression"]
 
     def test_a_listed_parameter_is_always_real(self):
-        """Extraction under-reports (it reads one level deep) but never invents:
-        every name it lists is a literal key in the source."""
+        """Extraction never invents: every name it lists is a literal key in
+        the source.
+
+        Searched in the defining *module*, not the template class: a template
+        may keep ``render`` as a one-line delegation to a module-level helper
+        and do all of its reading there, and extraction follows that hop.
+        """
         import inspect
         from straightedge.diagrams import DIAGRAM_REGISTRY
 
         for t in list_templates():
             if t.lane != "figure":
                 continue
-            src = inspect.getsource(type(DIAGRAM_REGISTRY[t.id]))
+            src = inspect.getsource(inspect.getmodule(DIAGRAM_REGISTRY[t.id].render))
             for name in t.params:
-                assert repr(name) in src or f'"{name}"' in src
+                assert repr(name) in src or f'"{name}"' in src, (
+                    f"{t.id} lists {name!r}, which appears nowhere in its module")
 
 
 def test_the_shape_is_stable():
@@ -153,3 +159,127 @@ def test_an_unrepresentable_default_is_omitted_not_flattened():
 
 def _parameters(template_id: str) -> list[dict]:
     return [t for t in list_templates() if t.id == template_id][0].parameters
+
+
+# --------------------------------------------------------- inference: idioms
+#
+# Module-level so `inspect.getmodule` can find them the way it finds a real
+# template. `_TYPING_*` are read by TestInference below.
+
+_TYPING_WIDTH = 640
+_TYPING_ACCENT = "#c33"
+
+
+def _typing_or_idiom(params):
+    _ = params.get("steps") or []
+    _ = params.get("gap") or 12
+    _ = params.get("label") or "untitled"
+
+
+def _typing_chained(params):
+    _ = params.get("steps") or params.get("construction") or []
+
+
+def _typing_coerced(params):
+    _ = float(params.get("angle") or _TYPING_WIDTH)
+    _ = bool(params.get("dotted"))
+    _ = int(params.get("rows", len(params.get("data") or [])))
+
+
+def _typing_named(params):
+    _ = params.get("width") or _TYPING_WIDTH
+    _ = params.get("accent") or _TYPING_ACCENT
+
+
+def _typing_delegate(params):
+    return _typing_or_idiom(params or {})
+
+
+class TestInference:
+    """What the catalog can read off a template's own code.
+
+    Each idiom below is half of how the lane actually reads parameters; a
+    reader that knows only `params.get(x, default)` publishes a name with no
+    type beside it, and a caller with no type in front of them guesses.
+    """
+
+    def _params(self, func):
+        from straightedge.catalog import _dict_get_parameters
+        return {p["name"]: p for p in _dict_get_parameters(func, receiver="params")}
+
+    def test_or_states_the_default_as_plainly_as_a_comma(self):
+        got = self._params(_typing_or_idiom)
+        assert got["steps"]["type"] == "array"
+        assert got["gap"] == {"name": "gap", "type": "number", "default": 12}
+        assert got["label"] == {"name": "label", "type": "string", "default": "untitled"}
+
+    def test_a_chain_shares_one_fallback(self):
+        got = self._params(_typing_chained)
+        assert got["steps"]["type"] == "array"
+        assert got["construction"]["type"] == "array"
+
+    def test_a_coercion_names_the_type(self):
+        got = self._params(_typing_coerced)
+        assert got["angle"]["type"] == "number"
+        assert got["dotted"]["type"] == "boolean"
+
+    def test_a_coercion_speaks_only_for_what_it_wraps(self):
+        """`int(params.get("rows", len(params.get("data") or [])))` says `rows`
+        is a number and says nothing at all about `data`."""
+        got = self._params(_typing_coerced)
+        assert got["rows"]["type"] == "number"
+        assert got["data"].get("type") != "number"
+
+    def test_a_named_default_resolves_to_its_value(self):
+        got = self._params(_typing_named)
+        assert got["width"] == {"name": "width", "type": "number", "default": 640}
+        assert got["accent"] == {"name": "accent", "type": "string", "default": "#c33"}
+
+    def test_a_one_line_delegation_is_followed(self):
+        """Otherwise the template reports no parameters at all — worse than
+        reporting them untyped, because it reads as taking no input."""
+        assert self._params(_typing_delegate).keys() == self._params(_typing_or_idiom).keys()
+
+    def test_no_figure_template_reports_zero_parameters(self):
+        from straightedge.diagrams import DIAGRAM_REGISTRY
+        for t in list_templates():
+            if t.lane != "figure":
+                continue
+            source = __import__("inspect").getsource(
+                __import__("inspect").getmodule(DIAGRAM_REGISTRY[t.id].render))
+            if "params.get(" in source or "params[" in source:
+                assert t.params, f"{t.id} reads params but publishes none"
+
+    def test_a_published_default_is_what_omitting_it_does(self):
+        """The check that keeps inference honest: if a published default were
+        guessed rather than read, passing it would not reproduce the figure
+        that leaving it out produces."""
+        import copy
+        from straightedge.diagrams import DIAGRAM_REGISTRY
+
+        checked = 0
+        for t in list_templates():
+            if t.lane != "figure":
+                continue
+            impl = DIAGRAM_REGISTRY[t.id]
+            for p in t.parameters:
+                if "default" not in p:
+                    continue
+                bare = impl.render({})
+                given = impl.render({p["name"]: copy.deepcopy(p["default"])})
+                assert bare == given, (
+                    f"{t.id}: passing the published default for {p['name']!r} "
+                    f"({p['default']!r}) does not match omitting it")
+                checked += 1
+        assert checked > 270, f"only {checked} defaults checked; extraction regressed"
+
+    def test_most_parameters_carry_a_type(self):
+        """A floor, not a target. Reading only `params.get(x, default)` typed
+        219 of 334; adding the `or`, coercion, named-constant and delegation
+        idioms took it to 280 of 343. Dropping back under this line means an
+        idiom stopped being read, which is invisible from the outside: the
+        catalog still lists the name, just with nothing beside it."""
+        figures = [t for t in list_templates() if t.lane == "figure"]
+        total = sum(len(t.params) for t in figures)
+        typed = sum(1 for t in figures for p in t.parameters if p.get("type"))
+        assert typed / total > 0.78, f"only {typed}/{total} parameters typed"
