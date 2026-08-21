@@ -13,6 +13,7 @@ than exceptions, and each render is isolated so concurrent calls cannot collide.
 from __future__ import annotations
 
 import pathlib
+import sys
 
 import pytest
 
@@ -69,6 +70,8 @@ class TestRenderGuardsBeforeSpending:
 
     def test_force_gets_past_the_refusal(self, monkeypatch, tmp_path):
         from straightedge.preconditions import Violation
+        # These mock render_scene, so the host runtime is irrelevant here.
+        monkeypatch.setattr(mcp_server, "_missing_render_runtime", lambda: [])
 
         monkeypatch.setattr(mcp_server, "_validate",
                             lambda plan: [Violation("c", "p", "boom")])
@@ -97,6 +100,9 @@ class TestRenderGuardsBeforeSpending:
         """
         import sys
         from straightedge.preconditions import Violation
+
+        # These mock render_scene, so the host runtime is irrelevant here.
+        monkeypatch.setattr(mcp_server, "_missing_render_runtime", lambda: [])
 
         monkeypatch.setattr(mcp_server, "_validate", lambda plan: [])
         seen = {}
@@ -209,13 +215,22 @@ class TestTheFigureLaneIsReachable:
         listed = {t["id"] for t in mcp_server.as_dicts() if t["lane"] == "figure"}
         assert listed == set(DIAGRAM_REGISTRY)
         for name in sorted(listed):
-            assert mcp_server._draw_payload(name, {})["ok"]
+            # Reachability, not output: a template given no parameters may
+            # legitimately have nothing to draw, and that now comes back as
+            # blank_figure. What must never happen is unknown_template.
+            out = mcp_server._guarded(lambda n=name: mcp_server._draw_payload(n, {}))
+            assert out["ok"] or out["error"]["code"] == "blank_figure", name
 
-    def test_an_empty_figure_is_reported_rather_than_hidden(self):
-        """Chrome with no data reads exactly like a successful render."""
-        result = mcp_server._draw_payload("org_chart", {"nothing": "usable"})
-        assert result["ok"] and result["blank"] is True
-        assert result["data_marks"] == 0 and result["bytes"] > 0
+    def test_an_empty_figure_is_a_failure_not_a_quiet_flag(self):
+        """Chrome with no data reads exactly like a successful render, so the
+        tool must not answer `ok: true` — it can already tell from its own mark
+        count that nothing landed."""
+        out = mcp_server._guarded(
+            lambda: mcp_server._draw_payload("org_chart", {"nothing": "usable"}))
+
+        assert out["ok"] is False
+        assert out["error"]["code"] == "blank_figure"
+        assert out["error"]["details"]["type"] == "org_chart"
 
     def test_an_unknown_id_says_so_and_lists_the_real_ones(self):
         with pytest.raises(StraightedgeError) as excinfo:
@@ -255,3 +270,116 @@ class TestTheFigureLaneIsReachable:
         import sys
         assert "manim" not in sys.modules
         assert mcp_server._draw_payload("unit_circle", {"angle": 30})["ok"]
+
+
+class TestABlankFigureIsAFailure:
+    """A template handed a value it cannot read draws its frame and no data.
+
+    That is the one failure that looks exactly like success, and the tool can
+    tell from its own mark count — so it must not answer `ok: true`.
+    """
+
+    def test_a_figure_with_no_marks_comes_back_as_an_error(self):
+        out = mcp_server._guarded(
+            lambda: mcp_server._draw_payload("unit_circle", {"angle": "pi/4"}))
+
+        assert out["ok"] is False
+        assert out["error"]["code"] == "blank_figure"
+
+    def test_the_failure_carries_the_shapes_the_caller_got_wrong(self):
+        """An agent asked for the unit circle at "pi/4"; nothing in the response
+        said `angle` is a number of degrees, so it could not correct itself."""
+        out = mcp_server._guarded(
+            lambda: mcp_server._draw_payload("unit_circle", {"angle": "pi/4"}))
+        details = out["error"]["details"]
+        angle = [p for p in details["parameters"] if p["name"] == "angle"][0]
+
+        assert angle["type"] == "number"
+        assert angle["default"] == 45
+        assert details["given"] == ["angle"]
+        assert out["error"]["remedy"]
+
+    def test_a_figure_that_draws_still_succeeds(self):
+        out = mcp_server._draw_payload("unit_circle", {"angle": 45})
+
+        assert out["ok"] is True and out["blank"] is False
+        assert out["data_marks"] > 0 and out["bytes"] > 0
+
+
+class TestTheAnimationLaneNamesWhatItNeeds:
+    def test_a_host_without_the_runtime_says_which_part_is_missing(self, monkeypatch):
+        """It failed deep in the pipeline with "Manim ran but did not produce the
+        expected file", which sends a caller to their plan rather than their host."""
+        monkeypatch.setattr(mcp_server, "_missing_render_runtime",
+                            lambda: ["manim (pip install 'straightedge[render]')"])
+        monkeypatch.setattr(mcp_server, "_plan_for", lambda *a, **k: object())
+        monkeypatch.setattr(mcp_server, "_validate", lambda plan: [])
+        out = mcp_server._guarded(
+            lambda: mcp_server._render("", "en", "l", False, template="x"))
+
+        assert out["ok"] is False
+        assert out["error"]["code"] == "dependency_missing"
+        assert "manim" in out["error"]["details"]["missing"][0]
+        assert "draw" in out["error"]["remedy"]
+
+    def test_the_check_is_per_component(self, monkeypatch):
+        monkeypatch.setattr(mcp_server.shutil, "which", lambda _b: None)
+        missing = mcp_server._missing_render_runtime()
+
+        assert any("ffmpeg" in item for item in missing)
+        assert any("LaTeX" in item for item in missing)
+
+    def test_the_whole_latex_chain_is_checked_not_just_its_headline(self, monkeypatch):
+        """Scenes use MathTex, so Manim goes LaTeX -> DVI -> SVG. A host with
+        manim, ffmpeg and latex but no dvisvgm passed the guard and still failed
+        deep in the render — the failure it exists to pre-empt."""
+        monkeypatch.setitem(sys.modules, "manim", object())
+        monkeypatch.setattr(mcp_server.shutil, "which",
+                            lambda binary: None if binary == "dvisvgm" else "/usr/bin/" + binary)
+        monkeypatch.setattr(mcp_server, "_tex_has", lambda _cls: True)
+
+        assert mcp_server._missing_render_runtime() == [
+            "dvisvgm (Manim's DVI to SVG step)"]
+
+    def test_a_tex_install_missing_the_class_the_preamble_asks_for(self, monkeypatch):
+        monkeypatch.setitem(sys.modules, "manim", object())
+        monkeypatch.setattr(mcp_server.shutil, "which", lambda binary: "/usr/bin/" + binary)
+        monkeypatch.setattr(mcp_server, "_tex_has", lambda _cls: False)
+
+        assert mcp_server._missing_render_runtime() == [
+            "standalone.cls (texlive-latex-extra)"]
+
+    def test_an_unanswerable_probe_is_not_reported_as_missing(self, monkeypatch):
+        """kpsewhich absent means unknown, not absent. Reporting a guess sends a
+        caller to install something they may already have."""
+        monkeypatch.setitem(sys.modules, "manim", object())
+        monkeypatch.setattr(
+            mcp_server.shutil, "which",
+            lambda binary: None if binary == "kpsewhich" else "/usr/bin/" + binary)
+
+        assert mcp_server._missing_render_runtime() == []
+
+    def test_a_probe_that_cannot_run_answers_unknown(self, monkeypatch):
+        def boom(*_a, **_k):
+            raise OSError("kpsewhich exploded")
+
+        monkeypatch.setattr(mcp_server.subprocess, "run", boom)
+        assert mcp_server._tex_has("standalone.cls") is True
+
+
+class TestTemplatesDeclareTheirParameterShapes:
+    def test_a_figure_template_reports_types_and_defaults(self):
+        from straightedge.catalog import list_templates
+
+        unit_circle = [t for t in list_templates() if t.id == "unit_circle"][0]
+        by_name = {p["name"]: p for p in unit_circle.parameters}
+
+        assert by_name["angle"] == {"name": "angle", "type": "number", "default": 45}
+        assert by_name["show_tan"]["type"] == "boolean"
+
+    def test_names_are_still_reported_beside_the_shapes(self):
+        from straightedge.catalog import list_templates
+
+        for template in list_templates():
+            named = {p["name"] for p in template.parameters}
+            assert set(template.params) <= named

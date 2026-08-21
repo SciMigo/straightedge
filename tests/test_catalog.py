@@ -131,4 +131,25 @@ def test_the_shape_is_stable():
     """The fields an agent parses. A rename here breaks every consumer silently."""
     t = list_templates()[0]
     assert isinstance(t, Template)
-    assert set(vars(t)) == {"id", "lane", "output", "invocation", "params", "summary"}
+    assert set(vars(t)) == {"id", "lane", "output", "invocation", "params",
+                            "parameters", "summary"}
+
+
+def test_a_collection_default_keeps_its_contents():
+    """Publishing `[]` for a matrix whose default is [[1, 0], [0, 1]] is a wrong
+    answer where no answer was available."""
+    matrix = [p for p in _parameters("matrix_transform") if p["name"] == "matrix"][0]
+    assert matrix == {"name": "matrix", "type": "array", "default": [[1, 0], [0, 1]]}
+
+
+def test_an_unrepresentable_default_is_omitted_not_flattened():
+    for template in list_templates():
+        for parameter in template.parameters:
+            if "default" in parameter:
+                assert parameter["default"] is not None
+                if parameter["type"] == "array":
+                    assert isinstance(parameter["default"], list)
+
+
+def _parameters(template_id: str) -> list[dict]:
+    return [t for t in list_templates() if t.id == template_id][0].parameters

@@ -34,6 +34,7 @@ Install: ``pip install 'straightedge[mcp]'``
 from __future__ import annotations
 
 import shutil
+import subprocess
 import sys
 import tempfile
 from dataclasses import asdict
@@ -44,7 +45,7 @@ from . import __version__
 from .catalog import as_dicts
 from .diagrams import DIAGRAM_REGISTRY, render_diagram
 from .diagrams.registry import count_data_marks
-from .errors import RequestError, StraightedgeError, UnknownTemplateError
+from .errors import BlankFigureError, RequestError, StraightedgeError, UnknownTemplateError
 from .estimate import estimate
 from .planner import build_plan
 from .preconditions import blocking, validate as _validate
@@ -160,6 +161,16 @@ def build_server():
 # --------------------------------------------------------------- tool bodies
 
 
+def _parameters_for(name: str) -> list[dict]:
+    """What the named figure template reads, with types where the code says."""
+    from .catalog import list_templates
+
+    for template in list_templates():
+        if template.id == name:
+            return template.parameters
+    return []
+
+
 def _draw_payload(diagram_type: str, params: dict | None) -> dict[str, Any]:
     """Render one figure, and say whether anything actually landed on it."""
     name = (diagram_type or "").strip()
@@ -176,6 +187,20 @@ def _draw_payload(diagram_type: str, params: dict | None) -> dict[str, Any]:
         )
     svg = render_diagram({"type": name, "params": params or {}})
     marks = count_data_marks(svg)
+    if marks == 0:
+        # The tool can tell from its own mark count that nothing landed, so
+        # `ok: true` beside zero marks would be a claim of success it has
+        # already disproved. The accepted parameters travel with the failure,
+        # because a blank figure is almost always a parameter-shape mismatch and
+        # the caller cannot fix what it cannot see: an agent asked for the unit
+        # circle at "pi/4" and got an empty result reported as fine.
+        raise BlankFigureError(
+            f"{name!r} drew no data marks",
+            remedy="Check the parameter shapes in `details.parameters` — a value "
+                   "of the wrong type is read as absent — then call draw again.",
+            details={"type": name, "given": sorted((params or {})),
+                     "parameters": _parameters_for(name)},
+        )
     return {
         "ok": True,
         "type": name,
@@ -187,10 +212,9 @@ def _draw_payload(diagram_type: str, params: dict | None) -> dict[str, Any]:
         "bytes": len(svg.encode("utf-8")),
         "characters": len(svg),
         "data_marks": marks,
-        # Reported rather than raised: an empty figure is a parameter-shape
-        # mismatch the caller can fix, and it is the caller who knows what the
-        # figure was meant to show.
-        "blank": marks == 0,
+        # Kept for callers that branch on it; it is now always False, because a
+        # figure with no marks raises BlankFigureError instead.
+        "blank": False,
     }
 
 
@@ -222,9 +246,45 @@ def _plan_payload(request: str, template: str = "",
     return {"ok": True, "plan": payload}
 
 
+def _tex_has(cls: str) -> bool:
+    """Whether this TeX installation can find one class or package file."""
+    try:
+        found = subprocess.run(["kpsewhich", cls], capture_output=True, timeout=10)
+    except (OSError, subprocess.SubprocessError):
+        return True          # cannot tell; absence of evidence is not evidence
+    return found.returncode == 0 and bool(found.stdout.strip())
+
+
+def _missing_render_runtime() -> list[str]:
+    """What the animation lane needs and this host does not have.
+
+    The whole chain, not the headline parts: scenes use MathTex, so Manim goes
+    LaTeX -> DVI -> SVG, and a host with manim, ffmpeg and latex but no dvisvgm
+    fails deep in the render — the failure this check exists to pre-empt. The
+    same is true of a TeX installation missing the class the emitted preamble
+    asks for, which is why the smoke workflow installs texlive-latex-extra.
+    """
+    missing: list[str] = []
+    try:
+        import manim  # noqa: F401
+    except ImportError:
+        missing.append("manim (pip install 'straightedge[render]')")
+    for binary, note in (("ffmpeg", "ffmpeg"),
+                         ("latex", "a LaTeX distribution"),
+                         ("dvisvgm", "dvisvgm (Manim's DVI to SVG step)")):
+        if shutil.which(binary) is None:
+            missing.append(note)
+    # Only probed when TeX is present enough to answer: kpsewhich missing means
+    # unknown, not absent, and reporting a guess would send a caller to install
+    # something they may already have.
+    if shutil.which("kpsewhich") and not _tex_has("standalone.cls"):
+        missing.append("standalone.cls (texlive-latex-extra)")
+    return missing
+
+
 def _render(request: str, language: str, quality: str, force: bool,
             template: str = "", params: dict | None = None) -> dict[str, Any]:
-    from .errors import PreconditionError, RenderError
+    from .errors import DependencyError, PreconditionError, RenderError
 
     built = _plan_for(request, template, params)
     violations = _validate(built)
@@ -236,6 +296,20 @@ def _render(request: str, language: str, quality: str, force: bool,
             remedy="Call render again with force=true to draw it anyway, or plan "
                    "a different request.",
             details={"violations": [str(v) for v in fatal]})
+
+    # After the plan is judged, before any work is spent. An invalid plan is the
+    # caller's to fix whatever this host has; a missing runtime is the host's.
+    # Without this the lane failed deep in the pipeline with "Manim ran but did
+    # not produce the expected file", which sends a caller to their plan rather
+    # than their machine — and the extra alone does not fix it, because ffmpeg
+    # and LaTeX are system packages pip cannot install.
+    missing = _missing_render_runtime()
+    if missing:
+        raise DependencyError(
+            "the animation lane needs " + ", ".join(missing),
+            remedy="Install them on this host, or use `draw` for a figure — it "
+                   "is pure standard library and needs none of them.",
+            details={"missing": missing, "lane": "animation"})
 
     # Each render gets its own directory so concurrent tool calls never clobber
     # one another's scene.py or sidecar — the isolation the library leaves to the

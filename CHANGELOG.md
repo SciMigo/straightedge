@@ -4,6 +4,44 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project aims to
 follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+- **`draw` answered `ok: true` for a figure with nothing on it.** Asked for the
+  unit circle at `"pi/4"`, it returned zero bytes, zero data marks and
+  `blank: true` — alongside `ok: true`. The mark count is the tool's own
+  evidence that nothing landed, so claiming success beside it is a claim it has
+  already disproved. A figure with no marks now raises `blank_figure`, and the
+  failure carries the parameters the template actually reads, so a caller can
+  correct it in one step rather than guess again.
+- **`render` advertised a lane this host could not run.** Without Manim it
+  failed deep in the pipeline with "Manim ran but did not produce the expected
+  file", which sends a caller to look at their plan rather than their machine.
+  It now checks the runtime once the plan has been judged — preconditions still
+  refuse first, because an invalid plan is the caller's to fix whatever the host
+  has — and names each missing piece. `pip install 'straightedge[render]'` is
+  not the whole answer either: ffmpeg and LaTeX are system packages, and the
+  error says so. The whole chain is checked rather than its headline parts —
+  scenes use `MathTex`, so Manim goes LaTeX → DVI → SVG, and a host with manim,
+  ffmpeg and latex but no `dvisvgm` failed deep in the render exactly as before.
+  A TeX installation that cannot find `standalone.cls` is reported too, and only
+  when `kpsewhich` is there to answer: absent, it means unknown rather than
+  missing, and a guess would send a caller to install what they already have.
+
+### Added
+- **Parameter shapes in the catalog.** `Template.parameters` reports each
+  parameter with its type and default where the code states one, beside the
+  existing `params` name list. Names alone are what let an agent send `"pi/4"`
+  for a field that wanted `45`: nothing in the listing said `angle` is a number
+  of degrees. Inferred from the default in `params.get(name, default)`, since
+  that is the one place a template says what it expects. A parameter read
+  without a usable default is reported by name alone rather than with a guess,
+  because saying nothing is recoverable and saying "string" about a number is
+  not — and a default whose contents cannot be read literally keeps its type and
+  drops its value, since publishing `[]` for a matrix that defaults to
+  `[[1, 0], [0, 1]]` is a wrong answer where no answer was available. The animation lane reports names only — its parameters are declared by
+  preconditions, which carry no default to read a type from.
+
 ## [0.3.2] - 2026-08-20
 
 Three review findings on 0.3.1, and the reason the second of them shipped.
