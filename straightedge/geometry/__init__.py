@@ -20,6 +20,7 @@ from __future__ import annotations
 
 from .exact import MAX_BITS, MAX_DEPTH, Exact, Tower
 from .model import (
+    Arc,
     Circle,
     Construction,
     Element,
@@ -36,6 +37,7 @@ __all__ = [
     "Point",
     "Line",
     "Circle",
+    "Arc",
     "Segment",
     "Section",
     "Polygon",

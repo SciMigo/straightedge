@@ -160,6 +160,12 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - A post, *The picture is not the proof*, and a third series on the blog. 1.618
   is right to three places, is not φ, and every checker that compares a measured
   ratio against a tolerance says it is.
+- `Arc` joins the `straightedge.geometry` namespace. It was reachable through
+  `Element.geometry` and not importable, so a caller received a type they could
+  not name or check against. The guard added with it is written against the
+  *set* of the model's exports rather than against `Arc` — a class added to the
+  model and forgotten in the package is how this one was missed, and the next
+  one would have gone the same way.
 - Four further review findings, all reproduced first:
   - **A circle was tangent to itself.** The squared identity is satisfied by a
     circle and its own copy — `d² = 0` and `r₁ = r₂` make both sides `4r⁴` — but

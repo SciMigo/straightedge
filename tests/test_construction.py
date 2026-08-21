@@ -423,3 +423,37 @@ class TestAZeroSweepArcIsRefused:
         o = c.set_point(0, 0)
         arc = c.construct_arc(o, c.set_point(200, 0), c.set_point(-200, 0))
         assert c[arc].geometry.reflex is False
+
+
+class TestThePublicNamespaceIsComplete:
+    """`Arc` was reachable through `Element.geometry` and not importable.
+
+    A type a caller receives but cannot name is a type they cannot check
+    against, and `from straightedge.geometry import Arc` failed while every
+    other geometry class worked. The test below is written against the *set*
+    rather than against `Arc`, so the next class added to the model cannot be
+    left out quietly either — which is how this one was missed.
+    """
+
+    def test_every_model_export_is_reachable_from_the_package(self):
+        from straightedge import geometry
+        from straightedge.geometry import model
+
+        missing = sorted(set(model.__all__) - set(geometry.__all__))
+        assert not missing, (
+            f"{missing} are in the model's public surface but not the "
+            f"package's — a caller receives them and cannot import them")
+
+    def test_every_advertised_name_actually_resolves(self):
+        from straightedge import geometry
+
+        for name in geometry.__all__:
+            assert hasattr(geometry, name), f"{name} is advertised and absent"
+
+    def test_arc_specifically(self):
+        from straightedge.geometry import Arc as PublicArc
+
+        c = Construction()
+        o = c.set_point(0, 0)
+        arc = c.construct_arc(o, c.set_point(1, 0), c.set_point(-1, 0))
+        assert isinstance(c[arc].geometry, PublicArc)
