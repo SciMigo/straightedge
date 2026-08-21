@@ -269,25 +269,22 @@ def _dict_get_keys(func: Callable, *, receiver: str) -> set[str]:
     context — a method is indented and a check is decorated, and both defeat a
     naive reindent. The module always parses.
     """
-    node, receiver = _followed(func, receiver)
-    if node is None:
-        return set()
-
     keys: set[str] = set()
-    for node in ast.walk(node):
-        if (isinstance(node, ast.Call)
-                and isinstance(node.func, ast.Attribute)
-                and node.func.attr == "get"
-                and _names(node.func.value) == receiver
-                and node.args
-                and isinstance(node.args[0], ast.Constant)
-                and isinstance(node.args[0].value, str)):
-            keys.add(node.args[0].value)
-        elif (isinstance(node, ast.Subscript)
-              and _names(node.value) == receiver
-              and isinstance(node.slice, ast.Constant)
-              and isinstance(node.slice.value, str)):
-            keys.add(node.slice.value)
+    for scope, inner in _scopes(func, receiver):
+        for node in ast.walk(scope):
+            if (isinstance(node, ast.Call)
+                    and isinstance(node.func, ast.Attribute)
+                    and node.func.attr == "get"
+                    and _names(node.func.value) == inner
+                    and node.args
+                    and isinstance(node.args[0], ast.Constant)
+                    and isinstance(node.args[0].value, str)):
+                keys.add(node.args[0].value)
+            elif (isinstance(node, ast.Subscript)
+                  and _names(node.value) == inner
+                  and isinstance(node.slice, ast.Constant)
+                  and isinstance(node.slice.value, str)):
+                keys.add(node.slice.value)
     return keys
 
 
@@ -383,78 +380,79 @@ def _dict_get_parameters(func: Callable, *, receiver: str) -> list[dict]:
     a usable default is reported with its name alone rather than a guess: saying
     nothing is recoverable, and saying "string" about a number is not.
     """
-    root, inner = _followed(func, receiver)
-    if root is None:
+    scopes = _scopes(func, receiver)
+    if not scopes:
         return []
-    consts = _module_consts(func, root)
+    consts = _module_consts(func, scopes[0][0])
     found: dict[str, dict] = {}
-    for node in ast.walk(root):
-        if not (isinstance(node, ast.Call)
-                and isinstance(node.func, ast.Attribute)
-                and node.func.attr == "get"
-                and _names(node.func.value) == inner
-                and node.args
-                and isinstance(node.args[0], ast.Constant)
-                and isinstance(node.args[0].value, str)):
-            continue
-        name = node.args[0].value
-        entry = found.setdefault(name, {"name": name})
-        if "type" in entry or len(node.args) < 2:
-            continue
-        shape = _default_shape(node.args[1], consts)
-        if shape:
-            entry["type"] = shape[0]
-            if shape[1] is not _OMIT:
-                entry["default"] = shape[1]
-    # `params.get("x") or []` states its default just as plainly as
-    # `params.get("x", [])` does — it is simply to the right of the `or`, where
-    # the walk above was not looking. Half of every parameter read in the lane
-    # is written this way (72 of 144), so reading only the two-argument form
-    # left most templates publishing names with no types at all: an agent could
-    # see that `angle` exists and nothing saying it is a number of degrees,
-    # which is how one came to send "pi/4".
-    for node in ast.walk(root):
-        if not (isinstance(node, ast.BoolOp) and isinstance(node.op, ast.Or)):
-            continue
-        fallback = node.values[-1]
-        shape = _default_shape(fallback, consts)
-        if not shape:
-            continue
-        # Every get in the chain shares the one fallback:
-        # `params.get("steps") or params.get("construction") or []`.
-        for value in node.values[:-1]:
-            name = _get_key(value, inner)
-            if name is None:
+    for root, inner in scopes:
+        for node in ast.walk(root):
+            if not (isinstance(node, ast.Call)
+                    and isinstance(node.func, ast.Attribute)
+                    and node.func.attr == "get"
+                    and _names(node.func.value) == inner
+                    and node.args
+                    and isinstance(node.args[0], ast.Constant)
+                    and isinstance(node.args[0].value, str)):
                 continue
+            name = node.args[0].value
             entry = found.setdefault(name, {"name": name})
-            if "type" in entry:
+            if "type" in entry or len(node.args) < 2:
                 continue
-            entry["type"] = shape[0]
-            if shape[1] is not _OMIT:
-                entry["default"] = shape[1]
+            shape = _default_shape(node.args[1], consts)
+            if shape:
+                entry["type"] = shape[0]
+                if shape[1] is not _OMIT:
+                    entry["default"] = shape[1]
+        # `params.get("x") or []` states its default just as plainly as
+        # `params.get("x", [])` does — it is simply to the right of the `or`, where
+        # the walk above was not looking. Half of every parameter read in the lane
+        # is written this way (72 of 144), so reading only the two-argument form
+        # left most templates publishing names with no types at all: an agent could
+        # see that `angle` exists and nothing saying it is a number of degrees,
+        # which is how one came to send "pi/4".
+        for node in ast.walk(root):
+            if not (isinstance(node, ast.BoolOp) and isinstance(node.op, ast.Or)):
+                continue
+            fallback = node.values[-1]
+            shape = _default_shape(fallback, consts)
+            if not shape:
+                continue
+            # Every get in the chain shares the one fallback:
+            # `params.get("steps") or params.get("construction") or []`.
+            for value in node.values[:-1]:
+                name = _get_key(value, inner)
+                if name is None:
+                    continue
+                entry = found.setdefault(name, {"name": name})
+                if "type" in entry:
+                    continue
+                entry["type"] = shape[0]
+                if shape[1] is not _OMIT:
+                    entry["default"] = shape[1]
 
-    # `float(params.get("angle") or DEFAULT)` names the type outright, and does
-    # it more firmly than any default can: the coercion is what the template
-    # *enforces*, whatever the fallback turns out to be. This is the read that
-    # answers "is `angle` degrees or radians?" with "it is a number" instead of
-    # with silence — the silence a caller filled in with `pi/4`.
-    for node in ast.walk(root):
-        if not (isinstance(node, ast.Call)
-                and isinstance(node.func, ast.Name)
-                and node.func.id in _COERCIONS
-                and node.args):
-            continue
-        # Only gets sitting directly under the coercion: in
-        # `int(params.get("rows", len(params.get("data") or [])))` the coercion
-        # speaks for `rows`, and says nothing whatever about `data`.
-        arg = node.args[0]
-        direct = (arg.values if isinstance(arg, ast.BoolOp)
-                  and isinstance(arg.op, ast.Or) else [arg])
-        for value in direct:
-            name = _get_key(value, inner)
-            if name is None:
+        # `float(params.get("angle") or DEFAULT)` names the type outright, and does
+        # it more firmly than any default can: the coercion is what the template
+        # *enforces*, whatever the fallback turns out to be. This is the read that
+        # answers "is `angle` degrees or radians?" with "it is a number" instead of
+        # with silence — the silence a caller filled in with `pi/4`.
+        for node in ast.walk(root):
+            if not (isinstance(node, ast.Call)
+                    and isinstance(node.func, ast.Name)
+                    and node.func.id in _COERCIONS
+                    and node.args):
                 continue
-            found.setdefault(name, {"name": name})["type"] = _COERCIONS[node.func.id]
+            # Only gets sitting directly under the coercion: in
+            # `int(params.get("rows", len(params.get("data") or [])))` the coercion
+            # speaks for `rows`, and says nothing whatever about `data`.
+            arg = node.args[0]
+            direct = (arg.values if isinstance(arg, ast.BoolOp)
+                      and isinstance(arg.op, ast.Or) else [arg])
+            for value in direct:
+                name = _get_key(value, inner)
+                if name is None:
+                    continue
+                found.setdefault(name, {"name": name})["type"] = _COERCIONS[node.func.id]
 
     for name in _dict_get_keys(func, receiver=receiver):
         found.setdefault(name, {"name": name})
@@ -486,55 +484,59 @@ def _names(node) -> str | None:
 _MODULE_CACHE: dict[str, ast.Module] = {}
 
 
-def _followed(func: Callable, receiver: str) -> tuple[ast.AST | None, str]:
-    """The node that really reads the params, and the name it reads them under.
+def _scopes(func: Callable, receiver: str) -> list[tuple[ast.AST, str]]:
+    """Every function that reads the params dict, and the name each reads it under.
 
-    A template may keep ``render`` as a one-line delegation to a module-level
-    helper — ``return _render(params or {})`` — and then do all of its reading
-    there. Walking ``render`` alone reports such a template as taking *no
-    parameters at all*, which is worse than reporting them untyped: an agent
-    sees a template that appears to need no input and calls it bare.
+    A template need not do its reading in ``render``. Some hand the dict
+    straight on — ``return _render(params or {})`` — and some keep ``render``
+    as an outline that calls ``_normalise_components(params)``,
+    ``_tasks_from_params(params)`` and so on. Walking ``render`` alone reported
+    the first kind as taking *no parameters at all* (worse than untyped: it
+    reads as a template needing no input) and silently dropped whole parameters
+    from the second — `gantt` never listed `tasks`, which is the only parameter
+    it really has.
 
-    So follow the hop, and follow it by position: the helper is free to call its
-    argument something else, and the receiver name we look for downstream is
-    whatever the callee named the parameter the dict was passed into.
+    So collect the whole set, and follow each hand-off by position: a helper is
+    free to call its argument something else, and the name to look for
+    downstream is whatever *it* called the parameter the dict arrived in.
     """
-    node = _func_node(func)
-    if node is None:
-        return None, receiver
+    root = _func_node(func)
+    if root is None:
+        return []
     module = inspect.getmodule(func)
     tree = _MODULE_CACHE.get(module.__name__) if module is not None else None
     if tree is None:
-        return node, receiver
+        return [(root, receiver)]
 
-    seen: set[str] = set()
-    while True:
-        body = [stmt for stmt in node.body
-                if not (isinstance(stmt, ast.Expr)
-                        and isinstance(stmt.value, ast.Constant)
-                        and isinstance(stmt.value.value, str))]
-        if len(body) != 1 or not isinstance(body[0], ast.Return):
-            return node, receiver
-        call = body[0].value
-        if not (isinstance(call, ast.Call) and isinstance(call.func, ast.Name)):
-            return node, receiver
-        name = call.func.id
-        if name in seen:  # a cycle: stop where we are rather than spin
-            return node, receiver
-        index = next(
-            (i for i, arg in enumerate(call.args)
-             if receiver in {n.id for n in ast.walk(arg) if isinstance(n, ast.Name)}),
-            None)
-        if index is None:
-            return node, receiver
-        target = next(
-            (n for n in tree.body
-             if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)) and n.name == name),
-            None)
-        if target is None or index >= len(target.args.args):
-            return node, receiver
-        seen.add(name)
-        node, receiver = target, target.args.args[index].arg
+    module_functions = {n.name: n for n in tree.body
+                        if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))}
+    scopes: list[tuple[ast.AST, str]] = [(root, receiver)]
+    seen: set[tuple[str, str]] = set()
+    queue = list(scopes)
+    while queue:
+        node, name_here = queue.pop(0)
+        for call in ast.walk(node):
+            if not (isinstance(call, ast.Call) and isinstance(call.func, ast.Name)):
+                continue
+            target = module_functions.get(call.func.id)
+            if target is None:
+                continue
+            # Which argument carries the dict? `_render(params or {})` passes it
+            # inside an expression, so look for the name anywhere in the argument.
+            index = next(
+                (i for i, arg in enumerate(call.args)
+                 if name_here in {n.id for n in ast.walk(arg) if isinstance(n, ast.Name)}),
+                None)
+            if index is None or index >= len(target.args.args):
+                continue
+            inner = target.args.args[index].arg
+            key = (target.name, inner)
+            if key in seen:  # recursion, or two call sites of the same helper
+                continue
+            seen.add(key)
+            scopes.append((target, inner))
+            queue.append((target, inner))
+    return scopes
 
 
 def _func_node(func: Callable) -> ast.AST | None:

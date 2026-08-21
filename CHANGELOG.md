@@ -26,17 +26,21 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
-- The catalog now reads four more ways a template can state a parameter's type,
-  taking typed coverage from 219 of 334 parameters to 280 of 343. It previously
+- The catalog now reads five more ways a template can state a parameter's type,
+  taking typed coverage from 219 of 334 parameters to 290 of 365. It previously
   understood only `params.get("x", default)`; the lane writes
   `params.get("x") or default` exactly as often (72 reads each), so half of
   every parameter was published as a bare name with nothing beside it. Also read
   now: a coercion (`float(params.get("angle") or D)` says "number" however the
   fallback is spelled), a named default resolved to its value
-  (`or DEFAULT_WIDTH` → `640`), and a `render` that is a one-line delegation to
-  a module-level helper — two templates read their parameters there and so had
-  been reporting *no parameters at all*, which reads as a template needing no
-  input rather than one whose input is undocumented.
+  (`or DEFAULT_WIDTH` → `640`), and any module-level helper the template hands
+  the params dict to, followed by position so a helper may rename it. That last
+  one closed real gaps rather than only untyped ones: two templates did all
+  their reading in a delegated `_render` and so reported *no parameters at all*
+  (which reads as a template needing no input, not one whose input is
+  undocumented), and four more kept `render` as an outline over helpers like
+  `_tasks_from_params(params)` — `gantt` had never listed `tasks`, the only
+  parameter it really has.
 
   A published default is verified against behaviour, not just parsed: for all
   278 of them, passing the default renders byte-identical output to omitting the

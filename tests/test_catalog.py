@@ -195,6 +195,18 @@ def _typing_delegate(params):
     return _typing_or_idiom(params or {})
 
 
+def _typing_side(settings):
+    """Called with the params dict under a different name."""
+    _ = settings.get("accent") or "#333"
+
+
+def _typing_outline(params):
+    """`render` as an outline: the reads live in the helpers it calls."""
+    _ = _typing_side(params)
+    _ = _typing_or_idiom(params)
+    _ = params.get("caption") or ""
+
+
 class TestInference:
     """What the catalog can read off a template's own code.
 
@@ -240,6 +252,25 @@ class TestInference:
         reporting them untyped, because it reads as taking no input."""
         assert self._params(_typing_delegate).keys() == self._params(_typing_or_idiom).keys()
 
+    def test_helpers_that_take_the_params_dict_are_read_too(self):
+        """`render` is often an outline calling `_tasks_from_params(params)`.
+        Reading only `render` dropped whole parameters -- `gantt` never listed
+        `tasks`, the only parameter it really has."""
+        got = self._params(_typing_outline)
+        assert {"caption", "accent", "steps", "gap", "label"} <= got.keys()
+        assert got["accent"]["type"] == "string", "the helper renamed it; follow by position"
+
+    def test_a_helper_is_followed_by_position_not_by_name(self):
+        got = self._params(_typing_side)
+        assert "accent" not in got, "receiver is `settings` here, not `params`"
+
+    def test_the_lane_really_gained_those(self):
+        by_id = {t.id: t for t in list_templates()}
+        assert "tasks" in by_id["gantt"].params
+        assert "accounts" in by_id["t_account"].params
+        assert "components" in by_id["architecture_diagram"].params
+        assert "columns" in by_id["comparison"].params
+
     def test_no_figure_template_reports_zero_parameters(self):
         from straightedge.diagrams import DIAGRAM_REGISTRY
         for t in list_templates():
@@ -275,8 +306,8 @@ class TestInference:
 
     def test_most_parameters_carry_a_type(self):
         """A floor, not a target. Reading only `params.get(x, default)` typed
-        219 of 334; adding the `or`, coercion, named-constant and delegation
-        idioms took it to 280 of 343. Dropping back under this line means an
+        219 of 334; adding the `or`, coercion, named-constant, delegation and
+        helper-scope idioms took it to 290 of 365. Dropping back under this line means an
         idiom stopped being read, which is invisible from the outside: the
         catalog still lists the name, just with nothing beside it."""
         figures = [t for t in list_templates() if t.lane == "figure"]
