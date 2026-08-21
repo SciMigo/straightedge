@@ -313,3 +313,63 @@ class TestDefinitionsAreNotInk:
         svg = _svg('<defs><marker id="a"><polygon points="0 0, 8 3, 0 6"/></marker></defs>'
                    '<text x="20" y="50" font-size="10">label</text>')
         assert not [b for b in boxes_from_svg(svg) if b.label == "polygon"]
+
+
+class TestClipsAreHonoured:
+    """A `clip-path` on a visible group is not decoration: the browser paints
+    only what falls inside it. `matrix_transform` puts its transformed grid in
+    `<g clip-path="url(#clip-240)">` and lets the lines run well past the panel,
+    which is exactly right on screen and produced eighteen warnings about ink
+    that is never drawn."""
+
+    def test_a_clipped_line_is_measured_only_where_it_shows(self):
+        svg = _svg('<clipPath id="c"><rect x="0" y="0" width="50" height="50"/></clipPath>'
+                   '<g clip-path="url(#c)"><line x1="10" y1="10" x2="400" y2="10"/></g>')
+        box = next(b for b in boxes_from_svg(svg) if b.label == "line")
+        assert box.x1 == 50, f"line measured out to {box.x1}, past its clip"
+
+    def test_geometry_wholly_outside_its_clip_is_not_ink(self):
+        svg = _svg('<clipPath id="c"><rect x="0" y="0" width="50" height="50"/></clipPath>'
+                   '<g clip-path="url(#c)"><line x1="100" y1="80" x2="180" y2="90"/></g>')
+        assert not [b for b in boxes_from_svg(svg) if b.label == "line"]
+
+    def test_an_unclipped_line_past_the_frame_is_still_reported(self):
+        """The fix must not become a way of not looking: ink that really does
+        leave the frame still leaves it."""
+        svg = _svg('<text x="20" y="50" font-size="10">label</text>'
+                   '<line x1="10" y1="10" x2="400" y2="90"/>')
+        assert [f for f in check_figure(svg) if f.check == "out_of_frame"]
+
+    def test_a_clipped_line_and_an_unclipped_one_are_told_apart(self):
+        """The same line, drawn twice: only the clipped one is invisible out
+        past the panel, and only it should go unreported. (Both slope, because
+        `qc` skips a zero-area box and a level line has none.)"""
+        line = '<line x1="10" y1="10" x2="400" y2="90"/>'
+        clip = '<clipPath id="c"><rect x="0" y="0" width="50" height="50"/></clipPath>'
+        label = '<text x="20" y="50" font-size="10">label</text>'
+        bare = check_figure(_svg(label + line))
+        clipped = check_figure(_svg(clip + label + f'<g clip-path="url(#c)">{line}</g>'))
+        assert [f for f in bare if f.check == "out_of_frame"]
+        assert not [f for f in clipped if f.check == "out_of_frame"]
+
+    def test_a_clip_is_resolved_in_the_space_of_the_element_using_it(self):
+        svg = _svg('<clipPath id="c"><rect x="0" y="0" width="50" height="50"/></clipPath>'
+                   '<g transform="translate(100 0)" clip-path="url(#c)">'
+                   '<line x1="0" y1="10" x2="400" y2="10"/></g>')
+        box = next(b for b in boxes_from_svg(svg) if b.label == "line")
+        assert (box.x0, box.x1) == (100.0, 150.0), f"clip landed at {box.x0}..{box.x1}"
+
+    def test_a_clip_this_module_cannot_represent_draws_nothing(self):
+        """Rather than measuring the whole thing and reporting on pixels that
+        are clipped away."""
+        svg = _svg('<clipPath id="c"><circle cx="25" cy="25" r="25"/></clipPath>'
+                   '<g clip-path="url(#c)"><line x1="10" y1="10" x2="400" y2="10"/></g>')
+        assert not [b for b in boxes_from_svg(svg) if b.label == "line"]
+
+    def test_nested_clips_intersect(self):
+        svg = _svg('<clipPath id="a"><rect x="0" y="0" width="80" height="80"/></clipPath>'
+                   '<clipPath id="b"><rect x="0" y="0" width="40" height="80"/></clipPath>'
+                   '<g clip-path="url(#a)"><g clip-path="url(#b)">'
+                   '<line x1="0" y1="10" x2="400" y2="10"/></g></g>')
+        box = next(b for b in boxes_from_svg(svg) if b.label == "line")
+        assert box.x1 == 40

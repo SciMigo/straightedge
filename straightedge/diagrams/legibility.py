@@ -343,7 +343,113 @@ def _mapped(box: Box, matrix) -> Box:
                           for stroke in box.path))
 
 
-def _collect(node, matrix, boxes, styles, unfilled) -> None:
+
+def _clip_shapes(root) -> dict:
+    """``id`` -> the rectangle a ``<clipPath>`` clips to, or ``None`` if it is
+    one this module cannot represent.
+
+    Only a single rectangle is understood, which is every clip the lane draws.
+    A clip made of anything else maps to ``None``, and geometry under it is
+    omitted rather than measured: reporting a line's full length when the figure
+    only ever shows the part inside the panel is a finding about pixels that are
+    never drawn.
+
+    A rounded corner (``rx``) is ignored — the few units it would trim cannot
+    turn a legible label illegible.
+    """
+    found = {}
+    for node in root.iter():
+        if node.tag.replace(_SVG, "") != "clipPath":
+            continue
+        name = node.get("id")
+        if not name:
+            continue
+        children = [c for c in node if c.tag.replace(_SVG, "") not in ("title", "desc")]
+        rect = children[0] if len(children) == 1 else None
+        if rect is None or rect.tag.replace(_SVG, "") != "rect":
+            found[name] = None
+            continue
+        try:
+            x, y = float(rect.get("x", "0")), float(rect.get("y", "0"))
+            w, h = float(rect.get("width", "0")), float(rect.get("height", "0"))
+        except ValueError:
+            found[name] = None
+            continue
+        found[name] = (x, y, x + w, y + h)
+    return found
+
+
+_CLIP_REF = re.compile(r"url\(#([^)]+)\)")
+
+
+def _intersect(a, b):
+    if a is None:
+        return b
+    if b is None:
+        return a
+    box = (max(a[0], b[0]), max(a[1], b[1]), min(a[2], b[2]), min(a[3], b[3]))
+    return box if box[0] < box[2] and box[1] < box[3] else _EMPTY
+
+
+_EMPTY = (0.0, 0.0, 0.0, 0.0)
+
+
+def _clip_segment(p, q, clip):
+    """Liang-Barsky: the part of segment ``p``-``q`` inside ``clip``, or None."""
+    x0, y0 = p
+    x1, y1 = q
+    dx, dy = x1 - x0, y1 - y0
+    t0, t1 = 0.0, 1.0
+    for denom, numer in ((-dx, x0 - clip[0]), (dx, clip[2] - x0),
+                         (-dy, y0 - clip[1]), (dy, clip[3] - y0)):
+        if denom == 0:
+            if numer < 0:
+                return None
+            continue
+        t = numer / denom
+        if denom < 0:
+            if t > t1:
+                return None
+            t0 = max(t0, t)
+        else:
+            if t < t0:
+                return None
+            t1 = min(t1, t)
+    if t0 > t1:
+        return None
+    return ((x0 + t0 * dx, y0 + t0 * dy), (x0 + t1 * dx, y0 + t1 * dy))
+
+
+def _clipped(box: Box, clip) -> Box | None:
+    """``box`` reduced to the part the figure actually shows."""
+    if clip is None:
+        return box
+    x0, x1 = max(box.x0, clip[0]), min(box.x1, clip[2])
+    y0, y1 = max(box.y0, clip[1]), min(box.y1, clip[3])
+    if x0 > x1 or y0 > y1:
+        return None
+    strokes = []
+    for stroke in box.path:
+        kept: list[tuple[float, float]] = []
+        for start, end in zip(stroke, stroke[1:]):
+            piece = _clip_segment(start, end, clip)
+            if piece is None:
+                continue
+            if kept and kept[-1] == piece[0]:
+                kept.append(piece[1])
+            else:
+                kept.extend(piece)
+        if len(stroke) == 1 and clip[0] <= stroke[0][0] <= clip[2] \
+                and clip[1] <= stroke[0][1] <= clip[3]:
+            kept = list(stroke)
+        if kept:
+            strokes.append(tuple(kept))
+    if box.path and not strokes:
+        return None
+    return Box(box.label, x0, x1, y0, y1, kind=box.kind, path=tuple(strokes))
+
+
+def _collect(node, matrix, boxes, styles, unfilled, clips, clip=None) -> None:
     for child in node:
         tag = child.tag.replace(_SVG, "")
         if tag in _DEFINITIONS:
@@ -352,11 +458,31 @@ def _collect(node, matrix, boxes, styles, unfilled) -> None:
         if here is None:  # unsupported transform: omit rather than misplace
             continue
         here = _compose(matrix, here)
+
+        # The clip is resolved in the user space of the element referencing it,
+        # which is the space its own transform establishes — so map it with the
+        # composed matrix, not the inherited one.
+        active = clip
+        reference = _CLIP_REF.search(child.get("clip-path") or "")
+        if reference:
+            shape = clips.get(reference.group(1), None)
+            if shape is None:
+                continue  # a clip this module cannot represent: draw nothing
+            corners = [_point(here, x, y)
+                       for x in (shape[0], shape[2]) for y in (shape[1], shape[3])]
+            xs = [c[0] for c in corners]
+            ys = [c[1] for c in corners]
+            active = _intersect(active, (min(xs), min(ys), max(xs), max(ys)))
+        if active is _EMPTY:
+            continue
+
         box = (_text_box(child, styles) if tag == "text"
                else _shape_box(child, unfilled) if tag in _SHAPES else None)
         if box is not None:
-            boxes.append(_mapped(box, here))
-        _collect(child, here, boxes, styles, unfilled)
+            visible = _clipped(_mapped(box, here), active)
+            if visible is not None:
+                boxes.append(visible)
+        _collect(child, here, boxes, styles, unfilled, clips, active)
 
 
 def boxes_from_svg(svg: str) -> list[Box]:
@@ -368,7 +494,8 @@ def boxes_from_svg(svg: str) -> list[Box]:
     except ET.ParseError:
         return []
     boxes: list[Box] = []
-    _collect(root, _IDENTITY, boxes, styles_from_svg(svg), unfilled_classes(svg))
+    _collect(root, _IDENTITY, boxes, styles_from_svg(svg), unfilled_classes(svg),
+             _clip_shapes(root))
     return boxes
 
 
