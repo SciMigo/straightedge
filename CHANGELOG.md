@@ -4,7 +4,24 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project aims to
 follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.4.0] - 2026-08-21
+
+A minor release, and a new lane. The library is named after a tool it could not
+draw with; this is that tool — compass-and-straightedge constructions computed
+in exact arithmetic, able to assert what they demonstrate and refused when the
+assertion is false.
+
+That refusal is the point. `preconditions` validates a plan's shape, `qc`
+measures a rendered frame, `labels` checks translation — and none of them can
+tell you that the line you drew through two circle intersections *is* the
+perpendicular bisector. This decides that, and draws the conventional marks for
+the claims it decided, so a right-angle square on the figure is evidence rather
+than decoration.
+
+New public surface: `Construction`, `Exact`, `Tower`, `PrecisionError`, the
+`straightedge.geometry` namespace, a `construction` figure template, the
+`verify_construction` MCP tool and a `draw` CLI command. Nothing was removed;
+code written against 0.3.2 keeps working.
 
 ### Fixed
 - The exact kernel's bit ceiling was not enforced on plain rationals. `__add__`,
