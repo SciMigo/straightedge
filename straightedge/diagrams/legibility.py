@@ -30,6 +30,7 @@ resolve to rather than the width this host happens to render.
 
 from __future__ import annotations
 
+import math
 import re
 import xml.etree.ElementTree as ET
 from typing import Iterable
@@ -267,6 +268,97 @@ def _points_attr(raw: str) -> list[tuple[float, float]]:
     return list(zip(numbers[::2], numbers[1::2]))
 
 
+
+#: Subtrees that describe geometry rather than draw it. A `<marker>` is stamped
+#: where an arrow references it, a `<clipPath>` bounds what shows through — none
+#: of it is ink at the coordinates it is written at. Counting them made a
+#: clip-path rectangle "cover" the text beneath it, which was a finding about
+#: nothing.
+_DEFINITIONS = ("defs", "clipPath", "marker", "mask", "symbol", "pattern")
+
+_SHAPES = ("rect", "circle", "ellipse", "line", "path", "polyline", "polygon")
+
+#: An affine as SVG writes it: (a, b, c, d, e, f) for [[a c e], [b d f]].
+_IDENTITY = (1.0, 0.0, 0.0, 1.0, 0.0, 0.0)
+
+
+def _compose(outer, inner):
+    a, b, c, d, e, f = outer
+    a2, b2, c2, d2, e2, f2 = inner
+    return (a * a2 + c * b2, b * a2 + d * b2,
+            a * c2 + c * d2, b * c2 + d * d2,
+            a * e2 + c * f2 + e, b * e2 + d * f2 + f)
+
+
+def _transform_of(value: str | None):
+    """One element's ``transform`` attribute as an affine.
+
+    A rotated label is the case that matters: the step-function y-axis title is
+    written horizontally and turned a quarter turn, so measuring it where the
+    x/y say it sits reports a long horizontal label hanging off the frame. It is
+    a tall narrow one sitting comfortably inside.
+    """
+    if not value:
+        return _IDENTITY
+    matrix = _IDENTITY
+    for name, raw in re.findall(r"([a-zA-Z]+)\s*\(([^)]*)\)", value):
+        n = [float(v) for v in _NUMBER.findall(raw)]
+        if name == "translate" and n:
+            step = (1.0, 0.0, 0.0, 1.0, n[0], n[1] if len(n) > 1 else 0.0)
+        elif name == "scale" and n:
+            step = (n[0], 0.0, 0.0, n[1] if len(n) > 1 else n[0], 0.0, 0.0)
+        elif name == "rotate" and n:
+            rad = math.radians(n[0])
+            cos, sin = math.cos(rad), math.sin(rad)
+            step = (cos, sin, -sin, cos, 0.0, 0.0)
+            if len(n) >= 3:  # rotate about a point, not the origin
+                cx, cy = n[1], n[2]
+                step = _compose((1.0, 0.0, 0.0, 1.0, cx, cy),
+                                _compose(step, (1.0, 0.0, 0.0, 1.0, -cx, -cy)))
+        elif name == "matrix" and len(n) >= 6:
+            step = tuple(n[:6])
+        else:
+            # An unsupported transform (skew) would be measured wrongly, and a
+            # wrong finding is worse than a missing one.
+            return None
+        matrix = _compose(matrix, step)
+    return matrix
+
+
+def _point(matrix, x: float, y: float) -> tuple[float, float]:
+    a, b, c, d, e, f = matrix
+    return (a * x + c * y + e, b * x + d * y + f)
+
+
+def _mapped(box: Box, matrix) -> Box:
+    """``box`` in the coordinates it is actually painted in."""
+    if matrix == _IDENTITY:
+        return box
+    corners = [_point(matrix, x, y)
+               for x in (box.x0, box.x1) for y in (box.y0, box.y1)]
+    xs = [p[0] for p in corners]
+    ys = [p[1] for p in corners]
+    return Box(box.label, min(xs), max(xs), min(ys), max(ys), kind=box.kind,
+               path=tuple(tuple(_point(matrix, x, y) for x, y in stroke)
+                          for stroke in box.path))
+
+
+def _collect(node, matrix, boxes, styles, unfilled) -> None:
+    for child in node:
+        tag = child.tag.replace(_SVG, "")
+        if tag in _DEFINITIONS:
+            continue
+        here = _transform_of(child.get("transform"))
+        if here is None:  # unsupported transform: omit rather than misplace
+            continue
+        here = _compose(matrix, here)
+        box = (_text_box(child, styles) if tag == "text"
+               else _shape_box(child, unfilled) if tag in _SHAPES else None)
+        if box is not None:
+            boxes.append(_mapped(box, here))
+        _collect(child, here, boxes, styles, unfilled)
+
+
 def boxes_from_svg(svg: str) -> list[Box]:
     """Every drawn element of an emitted figure, as boxes the checker understands."""
     if not svg or not svg.strip().startswith("<svg"):
@@ -276,25 +368,30 @@ def boxes_from_svg(svg: str) -> list[Box]:
     except ET.ParseError:
         return []
     boxes: list[Box] = []
-    styles = styles_from_svg(svg)
-    unfilled = unfilled_classes(svg)
-    for node in root.iter():
-        tag = node.tag.replace(_SVG, "")
-        if tag == "text":
-            box = _text_box(node, styles)
-        elif tag in ("rect", "circle", "ellipse", "line", "path", "polyline",
-                     "polygon"):
-            box = _shape_box(node, unfilled)
-        else:
-            continue
-        if box is not None:
-            boxes.append(box)
+    _collect(root, _IDENTITY, boxes, styles_from_svg(svg), unfilled_classes(svg))
     return boxes
 
 
-def _canvas(svg: str) -> tuple[float, float]:
+def _canvas(svg: str) -> tuple[float, float, float, float]:
+    """The drawable frame as (min_x, min_y, width, height), in user units.
+
+    The ``viewBox`` wins where there is one, because it is the coordinate system
+    the content is written in — and it need not start at the origin. `graph`
+    emits ``viewBox="53.2 94.0 521.6 152.0"``: measuring its labels against a
+    frame running from 0 reported five of them past the right edge while every
+    one of them sits comfortably inside. The width and height attributes are the
+    *display* size and can differ from both.
+    """
+    box = re.search(r'viewBox="\s*([-\d.eE]+)[,\s]+([-\d.eE]+)[,\s]+'
+                    r'([-\d.eE]+)[,\s]+([-\d.eE]+)\s*"', svg)
+    if box:
+        min_x, min_y, width, height = (float(v) for v in box.groups())
+        if width > 0 and height > 0:
+            return (min_x, min_y, width, height)
     found = re.search(r'width="([\d.]+)"\s+height="([\d.]+)"', svg)
-    return (float(found.group(1)), float(found.group(2))) if found else (0.0, 0.0)
+    if found:
+        return (0.0, 0.0, float(found.group(1)), float(found.group(2)))
+    return (0.0, 0.0, 0.0, 0.0)
 
 
 #: A full-bleed background is not a mark, and every template draws one. Judged as
@@ -316,14 +413,16 @@ def check_figure(svg: str, *, tolerance: float | None = None) -> list[Finding]:
     Everything else — the collapsing, the severities, the wording — is the
     checker's, unchanged.
     """
-    width, height = _canvas(svg)
+    min_x, min_y, width, height = _canvas(svg)
     if width <= 0 or height <= 0:
         return []
     boxes = [b for b in boxes_from_svg(svg)
              if not any(hint in b.label for hint in _BACKGROUND)]
     if not boxes:
         return []
-    half_w, half_h = width / 2, height / 2
+    # Centre on the middle of the *viewBox*, not on half its size: an origin
+    # away from zero shifts every box by exactly that offset otherwise.
+    half_w, half_h = min_x + width / 2, min_y + height / 2
     centred = [
         Box(b.label, b.x0 - half_w, b.x1 - half_w, b.y0 - half_h, b.y1 - half_h,
             kind=b.kind,

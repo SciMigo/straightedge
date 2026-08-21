@@ -11,7 +11,18 @@ registered template. It found fourteen errors on the first run, in six templates
 including the two label collisions in ``unit_circle`` and the unclipped geometry
 in ``matrix_transform`` that a human reviewer had just reported by eye.
 
-Those six are listed in :data:`KNOWN_ILLEGIBLE` and the list is **strict**: a
+Six of those fourteen were the checker's own fault, and review caught it: it
+measured every figure against a frame starting at the origin though a ``viewBox``
+need not, and it measured a rotated label where an unrotated one would sit. Both
+produced confident coordinates for text that was never outside anything. Eight
+errors in four templates remain, and those are real.
+
+That is the argument for the strict list rather than a threshold. A count that
+may drift down for two reasons — a template being fixed, or the checker being
+wrong — tells you nothing when it moves; a named list that fails when an entry
+starts passing makes you look at which happened.
+
+Those four are listed in :data:`KNOWN_ILLEGIBLE` and the list is **strict**: a
 template on it that starts passing fails the suite, so the list can only shrink.
 An open-ended allowlist is how a check like this becomes decoration.
 
@@ -86,9 +97,7 @@ CORPUS: dict[str, dict] = {
 KNOWN_ILLEGIBLE: dict[str, str] = {
     "architecture_diagram": "labels overflow the fixed 140x44 box, and two collide",
     "binary_tree": "a node label runs past the frame",
-    "graph": "five vertex labels run past the frame",
     "linked_list": "a label runs 4px past the frame",
-    "step_function": "a label runs past the frame",
     "unit_circle": "the '1' tick labels collide with the axis names",
 }
 
@@ -208,3 +217,99 @@ class TestTheExtractor:
                   for f in check_figure(svg) if "covered by" in f.message}
         assert not any(hint in name for name in blamed
                        for hint in ("grid-paper", "background", "backdrop")), blamed
+
+
+# ------------------------------------------------- the checker's own mistakes
+#
+# Three ways the checker reported text as misplaced when it was not. Each one
+# produced coordinates, a severity and a confident sentence, which is what made
+# them worth guarding: a checker that is wrong quietly is worse than no checker,
+# because the list it produces gets believed and templates get "fixed" to suit
+# it. Two of the six templates originally listed as illegible were only ever
+# these bugs.
+
+def _svg(body: str, view_box: str = "0 0 200 100") -> str:
+    return (f'<svg xmlns="http://www.w3.org/2000/svg" width="200" height="100" '
+            f'viewBox="{view_box}">{body}</svg>')
+
+
+class TestTheFrameIsTheViewBox:
+
+    def test_an_origin_away_from_zero_is_respected(self):
+        """`graph` emits viewBox="53.2 94.0 521.6 152.0". Measuring its labels
+        against a frame running from 0 put five of them outside it; every one
+        sits comfortably inside."""
+        from straightedge.diagrams.legibility import _canvas
+
+        assert _canvas(_svg("", "53.2 94.0 521.6 152.0")) == (53.2, 94.0, 521.6, 152.0)
+
+    def test_a_label_inside_a_shifted_view_box_is_not_clipped(self):
+        svg = _svg('<text x="120" y="140" font-size="10">inside</text>',
+                   "100 100 200 100")
+        assert not [f for f in check_figure(svg) if f.check == "text_clipped"]
+
+    def test_a_label_outside_a_shifted_view_box_is_still_caught(self):
+        """The fix must not simply stop reporting: text past the shifted frame
+        is still past it."""
+        svg = _svg('<text x="290" y="140" font-size="10">hanging off</text>',
+                   "100 100 200 100")
+        assert [f for f in check_figure(svg) if f.check == "text_clipped"]
+
+    def test_the_view_box_wins_over_width_and_height(self):
+        from straightedge.diagrams.legibility import _canvas
+
+        assert _canvas(_svg("", "0 0 50 25"))[2:] == (50.0, 25.0)
+
+
+class TestTransformsAreApplied:
+
+    def test_a_rotated_label_is_measured_where_it_is_drawn(self):
+        """The step-function y-axis title is written horizontally and turned a
+        quarter turn. Measured unrotated it is a long label hanging 20 units off
+        the frame; it is a tall narrow one well inside."""
+        svg = _svg('<text x="15" y="60" text-anchor="middle" font-size="10" '
+                   'transform="rotate(-90 15 60)">feasible(k)</text>')
+        box = next(b for b in boxes_from_svg(svg) if b.kind == "text")
+        assert box.y1 - box.y0 > box.x1 - box.x0, "still measured as horizontal"
+        assert not [f for f in check_figure(svg) if f.check == "text_clipped"]
+
+    def test_a_translate_moves_the_box(self):
+        svg = _svg('<g transform="translate(40 20)">'
+                   '<rect x="0" y="0" width="10" height="10"/></g>')
+        box = next(b for b in boxes_from_svg(svg) if b.label == "rect")
+        assert (box.x0, box.y0) == (40.0, 20.0)
+
+    def test_nested_transforms_compose(self):
+        svg = _svg('<g transform="translate(10 10)"><g transform="translate(5 5)">'
+                   '<rect x="0" y="0" width="4" height="4"/></g></g>')
+        box = next(b for b in boxes_from_svg(svg) if b.label == "rect")
+        assert (box.x0, box.y0) == (15.0, 15.0)
+
+    def test_an_unsupported_transform_is_omitted_not_misplaced(self):
+        """A wrong box is worse than a missing one: it is a finding about
+        something that is not there."""
+        svg = _svg('<rect x="0" y="0" width="10" height="10" transform="skewX(20)"/>')
+        assert not [b for b in boxes_from_svg(svg) if b.label == "rect"]
+
+
+class TestDefinitionsAreNotInk:
+
+    def test_a_shape_inside_defs_is_not_a_mark(self):
+        svg = _svg('<defs><rect x="0" y="0" width="200" height="100"/></defs>'
+                   '<text x="20" y="50" font-size="10">readable</text>')
+        assert not [b for b in boxes_from_svg(svg) if b.label == "rect"]
+        assert not [f for f in check_figure(svg) if f.check == "text_obscured"]
+
+    def test_a_clip_path_does_not_cover_the_text_it_bounds(self):
+        """`matrix_transform` draws a panel and clips to a copy of it. Counting
+        the copy reported every label as colliding twice — once with the panel
+        it sits on, and once with a rectangle that is not drawn at all."""
+        svg = _svg('<clipPath id="c"><rect x="0" y="0" width="200" height="100"/></clipPath>'
+                   '<rect x="0" y="0" width="200" height="100" fill="white"/>'
+                   '<text x="20" y="50" font-size="10">label</text>')
+        assert len([b for b in boxes_from_svg(svg) if b.label == "rect"]) == 1
+
+    def test_a_marker_is_not_drawn_where_it_is_defined(self):
+        svg = _svg('<defs><marker id="a"><polygon points="0 0, 8 3, 0 6"/></marker></defs>'
+                   '<text x="20" y="50" font-size="10">label</text>')
+        assert not [b for b in boxes_from_svg(svg) if b.label == "polygon"]
