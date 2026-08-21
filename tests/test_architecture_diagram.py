@@ -365,3 +365,73 @@ class TestRealL06Data:
     def test_notes_present(self):
         svg = render_diagram(self.HINT)
         assert "Idempotency via client message id" in svg
+
+
+class TestLabelsFitAndNotesStack:
+    """The four legibility errors this template shipped with in 0.5.0.
+
+    Every unanchored note was placed at one hard-coded spot, so two notes were
+    drawn one on top of the other and the reader saw neither -- and each was
+    centred on the left margin, which put most of a 300px note off the canvas.
+    Separately, a component label was drawn at whatever width it happened to
+    be: "Gateway (WebSocket/MQTT)" measured 186px in a 140px box and reached
+    far enough out to collide with the label on the connection leaving it.
+    """
+
+    HINT = {
+        "type": "architecture_diagram",
+        "params": {
+            "elements": [
+                {"id": "gw", "kind": "service", "label": "Gateway (WebSocket/MQTT)"},
+                {"id": "svc", "kind": "service", "label": "Chat Service"},
+                {"id": "cache", "kind": "cache", "label": "Session Cache (Redis)"},
+            ],
+            "connections": [{"from": "gw", "to": "svc", "label": "route"},
+                            {"from": "svc", "to": "cache", "label": "lookup"}],
+            "notes": ["Idempotency via client message id to deduplicate retries",
+                      "Fanout queue decouples write latency from recipient count",
+                      "Presence heartbeats are cheaper than a full session read"],
+        },
+    }
+
+    def _boxes(self):
+        from straightedge.diagrams.legibility import boxes_from_svg
+
+        return boxes_from_svg(render_diagram(self.HINT))
+
+    def test_the_figure_carries_no_legibility_error(self):
+        from straightedge.diagrams.legibility import check_figure
+
+        errors = [f for f in check_figure(render_diagram(self.HINT))
+                  if f.severity == "error"]
+        assert not errors, [f.message for f in errors]
+
+    def test_no_two_notes_share_a_line(self):
+        notes = sorted(b.y0 for b in self._boxes()
+                       if b.kind == "text" and b.label.startswith(
+                           ("Idempotency", "Fanout", "Presence")))
+        assert len(notes) == 3
+        assert len(set(notes)) == 3, f"notes drawn on top of each other at {notes}"
+
+    def test_a_note_starts_inside_the_canvas(self):
+        """Centring a long note on the left margin put its first half off the
+        left edge, which is not a collision but is just as unreadable."""
+        for b in self._boxes():
+            if b.kind == "text" and b.label.startswith(("Idempotency", "Fanout")):
+                assert b.x0 >= 0, f"{b.label!r} starts at x={b.x0}"
+
+    def test_a_component_label_fits_its_box(self):
+        from straightedge.diagrams.templates.architecture_diagram import _BOX_W
+
+        for b in self._boxes():
+            if b.kind == "text" and b.y0 < 250 and not b.label.startswith(
+                    ("Idempotency", "Fanout", "Presence")):
+                assert b.x1 - b.x0 <= _BOX_W, f"{b.label!r} is {b.x1 - b.x0:.0f}px"
+
+    def test_the_whole_label_survives_even_when_the_box_cannot_show_it(self):
+        """Wrapping and trimming both lose text on screen. The full string is
+        the accessible name, so it is still in the document and still findable
+        by anything reading it rather than looking at it."""
+        svg = render_diagram(self.HINT)
+        for elem in self.HINT["params"]["elements"]:
+            assert f"<title>{elem['label']}</title>" in svg

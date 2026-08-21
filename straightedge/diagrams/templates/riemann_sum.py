@@ -166,12 +166,16 @@ class RiemannSumTemplate:
         elements: List[str] = []
         elements.append(style(self._styles()))
 
-        # Grid
+        # Grid. `+ 1`, not `+ 2`: the integers inside the plot run up to
+        # int(x_max), so overshooting drew one line past the right edge of the
+        # data area — off the canvas entirely at 458px on a 450px figure — and
+        # one above the top. Invisible, so nothing complained until the frame
+        # check stopped skipping axis-aligned strokes for having no area.
         grid_lines = []
-        for i in range(int(x_min), int(x_max) + 2):
+        for i in range(int(x_min), int(x_max) + 1):
             px = to_svg_x(i)
             grid_lines.append(line(px, padding, px, svg_height - padding, **{"class": "rs-grid"}))
-        for i in range(int(y_min), int(y_max) + 2):
+        for i in range(int(y_min), int(y_max) + 1):
             py = to_svg_y(i)
             grid_lines.append(line(padding, py, svg_width - padding, py, **{"class": "rs-grid"}))
         elements.append(group("\n".join(grid_lines)))

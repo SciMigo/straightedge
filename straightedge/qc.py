@@ -174,7 +174,12 @@ def _check_frame(
     half_w, half_h = frame[0] / 2.0, frame[1] / 2.0
     findings: list[Finding] = []
     for box in boxes:
-        if box.area <= 1e-9:
+        # A point has nothing to clip; a line does. Skipping on *area* skipped
+        # every axis-aligned stroke, because a level line is zero-area however
+        # long it is — and axis-aligned is what a guide, an axis, a gridline or
+        # a connector usually is. `matrix_transform` drew its eigenvector ray
+        # from x=192 to x=477 on a 460-wide canvas and this loop said nothing.
+        if box.width <= 1e-9 and box.height <= 1e-9:
             continue
         over = max(
             (-half_w - tol) - box.x0, box.x1 - (half_w + tol),

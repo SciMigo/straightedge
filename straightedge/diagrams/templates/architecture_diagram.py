@@ -10,12 +10,15 @@ from typing import Any, Dict, List, Optional, Tuple
 from ..registry import register
 from ..renderer import (
     defs,
+    fit_text,
+    wrap_units,
     group,
     line,
     path,
     rect,
     style,
     svg_document,
+    title as svg_title,
     text,
 )
 
@@ -49,6 +52,14 @@ _CYLINDER_RY = 8
 
 # Layout constants
 _PADDING = 60
+#: One line of the bottom note stack, at the 10px note size, plus the gap that
+#: keeps the last baseline off the canvas edge — a baseline sitting exactly on
+#: it still hangs the descenders over.
+_NOTE_LINE = 14
+_NOTE_PAD = 6
+#: Component label size, and the step between its two lines.
+_LABEL_PX = 12
+_LABEL_LINE = 13
 _LAYER_GAP_H = 180  # horizontal gap between layers (left-to-right)
 _LAYER_GAP_V = 100  # vertical gap between layers (top-to-bottom)
 _NODE_GAP_H = 60  # gap between nodes in same layer (left-to-right)
@@ -251,13 +262,8 @@ def _render_component(
         d = _cylinder_path(x0, y0, w, h, ry)
         elements.append(path(d, fill=fill, stroke=stroke, stroke_width="1.4"))
         center = (x0 + w / 2, y0 + h / 2)
-        elements.append(text(
-            center[0], center[1] + 5, label,
-            text_anchor="middle",
-            font_size="12px",
-            font_family="sans-serif",
-            fill="#333",
-        ))
+        elements.append(svg_title(label))
+        elements.extend(_label_lines(label, center[0], center[1] + 5))
     else:
         w, h = _BOX_W, _BOX_H
         extra: Dict[str, Any] = {}
@@ -271,13 +277,8 @@ def _render_component(
             **extra,
         ))
         center = (cx + w / 2, cy + h / 2)
-        elements.append(text(
-            center[0], center[1] + 4, label,
-            text_anchor="middle",
-            font_size="12px",
-            font_family="sans-serif",
-            fill="#333",
-        ))
+        elements.append(svg_title(label))
+        elements.extend(_label_lines(label, center[0], center[1] + 4))
 
     return "\n".join(elements), center
 
@@ -318,6 +319,34 @@ def _edge_anchor(
     sy = abs(half_h / dy) if dy != 0 else float("inf")
     s = min(sx, sy)
     return (cx + dx * s, cy + dy * s)
+
+
+def _label_lines(label: str, cx: float, cy: float) -> List[str]:
+    """The component label, wrapped to fit the box it is drawn in.
+
+    Drawn raw, a label wider than the 140px box simply overhung it: "Gateway
+    (WebSocket/MQTT)" measured 186px and reached 46px into the space either
+    side, far enough to collide with the label on the connection leaving it.
+    Two lines fit comfortably in 44px of box, so wrap rather than truncate --
+    the text is the diagram's content, and there is room for it.
+    """
+    # `wrap_units` picks the break, `fit_text` guarantees the width. They do not
+    # measure the same way: the wrapper counts Latin at a flat half-em, which
+    # under-reads a real string — "Session Cache (Redis)" fits its budget by
+    # that count and measures 145px against a 140px box. `fit_text` uses the
+    # per-character table with the font-substitution headroom, which is the
+    # measure the legibility check applies, so a line that survives it is a line
+    # the checker agrees fits.
+    room = _BOX_W - 12
+    lines = [fit_text(part, room, _LABEL_PX)
+             for part in wrap_units(label, room / _LABEL_PX, max_lines=2)]
+    top = cy - _LABEL_LINE * (len(lines) - 1) / 2
+    return [text(cx, top + _LABEL_LINE * i, part,
+                 text_anchor="middle",
+                 font_size=f"{_LABEL_PX}px",
+                 font_family="sans-serif",
+                 fill="#333")
+            for i, part in enumerate(lines)]
 
 
 def _render_connection(
@@ -385,6 +414,17 @@ class ArchitectureDiagramTemplate:
             node_ids, connections, direction,
         )
 
+        # An annotation with no `near`, or one naming a component that is not
+        # here, has nowhere to point. Those go in a stack along the bottom, and
+        # the stack needs room: every one of them used to be placed at the same
+        # single spot, so two notes were drawn one on top of the other and the
+        # reader saw neither.
+        anchored = set(node_ids)
+        loose = [a for a in annotations
+                 if not (a.get("near") and str(a["near"]) in anchored)
+                 and a.get("text")]
+        svg_h += _NOTE_LINE * len(loose) + (_NOTE_PAD if loose else 0)
+
         # Reserve space for caption
         if caption:
             svg_h += 30
@@ -414,6 +454,9 @@ class ArchitectureDiagramTemplate:
             elements.append(_render_connection(conn, center_map, kind_map))
 
         # Render annotations
+        note_top = (svg_h - (30 if caption else 0)
+                    - _NOTE_LINE * len(loose) - (_NOTE_PAD if loose else 0))
+        placed = 0
         for ann in annotations:
             ann_text = ann.get("text", "")
             near_id = ann.get("near", "")
@@ -422,13 +465,21 @@ class ArchitectureDiagramTemplate:
             if near_id and near_id in center_map:
                 ax, ay = center_map[near_id]
                 ay += (_CYLINDER_H if kind_map.get(near_id) in ("database", "datastore") else _BOX_H) / 2 + 16
+                anchor = "middle"
             else:
-                # No anchor — place at bottom-left
+                # No anchor: down the bottom stack, one line each. Left-aligned
+                # rather than centred on the left margin — centring a 300px
+                # note on x=60 puts most of it off the canvas, which is how
+                # these notes came to be reported as running past the frame as
+                # well as over each other.
                 ax = _PADDING
-                ay = svg_h - 50
+                ay = note_top + _NOTE_LINE * placed + _NOTE_LINE
+                anchor = "start"
+                ann_text = fit_text(ann_text, svg_w - _PADDING * 2, 10)
+                placed += 1
             elements.append(text(
                 ax, ay, ann_text,
-                text_anchor="middle",
+                text_anchor=anchor,
                 font_size="10px",
                 font_style="italic",
                 font_family="sans-serif",

@@ -22,7 +22,7 @@ may drift down for two reasons — a template being fixed, or the checker being
 wrong — tells you nothing when it moves; a named list that fails when an entry
 starts passing makes you look at which happened.
 
-Those four are listed in :data:`KNOWN_ILLEGIBLE` and the list is **strict**: a
+Those three are listed in :data:`KNOWN_ILLEGIBLE` and the list is **strict**: a
 template on it that starts passing fails the suite, so the list can only shrink.
 An open-ended allowlist is how a check like this becomes decoration.
 
@@ -95,7 +95,6 @@ CORPUS: dict[str, dict] = {
 #: a name here that starts passing fails the suite, so fixing one *requires*
 #: removing it. The list is debt, recorded where it cannot be forgotten.
 KNOWN_ILLEGIBLE: dict[str, str] = {
-    "architecture_diagram": "labels overflow the fixed 140x44 box, and two collide",
     "binary_tree": "a node label runs past the frame",
     "linked_list": "a label runs 4px past the frame",
     "unit_circle": "the '1' tick labels collide with the axis names",
