@@ -158,6 +158,7 @@ def _dispatch(args: argparse.Namespace, out: _Emitter) -> int:
     # the other half of it.
     if args.command == "draw":
         from .diagrams import DIAGRAM_REGISTRY, render_diagram
+        from .diagrams.legibility import check_figure
         from .diagrams.registry import count_data_marks
 
         name = (args.template or args.text or "").strip()
@@ -174,6 +175,7 @@ def _dispatch(args: argparse.Namespace, out: _Emitter) -> int:
 
         svg = render_diagram({"type": name, "params": _read_params(args.params)})
         marks = count_data_marks(svg)
+        findings = check_figure(svg) if marks else []
         if marks == 0:
             # Chrome with no data is the one failure that looks like success, so
             # it is a refusal here as it is over MCP — and it must not leave a
@@ -202,6 +204,7 @@ def _dispatch(args: argparse.Namespace, out: _Emitter) -> int:
         if out.json_out:
             return out.ok("draw", template=name, data_marks=marks,
                           bytes=len(svg.encode("utf-8")),
+                          findings=[asdict(f) for f in findings],
                           path=str(args.out) if args.out else None,
                           svg=None if args.out else svg)
         if args.out:
@@ -209,6 +212,12 @@ def _dispatch(args: argparse.Namespace, out: _Emitter) -> int:
                     f"{marks} data marks)")
         else:
             print(svg)
+        # After the document, and on stderr, so `draw > figure.svg` still yields
+        # a figure. Legibility is a warning rather than a refusal: the template
+        # drew what was asked for and a caller may still want it — but silence
+        # would leave the defect for whoever opens the file.
+        for finding in (f for f in findings if f.severity == "error"):
+            out.say(f"  {finding}", err=True)
         return 0
 
     # A named template skips the keyword router entirely — the English-reachable

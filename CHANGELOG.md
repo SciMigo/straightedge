@@ -7,6 +7,41 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **A legibility check over the whole figure lane, and findings that say where.**
+  The animation lane has measured its own frames since the beginning; the figure
+  lane's only check was `count_data_marks` — "did anything get drawn" — so a
+  figure could put four labels in the same pixels and report success. Three
+  templates had grown a private version of this in their own test files and
+  thirty-five had nothing.
+
+  `diagrams.legibility.check_figure(svg)` reads an emitted figure back as
+  geometry and feeds the *existing* `qc.check`, so a figure and a scene report
+  the same findings in the same shape — and every finding carries the `box` of
+  what it names. "Your diagram is wrong" is what a screenshot and a vision model
+  already give you; "wrong *here*, at these coordinates" is what a caller can
+  act on, and it is only available because this lane computes its own geometry
+  instead of asking a browser for it. `draw` returns them over MCP, and the CLI
+  prints errors to stderr *after* the document, so a redirect still yields a
+  figure.
+
+  Two things had to be right before the findings were worth reading. An unfilled
+  shape is a **stroke**, not a surface — judged by its bounding box a circle
+  covers everything inside it, which alone produced four false warnings on the
+  unit circle — and the full-bleed background every template paints would
+  otherwise obscure every label on the page. Both are the parabola confusion the
+  scene lane already hit, where one mistake produced 31 of 39 findings and
+  buried the 8 that were real.
+
+  The first sweep found **fourteen errors in six of thirty-eight templates**,
+  among them the two `unit_circle` label collisions and the `matrix_transform`
+  overflow a reviewer had just found by eye. Those six are recorded in
+  `KNOWN_ILLEGIBLE`, and the list is strict: a template on it that starts
+  passing fails the suite, so it can only shrink. An open-ended allowlist is how
+  a check like this becomes decoration.
+
+  The fourteen are **not** fixed here — six templates' layouts is its own change,
+  and mixing it with the machinery that found them would make both harder to
+  review.
 - **`publish.yml` creates the GitHub Release**, not only the PyPI upload. Those
   were two steps and only one was automated, so the Releases page skipped 0.3.0,
   0.3.1 and 0.3.2 — all three tagged, all three on the index — and read as though
