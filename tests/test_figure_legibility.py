@@ -543,3 +543,54 @@ class TestUnitCircleLabelsClearEachOther:
         for b in boxes_from_svg(svg):
             if b.kind == "text" and b.label.startswith("("):
                 assert b.x0 >= 0 and b.x1 <= 400, f"readout at x {b.x0:.0f}..{b.x1:.0f}"
+
+
+class TestMatrixTransformKeepsItsGuidesInThePanel:
+    """The second piece of evidence in issue #14.
+
+    The eigenvector ray is drawn 1.5x the panel range on purpose, so the
+    direction reads as a line rather than a segment. That is only right if the
+    panel cuts it off, and nothing did: it crossed the gutter, the other panel
+    and the edge of the figure, ending 17px past a 460px canvas. The grid beside
+    it was clipped; the clip was emitted inside the grid branch, so the rays had
+    nothing to reach for.
+    """
+
+    PARAMS = {"matrix": [[1, 1], [0, 1]], "shape": "unit_square",
+              "show_eigenvectors": True, "show_grid": True}
+
+    def _svg(self, **over):
+        return render_diagram({"type": "matrix_transform",
+                               "params": {**self.PARAMS, **over}})
+
+    def test_no_ink_leaves_the_figure(self):
+        assert not [f for f in check_figure(self._svg())
+                    if f.check == "out_of_frame"]
+
+    def test_the_panel_clip_exists_without_a_grid(self):
+        """It used to be emitted inside `if show_grid`, so turning the grid off
+        took the clip away from everything else that needed it."""
+        assert "<clipPath" in self._svg(show_grid=False)
+        assert not [f for f in check_figure(self._svg(show_grid=False))
+                    if f.check == "out_of_frame"]
+
+    def test_a_repeated_eigenvalue_draws_one_ray(self):
+        """[[1,1],[0,1]] has one eigenvector and returns it twice. The same
+        dashed line drawn over itself is darker, not clearer."""
+        import re
+
+        assert len(re.findall(r'stroke-dasharray="6,3"', self._svg())) == 1
+
+    def test_distinct_eigenvectors_still_draw_two(self):
+        """The de-duplication must remove a repeat, not a direction."""
+        import re
+
+        svg = self._svg(matrix=[[2, 0], [0, 3]])
+        assert len(re.findall(r'stroke-dasharray="6,3"', svg)) == 2
+
+    def test_the_eigenvalue_label_is_not_clipped(self):
+        """Clipping the ray is right and clipping its label is not: a label the
+        reader cannot finish is the defect this whole module is about. The label
+        sits outside the clipped group for that reason."""
+        assert not [f for f in check_figure(self._svg())
+                    if f.check == "text_clipped"]

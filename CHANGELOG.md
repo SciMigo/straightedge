@@ -48,6 +48,20 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
   Swept across every 15°: 51 errors to 4.
 
+- **`matrix_transform`'s eigenvector rays are clipped to their panel.** They
+  are drawn 1.5x the panel range deliberately, so the direction reads as a line
+  rather than a segment — which is only right if the panel cuts them off, and
+  nothing did. A ray crossed the gutter, the other panel and the edge of the
+  figure, ending 17px past a 460px canvas. The grid beside it was clipped; the
+  clip was emitted inside the grid branch, so the rays had nothing to reach for
+  and turning the grid off took it away entirely. The label stays outside the
+  clip: cutting a guide short is the point, and cutting its label short is the
+  defect. A repeated eigenvalue also drew the same ray twice, which is darker
+  rather than clearer.
+
+  This is the second piece of evidence in #14, and the piece the 0.5.0 checker
+  could not see.
+
 - **`riemann_sum` drew one gridline past each edge of its plot**, found by the
   check above the moment it could see them: the grid loops ran to
   `int(max) + 2` where the integers inside the plot stop at `int(max)`. One
