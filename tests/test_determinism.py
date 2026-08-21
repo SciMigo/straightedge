@@ -18,6 +18,7 @@ the only thing that catches them.
 
 import hashlib
 import json
+import os
 import random
 import subprocess
 import sys
@@ -72,16 +73,25 @@ for t in list_templates():
         out["%%s/%%s" %% (t.id, label)] = hashlib.sha256(svg.encode()).hexdigest()
 out["__catalog__"] = hashlib.sha256(
     json.dumps([t.to_dict() for t in list_templates()]).encode()).hexdigest()
+# Proof the seed was actually applied. A string's hash is randomised per
+# process; if this came back equal under two seeds, PYTHONHASHSEED never
+# reached the child and the whole sweep would agree for the wrong reason.
+out["__seed_probe__"] = str(hash("straightedge"))
 print(json.dumps(out, sort_keys=True))
 """
 
 
 def _under_seed(seed: str) -> dict:
+    # Inherit the environment and override one variable, rather than replacing
+    # it. A hand-built env has to be right on every platform this runs on, and
+    # the previous one supplied a POSIX `PATH` and nothing else — on Windows
+    # that drops `SystemRoot`, which CPython needs to start at all, so the test
+    # would fail as a broken test rather than report on the figure lane.
+    env = {**os.environ, "PYTHONHASHSEED": seed}
     proc = subprocess.run(
         [sys.executable, "-c", _CHILD % str(REPO)],
         capture_output=True, text=True, timeout=180,
-        env={"PYTHONHASHSEED": seed, "PATH": "/usr/bin:/bin"},
-        cwd=REPO)
+        env=env, cwd=REPO)
     assert proc.returncode == 0, f"child failed under seed {seed}:\n{proc.stderr[-2000:]}"
     return json.loads(proc.stdout)
 
@@ -134,6 +144,10 @@ class TestDeterminism:
         every figure hashed under each — a set that reached output would sort
         differently between them."""
         a, b = _under_seed("0"), _under_seed("99999")
+        probe_a, probe_b = a.pop("__seed_probe__"), b.pop("__seed_probe__")
+        assert probe_a != probe_b, (
+            "string hashing was identical under both seeds, so PYTHONHASHSEED "
+            "never took effect — this sweep would agree no matter what")
         differing = sorted(k for k in a if a[k] != b[k])
         assert not differing, f"hash-seed dependent output: {differing}"
         assert len(a) > 70, f"only {len(a)} renders compared; the sweep shrank"
