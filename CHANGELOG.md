@@ -76,6 +76,23 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
     but squaring twice makes it `AB⁴ == AC²·BC²` — exact, and it adjoins
     nothing. It accepts φ and rejects 1.618, which is the entire argument for
     the exact kernel in one test.
+- **A step can name the points it produces** — `( B A ) -> C D`, and they are
+  ordered by geometry rather than by algebra: upper first, then left to right.
+  Automatic names shift when an earlier step consumes a letter, so inserting one
+  anonymous point moved the vesica's crossings from `C, D` to `D, E` and a line
+  written as `[ C D ]` silently joined two different points — no error, a
+  plausible figure. The geometric order is what makes a name mean something:
+  which crossing is "upper" is a fact about the drawing, while which one the
+  algebra emits first depends on the sign of a line coefficient. Naming more
+  points than a step makes is refused rather than ignored.
+- **`straightedge draw`**, so the CLI can draw a figure. `list-templates` had
+  listed both lanes since it was written while every command reached only the
+  animation one, so the CLI advertised 38 figure templates and could draw none
+  of them — the same gap the MCP server had before `draw`, on the other
+  transport. It writes to `--out` or pipes the document to stdout, reports
+  `data_marks` and the UTF-8 byte count under `--json`, and refuses a blank
+  figure rather than leaving an empty file behind. A test asserts the listing
+  and `draw` read one registry.
 - **`verify_construction`, an MCP tool.** `draw` refuses a construction whose
   claim is false and returns a blank, and a template has nowhere to put the
   reason. This returns the findings without drawing: `holds`, `worst`, and

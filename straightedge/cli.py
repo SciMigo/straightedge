@@ -12,8 +12,7 @@ from .agent.llm import LLMError
 from .aspect import ASPECTS, LANDSCAPE
 from .style import TEXTBOOK, THEME_NAMES, theme
 from .errors import (
-    DependencyError, FontError, InputFileError, PreconditionError, RenderError,
-    RequestError, StraightedgeError,
+    BlankFigureError, DependencyError, FontError, InputFileError, PreconditionError, RenderError, RequestError, StraightedgeError, UnknownTemplateError,
 )
 from .fonts import DEFAULT_CJK_FONT, font_status
 from .labels import DEFAULT_LANGUAGE, LANGUAGES, needs_cjk_font, untranslated
@@ -29,7 +28,7 @@ from .stt import transcribe_audio
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="straightedge")
     parser.add_argument("command", choices=[
-        "plan", "scaffold", "render",
+        "plan", "scaffold", "render", "draw",
         "agent-plan", "agent-scaffold", "agent-render",
         "list-templates",
     ])
@@ -47,6 +46,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--audio", type=Path,
                         help="Transcribe an audio file into the request (Chinese "
                              "STT, opt-in). An alternative to typing the request.")
+    parser.add_argument("--out", type=Path,
+                        help="Where `draw` writes the SVG. Without it the "
+                             "document goes to stdout, so it pipes.")
     parser.add_argument("--output-dir", type=Path, default=Path("generated"))
     parser.add_argument("--media-dir", type=Path, default=Path("media"),
                         help="Directory Manim writes rendered media into")
@@ -145,6 +147,55 @@ def _dispatch(args: argparse.Namespace, out: _Emitter) -> int:
         if out.json_out:
             return out.ok("list-templates", templates=templates)
         print(json.dumps(templates, ensure_ascii=False, indent=2))
+        return 0
+
+    # `draw` is the figure lane's whole loop in one command: milliseconds, pure
+    # standard library, no Manim. It exists because `list-templates` has listed
+    # both lanes since it was written while every command reached only the
+    # animation one — so the CLI advertised thirty-eight figure templates and
+    # could draw none of them, and the honest error it gave for one sent the
+    # caller to a Python function. The MCP server had the same gap; this closes
+    # the other half of it.
+    if args.command == "draw":
+        from .diagrams import DIAGRAM_REGISTRY, render_diagram
+        from .diagrams.registry import count_data_marks
+
+        name = (args.template or args.text or "").strip()
+        if not name:
+            raise RequestError(
+                "no figure named",
+                remedy="Give a figure id, e.g. `straightedge draw unit_circle`. "
+                       "`list-templates` reports which ids are figures.")
+        if name not in DIAGRAM_REGISTRY:
+            raise UnknownTemplateError(
+                f"unknown figure template: {name!r}",
+                remedy="Run `list-templates` and use an id whose lane is 'figure'.",
+                details={"template": name, "known": sorted(DIAGRAM_REGISTRY)})
+
+        svg = render_diagram({"type": name, "params": _read_params(args.params)})
+        marks = count_data_marks(svg)
+        if marks == 0:
+            # Chrome with no data is the one failure that looks like success, so
+            # it is a refusal here as it is over MCP — and it must not leave a
+            # blank file behind for someone to find later.
+            raise BlankFigureError(
+                f"{name!r} drew no data marks",
+                remedy="A parameter of the wrong type is read as absent; check "
+                       "the shapes reported by `list-templates --json`.",
+                details={"template": name})
+        if args.out:
+            args.out.parent.mkdir(parents=True, exist_ok=True)
+            args.out.write_text(svg, encoding="utf-8")
+        if out.json_out:
+            return out.ok("draw", template=name, data_marks=marks,
+                          bytes=len(svg.encode("utf-8")),
+                          path=str(args.out) if args.out else None,
+                          svg=None if args.out else svg)
+        if args.out:
+            out.say(f"wrote {args.out} ({len(svg.encode('utf-8'))} bytes, "
+                    f"{marks} data marks)")
+        else:
+            print(svg)
         return 0
 
     # A named template skips the keyword router entirely — the English-reachable

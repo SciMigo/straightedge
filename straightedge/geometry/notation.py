@@ -9,6 +9,7 @@ that and nothing else::
     ( A B )         the circle on A through B
     < A B C >       a polygon on those points
     / A B C /       a section: three collinear points
+    ( A B ) -> C D  name the points it produces, upper first
     ( A B ) guide   drawn, but excluded from intersection
     # anything      a comment
 
@@ -62,13 +63,18 @@ _NAME = r"[A-Za-z][A-Za-z0-9_]*"
 _NUMBER = r"[+-]?(?:\d+\.\d*|\.\d+|\d+/\d+|\d+)"
 
 _GUIDE = r"(?:\s+guide)?"
+#: ``-> C D`` names the points a step produces, in the order they are found:
+#: upper first, then left to right. Without it those points take the next
+#: automatic letters, which shift when an earlier step consumes one — so a line
+#: written as ``[ C D ]`` can silently join two different points after an edit.
+_NAMES = rf"(?:\s*->\s*(?P<names>{_NAME}(?:\s+{_NAME})*))?"
 
 _POINT_NAMED = re.compile(
     rf"^({_NAME})\s*=\s*({_NUMBER})\s*,\s*({_NUMBER}){_GUIDE}$")
 _POINT_ANON = re.compile(
     rf"^\*\s*({_NUMBER})\s*,\s*({_NUMBER}){_GUIDE}$")
-_LINE = re.compile(rf"^\[\s*({_NAME})\s+({_NAME})\s*\]{_GUIDE}$")
-_CIRCLE = re.compile(rf"^\(\s*({_NAME})\s+({_NAME})\s*\){_GUIDE}$")
+_LINE = re.compile(rf"^\[\s*({_NAME})\s+({_NAME})\s*\]{_GUIDE}{_NAMES}$")
+_CIRCLE = re.compile(rf"^\(\s*({_NAME})\s+({_NAME})\s*\){_GUIDE}{_NAMES}$")
 # Three names at minimum: two points bound a segment, not a polygon, and the
 # model refuses it downstream — better to say so here, with the line number.
 _POLYGON = re.compile(rf"^<\s*({_NAME}(?:\s+{_NAME}){{2,}})\s*>{_GUIDE}$")
@@ -85,6 +91,7 @@ FORMS: tuple[tuple[str, str], ...] = (
     ("( A B )", "the circle on A through B"),
     ("< A B C >", "a polygon on those points"),
     ("/ A B C /", "a section: three collinear points"),
+    ("( A B ) -> C D", "name the points it produces, upper first"),
     ("( A B ) guide", "drawn, but excluded from intersection"),
     ("# anything", "a comment"),
 )
@@ -113,11 +120,13 @@ def parse_line(line: str, number: int = 1) -> Dict[str, Any] | None:
 
     match = _LINE.match(text)
     if match:
-        return _with_guide({"line": [match.group(1), match.group(2)]}, guide)
+        return _named(_with_guide(
+            {"line": [match.group(1), match.group(2)]}, guide), match)
 
     match = _CIRCLE.match(text)
     if match:
-        return _with_guide({"circle": [match.group(1), match.group(2)]}, guide)
+        return _named(_with_guide(
+            {"circle": [match.group(1), match.group(2)]}, guide), match)
 
     match = _SECTION.match(text)
     if match:
@@ -133,6 +142,13 @@ def parse_line(line: str, number: int = 1) -> Dict[str, Any] | None:
 def _with_guide(step: Dict[str, Any], guide: bool) -> Dict[str, Any]:
     if guide:
         step["guide"] = True
+    return step
+
+
+def _named(step: Dict[str, Any], match: "re.Match[str]") -> Dict[str, Any]:
+    names = match.groupdict().get("names")
+    if names:
+        step["names"] = names.split()
     return step
 
 

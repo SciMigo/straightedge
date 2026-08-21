@@ -412,23 +412,25 @@ class Construction:
                          id, classes, parents, guide)
 
     def construct_line(self, first: str, second: str, *, id: str | None = None,
-                       classes: Sequence[str] = (), guide: bool = False) -> str:
+                       classes: Sequence[str] = (), guide: bool = False,
+                       names: Sequence[str] = ()) -> str:
         p, q = self._require_point(first), self._require_point(second)
         if p == q:
             raise ValueError(
                 f"a line needs two distinct points; {first} and {second} coincide")
         element_id = self._add(Line.through(p, q), id, classes, (first, second), guide)
-        self._intersect_new(element_id)
+        self._intersect_new(element_id, names)
         return element_id
 
     def construct_circle(self, center: str, through: str, *, id: str | None = None,
-                         classes: Sequence[str] = (), guide: bool = False) -> str:
+                         classes: Sequence[str] = (), guide: bool = False,
+                         names: Sequence[str] = ()) -> str:
         c, p = self._require_point(center), self._require_point(through)
         if c == p:
             raise ValueError(
                 f"a circle needs a radius; {center} and {through} coincide")
         element_id = self._add(Circle.through(c, p), id, classes, (center, through), guide)
-        self._intersect_new(element_id)
+        self._intersect_new(element_id, names)
         return element_id
 
     def set_section(self, a: str, b: str, c: str, *, id: str | None = None,
@@ -454,24 +456,42 @@ class Construction:
         return element.geometry
 
     # -- intersection ----------------------------------------------------
-    def _intersect_new(self, element_id: str) -> list[str]:
+    def _intersect_new(self, element_id: str,
+                       names: Sequence[str] = ()) -> list[str]:
         """Cross a newly added line or circle with everything already drawn.
 
-        Single-threaded and in insertion order, so the same construction produces
-        the same points with the same names every time. A ``guide`` element takes
-        part in nothing: it is scaffolding a reader is meant to see and the model
-        is meant to ignore.
+        Single-threaded and in insertion order over the *elements*, so the same
+        construction produces the same points every time. A ``guide`` element
+        takes part in nothing: it is scaffolding a reader is meant to see and the
+        model is meant to ignore.
+
+        Within one crossing the points are ordered by **geometry** — upper first,
+        then left to right — rather than by whichever the algebra happened to
+        emit. That order is what makes a name mean something: the caller can say
+        `-> C D` and know `C` is the upper crossing, where the algebraic order
+        depends on the sign of a line coefficient and is not a fact about the
+        drawing. It also makes automatic names stable under a step that produces
+        nothing, which they were not: inserting one anonymous point moved the
+        vesica's crossings from `C, D` to `D, E`, so a line written as `[ C D ]`
+        silently joined two different points.
         """
         element = self._elements[element_id]
         if element.guide:
             return []
         found: list[str] = []
+        queued = list(names)
         for other in list(self._elements.values()):
             if other.id == element_id or other.guide:
                 continue
-            for point in self._crossings(element.geometry, other.geometry):
-                found.append(self._add(point, None, ("intersection",),
+            crossings = self._crossings(element.geometry, other.geometry)
+            for point in sorted(crossings, key=_upper_then_left):
+                wanted = queued.pop(0) if queued else None
+                found.append(self._add(point, wanted, ("intersection",),
                                        (element_id, other.id), False))
+        if queued:
+            raise ValueError(
+                f"{element_id} was given {len(names)} name(s) for the points it "
+                f"produces but made {len(names) - len(queued)}")
         return found
 
     def _crossings(self, one: Geometry, two: Geometry) -> list[Point]:
@@ -534,6 +554,16 @@ class Construction:
     def __repr__(self) -> str:
         return (f"Construction({self.name!r}, {len(self._elements)} elements, "
                 f"tower depth {self.tower.depth})")
+
+
+def _upper_then_left(point: Point) -> tuple[Fraction, Fraction]:
+    """Sort key: highest first, then leftmost. Exact, via float only for order.
+
+    Comparison has to be exact — two crossings can differ far below any epsilon —
+    so this sorts on the *negated* coordinates as exact values rather than on
+    floats. ``Exact`` is ordered, so tuples of it compare correctly.
+    """
+    return (-point.y, point.x)          # type: ignore[return-value]
 
 
 def _collinear(a: Point, b: Point, c: Point) -> bool:

@@ -52,7 +52,7 @@ class TestTheDocumentationIsTheGrammar:
         for form, _ in FORMS:
             step = parse_line(form)
             if step:
-                kinds |= {k for k in step if k not in ("id", "guide")}
+                kinds |= {k for k in step if k not in ("id", "guide", "names")}
         assert kinds == {"point", "line", "circle", "polygon", "section"}
 
 
@@ -70,6 +70,11 @@ class TestTheForms:
     def test_a_polygon_and_a_section(self):
         assert parse_line("< A B C >") == {"polygon": ["A", "B", "C"]}
         assert parse_line("/ A B C /") == {"section": ["A", "B", "C"]}
+
+    def test_naming_what_a_step_produces(self):
+        assert parse_line("( B A ) -> C D") == {
+            "circle": ["B", "A"], "names": ["C", "D"]}
+        assert parse_line("[ A B ] -> M") == {"line": ["A", "B"], "names": ["M"]}
 
     def test_a_guide(self):
         assert parse_line("( A B ) guide") == {"circle": ["A", "B"], "guide": True}
@@ -184,3 +189,48 @@ class TestTheTemplateAcceptsEitherForm:
             "steps": VESICA + "[ A B ]\n",
             "claims": [{"claim": "parallel", "of": ["[ C D ]", "[ A B ]"]}]}})
         assert count_data_marks(svg) == 0
+
+
+class TestFoundPointsCanBeNamed:
+    """Automatic names shift, and a line written against them changes meaning.
+
+    Inserting one anonymous point moved the vesica's crossings from `C, D` to
+    `D, E`, so `[ C D ]` silently joined two different points — no error, a
+    plausible figure. Naming what a step produces is the fix; ordering them by
+    geometry is what makes the name mean something.
+    """
+
+    BASE = ["A = 0, 0", "B = 1, 0", "( A B )"]
+
+    def test_automatic_names_do_shift(self):
+        """The problem, pinned, so the fix cannot quietly stop mattering."""
+        plain = build(self.BASE + ["( B A )"])
+        shifted = build(self.BASE[:2] + ["* 9, 9"] + self.BASE[2:] + ["( B A )"])
+        upper_plain = [k for k, v in plain.points.items() if float(v.y) > 0.5]
+        upper_shifted = [k for k, v in shifted.points.items() if float(v.y) > 0.5]
+        assert upper_plain == ["C"]
+        assert upper_shifted != ["C"]
+
+    def test_a_name_survives_an_earlier_step(self):
+        for extra in ([], ["* 9, 9"], ["* 9, 9", "* 8, 8"]):
+            c = build(self.BASE[:2] + extra + self.BASE[2:] + ["( B A ) -> UP LOW"])
+            assert float(c.points["UP"].y) > 0.5
+            assert float(c.points["LOW"].y) < -0.5
+
+    def test_the_order_is_geometric_not_algebraic(self):
+        """Upper first, then left to right — a fact about the drawing."""
+        c = build(self.BASE + ["( B A ) -> FIRST SECOND"])
+        assert float(c.points["FIRST"].y) > float(c.points["SECOND"].y)
+
+    def test_naming_more_points_than_a_step_makes_is_refused(self):
+        """Two concentric circles produce nothing; asking to name two says so."""
+        with pytest.raises(ValueError, match="name"):
+            build(["O = 0, 0", "X = 2, 0", "( O X )", "E = 1, 0", "( O E ) -> P Q"])
+
+    def test_naming_fewer_is_fine(self):
+        c = build(self.BASE + ["( B A ) -> UP"])
+        assert "UP" in c.points and len(c.points) == 4
+
+    def test_a_named_point_is_still_an_intersection(self):
+        c = build(self.BASE + ["( B A ) -> UP LOW"])
+        assert "intersection" in c["UP"].classes

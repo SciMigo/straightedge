@@ -123,17 +123,20 @@ def _apply(construction: Construction, step: Any) -> None:
                                id=element_id, guide=guide)
         return
 
+    names = [str(n) for n in (step.get("names") or [])]
+
     ends = _first(step, _LINE_KEYS)
     if ends is not None:
         first, second = ends
-        construction.construct_line(str(first), str(second), id=element_id, guide=guide)
+        construction.construct_line(str(first), str(second), id=element_id,
+                                    guide=guide, names=names)
         return
 
     around = _first(step, _CIRCLE_KEYS)
     if around is not None:
         center, through = around
         construction.construct_circle(str(center), str(through),
-                                      id=element_id, guide=guide)
+                                      id=element_id, guide=guide, names=names)
         return
 
     corners = _first(step, _POLYGON_KEYS)
