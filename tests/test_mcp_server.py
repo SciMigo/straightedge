@@ -138,7 +138,8 @@ class TestTheServer:
         import asyncio
         server = self._server()
         names = {t.name for t in asyncio.run(server.list_tools())}
-        assert names == {"list_templates", "draw", "plan", "validate", "render"}
+        assert names == {"list_templates", "draw", "verify_construction",
+                         "plan", "validate", "render"}
 
     def test_render_is_the_only_tool_with_a_force_switch(self):
         """A tool set an agent can read: the expensive one is the one you force."""
@@ -383,3 +384,76 @@ class TestTemplatesDeclareTheirParameterShapes:
         for template in list_templates():
             named = {p["name"] for p in template.parameters}
             assert set(template.params) <= named
+
+
+class TestConstructionsCanBeCheckedBeforeTheyAreDrawn:
+    """`draw` refuses a construction whose claim is false and returns a blank.
+
+    A template returns a string and has nowhere to put findings, so the refusal
+    arrives with no reason attached. `verify_construction` is where the reasons
+    live — the same economics as `validate` before `render`, at a smaller scale.
+    """
+
+    VESICA = "A = 0, 0\nB = 1, 0\n( A B )\n( B A )\n[ C D ]\n[ A B ]\n"
+
+    def test_a_true_claim_holds_and_would_draw(self):
+        result = mcp_server._verify_payload(
+            self.VESICA, [{"claim": "perpendicular", "of": ["[ C D ]", "[ A B ]"]}])
+        assert result["ok"] and result["holds"] and result["would_draw"]
+        assert result["findings"] == [] and result["worst"] is None
+
+    def test_a_false_claim_says_so_and_says_draw_will_refuse(self):
+        result = mcp_server._verify_payload(
+            self.VESICA, [{"claim": "parallel", "of": ["[ C D ]", "[ A B ]"]}])
+        assert not result["holds"] and result["worst"] == "error"
+        assert result["would_draw"] is False
+
+    def test_the_verdict_agrees_with_what_draw_actually_does(self):
+        """`would_draw` is a claim about another tool; it has to be true."""
+        for claim, expected in (("perpendicular", True), ("parallel", False)):
+            claims = [{"claim": claim, "of": ["[ C D ]", "[ A B ]"]}]
+            verdict = mcp_server._verify_payload(self.VESICA, claims)["would_draw"]
+            out = mcp_server._guarded(lambda: mcp_server._draw_payload(
+                "construction", {"steps": self.VESICA, "claims": claims}))
+            assert verdict is expected and out["ok"] is expected
+
+    def test_a_refusal_is_not_reported_as_a_parameter_mistake(self):
+        """A construction blocked by a false claim has correct parameters.
+
+        `draw` raises `blank_figure` for anything with no marks, and its remedy
+        sends the caller to check parameter shapes — right for a template handed
+        a value it cannot read, and wrong here, where the input is fine and the
+        assertion is not. The refusal says which claim failed instead.
+        """
+        out = mcp_server._guarded(lambda: mcp_server._draw_payload(
+            "construction", {"steps": self.VESICA, "claims": [
+                {"claim": "parallel", "of": ["[ C D ]", "[ A B ]"]}]}))
+        error = out["error"]
+        assert error["code"] == "blank_figure"
+        assert "refused" in error["message"]
+        assert "parameter" not in error["remedy"].split("The parameters")[0]
+        assert "verify_construction" in error["remedy"]
+        [finding] = error["details"]["findings"]
+        assert finding["check"] == "claim:parallel"
+
+    def test_an_unreadable_parameter_still_reports_the_shapes(self):
+        """The other branch must keep #9's behaviour intact."""
+        out = mcp_server._guarded(lambda: mcp_server._draw_payload(
+            "construction", {"steps": "this is not a construction"}))
+        assert out["error"]["code"] == "blank_figure"
+        assert "parameters" in out["error"]["details"]
+
+    def test_a_notation_error_comes_back_as_a_finding_with_its_line(self):
+        result = mcp_server._verify_payload("A = 0, 0\n[ A ", [])
+        assert result["findings"][0]["check"] == "construction:notation"
+        assert "line 2" in result["findings"][0]["message"]
+
+    def test_no_steps_is_a_typed_refusal(self):
+        with pytest.raises(StraightedgeError) as excinfo:
+            mcp_server._verify_payload(None, [])
+        assert excinfo.value.code == "no_request"
+
+    def test_verifying_costs_no_drawing(self):
+        """It returns findings, never an SVG — that is the point of it."""
+        result = mcp_server._verify_payload(self.VESICA, [])
+        assert "svg" not in result

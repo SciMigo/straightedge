@@ -119,3 +119,21 @@ class UnknownTemplateError(StraightedgeError):
     """
 
     code = "unknown_template"
+
+
+class PrecisionError(StraightedgeError):
+    """An exact construction outgrew the field this library will carry.
+
+    Ruler and compass reach exactly the tower of quadratic extensions of Q, and
+    every level doubles the rationals a single coordinate costs. A construction
+    that keeps adjoining generators is either far outside the classroom range
+    this lane is for, or is adjoining roots it could have reused — so the cap is
+    a refusal, not a silent fall back to floats.
+
+    That refusal is the point. A tolerance-based "yes" on a claim nobody could
+    certify is exactly the plausible-but-false answer this project exists to
+    avoid; ``details`` carries ``depth``/``max_depth`` or ``bits``/``max_bits``
+    so a caller can say which limit it hit.
+    """
+
+    code = "exact_precision"

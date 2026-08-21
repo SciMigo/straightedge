@@ -24,13 +24,16 @@ Three checks run at three different moments, and they catch different things:
 #: metadata and anything reading it at runtime — the MCP server advertises it to
 #: clients — cannot drift apart. Kept a plain literal because setuptools reads it
 #: statically, without importing the package at build time.
-__version__ = "0.3.2"
+__version__ = "0.4.0"
 
 from .aspect import ASPECTS, LANDSCAPE, VERTICAL
 from .catalog import Template, list_templates
+from .geometry import Construction, Exact, Tower
 from .errors import (
     DependencyError, FontError, InputFileError, PreconditionError, RenderError,
     RequestError, StraightedgeError, UnknownTemplateError,
+    DependencyError, FontError, InputFileError, PreconditionError,
+    PrecisionError, RenderError, RequestError, StraightedgeError,
 )
 from .estimate import Estimate, estimate
 from .expr import parse_function, to_latex_expr, to_numpy_expr
@@ -67,6 +70,11 @@ __all__ = [
     "RequestError",
     "InputFileError",
     "PreconditionError",
+    "PrecisionError",
+    # Constructive geometry — exact coordinates, decidable claims
+    "Construction",
+    "Exact",
+    "Tower",
     "FontError",
     "RenderError",
     "DependencyError",

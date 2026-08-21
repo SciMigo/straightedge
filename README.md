@@ -73,10 +73,11 @@ Path("unit-circle.svg").write_text(svg, encoding="utf-8")
 diagram type returns an empty string so a missing optional figure does not abort
 an entire document build.
 
-The registry currently contains 37 templates across several domains:
+The registry currently contains 38 templates across several domains:
 
 - Math and data: function graphs, coordinate planes, Riemann sums, unit circles,
-  polar graphs, matrices, step functions, heatmaps, and tables.
+  polar graphs, matrices, step functions, heatmaps, tables, and compass-and-
+  straightedge constructions with exactly placed points.
 - Computer science: binary trees, linked lists, stacks, queues, hash tables, call
   stacks, dynamic-programming tables, architecture diagrams, and graphs — a state
   machine is `graph` with `directed` edges, not a template of its own.
@@ -87,6 +88,53 @@ The registry currently contains 37 templates across several domains:
 Inspect `straightedge.diagrams.DIAGRAM_REGISTRY` for the exact registered names.
 Each renderer accepts a compact, serializable hint and returns a complete SVG
 string.
+
+## Draw a construction, and make it prove something
+
+The library is named after a tool it could not draw with until 0.4.0. This is
+that lane, and it is the one place where a figure can be *refused* for being
+mathematically false rather than merely illegible.
+
+```python
+from straightedge.diagrams import render_diagram
+
+svg = render_diagram({"type": "construction", "params": {
+    "steps": ["A = 0, 0", "B = 1, 0", "( A B )", "( B A )", "[ C D ]", "[ A B ]"],
+    "claims": [{"claim": "perpendicular", "of": ["[ C D ]", "[ A B ]"]}],
+}})
+```
+
+`( A B )` is a compass on `A` through `B`; `[ A B ]` is a straightedge across
+them. Only `A` and `B` are given — `C` and `D` are where the circles cross, and
+`G` is where the lines do. They are found, not placed, and they are **exact**:
+`G` is `(1/2, 0)` and `C` is `(1/2, √3/2)`, not values near them.
+
+That is what makes the `claims` decidable. Ruler and compass reach exactly the
+tower of quadratic extensions of the rationals, so `straightedge.geometry.exact`
+implements that field rather than approximating it, and `is_zero` is a proof
+with no tolerance in the path. Change `perpendicular` to `parallel` above and
+nothing is drawn at all.
+
+The vocabulary is `on`, `collinear`, `parallel`, `perpendicular`, `congruent`,
+`midpoint`, `equilateral`, `tangent`, `concurrent`, `ratio`, `golden` and
+`harmonic`. To see why exactness is the point rather than a flourish: a section
+built on 1.618 is **not** golden, and every checker that compares a measured
+ratio against a tolerance says it is.
+
+```python
+from straightedge.diagrams.templates.construction import verify
+
+verify({"steps": [...], "claims": [...]})   # findings, without drawing anything
+```
+
+See [`docs/construction.md`](https://github.com/SciMigo/straightedge/blob/main/docs/construction.md)
+for the notation, the full claim vocabulary, and an honest account of what the
+precision caps mean.
+
+`verify` is the cheap step before the cheap step — it returns `qc.Finding`
+values, so the CLI, the MCP tools and every existing consumer report them
+unchanged. A claim that holds is silent; one that fails is an `error`; one that
+could not be certified is a `warn` that says so, never a pass.
 
 ## Make an animation
 

@@ -159,3 +159,112 @@ class TestHumanOutputUnchanged:
         err = capsys.readouterr().err
         assert code == 1
         assert "--force" in err, "the human still gets the remedy on stderr"
+
+
+class TestDrawReachesTheFigureLane:
+    """`list-templates` has listed both lanes since it was written.
+
+    Every command reached only the animation one, so the CLI advertised
+    thirty-eight figure templates and could draw none of them — the same gap the
+    MCP server had before `draw`, on the other transport. `render`'s error was
+    honest about it and pointed at a Python function, which is not a thing a
+    shell user can call.
+    """
+
+    def test_a_figure_is_drawn_to_stdout(self, capsys):
+        code = cli.main(["draw", "unit_circle", "--params", '{"angle": 45}'])
+        assert code == 0
+        assert capsys.readouterr().out.startswith("<svg")
+
+    def test_a_figure_is_written_to_a_file(self, capsys, tmp_path):
+        out = tmp_path / "nested" / "figure.svg"
+        assert cli.main(["draw", "unit_circle", "--out", str(out)]) == 0
+        assert out.read_text(encoding="utf-8").startswith("<svg")
+
+    def test_json_reports_the_marks_and_the_byte_count(self, capsys, tmp_path):
+        out = tmp_path / "f.svg"
+        _, payload = _run_json(capsys, ["draw", "unit_circle", "--out", str(out),
+                                     "--json"])
+        assert payload["ok"] and payload["command"] == "draw"
+        assert payload["data_marks"] > 0
+        assert payload["bytes"] == len(out.read_bytes())
+        assert payload["svg"] is None          # it is on disk, not duplicated
+
+    def test_json_carries_the_document_when_there_is_no_file(self, capsys):
+        _, payload = _run_json(capsys, ["draw", "unit_circle", "--json"])
+        assert payload["svg"].startswith("<svg")
+
+    def test_every_figure_template_is_reachable(self, capsys):
+        """The listing and `draw` read one registry, so nothing can be
+        advertised by one and undrawable by the other."""
+        from straightedge.diagrams import DIAGRAM_REGISTRY
+
+        _, payload = _run_json(capsys, ["list-templates", "--json"])
+        listed = {t["id"] for t in payload["templates"] if t["lane"] == "figure"}
+        assert listed == set(DIAGRAM_REGISTRY)
+
+    def test_an_unknown_id_is_typed(self, capsys):
+        _, payload = _run_json(capsys, ["draw", "orgchart", "--json"])
+        assert payload["ok"] is False
+        assert payload["error"]["code"] == "unknown_template"
+
+    def test_a_blank_figure_is_a_failure_not_a_file(self, capsys, tmp_path):
+        """Chrome with no data looks exactly like success, and must not be
+        left on disk for someone to find later."""
+        out = tmp_path / "blank.svg"
+        _, payload = _run_json(capsys, ["draw", "unit_circle", "--params",
+                                     '{"angle": "pi/4"}', "--out", str(out),
+                                     "--json"])
+        assert payload["ok"] is False
+        assert payload["error"]["code"] == "blank_figure"
+        assert not out.exists()
+
+    def test_no_id_at_all_is_typed(self, capsys):
+        _, payload = _run_json(capsys, ["draw", "--json"])
+        assert payload["ok"] is False and payload["error"]["code"] == "no_request"
+
+    def test_a_construction_draws_from_the_notation(self, capsys):
+        _, payload = _run_json(capsys, ["draw", "construction", "--json", "--params",
+                                     json.dumps({"steps": [
+                                         "A = 0, 0", "B = 1, 0",
+                                         "( A B )", "( B A ) -> C D",
+                                         "[ C D ]"]})])
+        assert payload["ok"] and payload["data_marks"] > 0
+
+
+class TestTheCliSaysWhyAConstructionWasRefused:
+    """A construction with correct parameters and a false claim renders blank.
+
+    The generic blank-figure remedy sends the caller to check parameter shapes,
+    which are already right. The MCP path distinguished this and the CLI did
+    not — the same refusal reported two different ways depending on transport.
+    """
+
+    STEPS = ["A = 0, 0", "B = 1, 0", "( A B )", "( B A ) -> C D",
+             "[ C D ]", "[ A B ]"]
+
+    def _draw(self, capsys, claims):
+        return _run_json(capsys, ["draw", "construction", "--json", "--params",
+                                  json.dumps({"steps": self.STEPS,
+                                              "claims": claims})])[1]
+
+    def test_a_false_claim_reports_the_claim(self, capsys):
+        payload = self._draw(capsys, [{"claim": "parallel",
+                                       "of": ["[ C D ]", "[ A B ]"]}])
+        error = payload["error"]
+        assert error["code"] == "blank_figure"
+        assert "refused" in error["message"]
+        assert "parameters are not the problem" in error["remedy"]
+        assert "claim:parallel" in error["details"]["findings"][0]
+
+    def test_a_real_parameter_mistake_still_says_so(self, capsys):
+        payload = _run_json(capsys, ["draw", "construction", "--json",
+                                     "--params",
+                                     json.dumps({"steps": "not a construction"})])[1]
+        assert payload["error"]["code"] == "blank_figure"
+        assert "parameter" in payload["error"]["remedy"]
+
+    def test_a_true_claim_still_draws(self, capsys):
+        payload = self._draw(capsys, [{"claim": "perpendicular",
+                                       "of": ["[ C D ]", "[ A B ]"]}])
+        assert payload["ok"] and payload["data_marks"] > 0

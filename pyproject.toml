@@ -59,8 +59,17 @@ mcp = ["mcp>=2.0"]
 # Everything the fast test suite imports belongs here. Keep this separate from
 # `render` and `stt`, whose heavyweight/runtime dependencies are not needed in
 # the per-PR job. MCP must be present so its `importorskip`-guarded tests run.
+#
+# `sympy` is a *test oracle*, never a runtime path. The exact kernel in
+# `straightedge.geometry.exact` is the one component whose bugs are silent — a
+# sign function wrong in one branch returns a confident wrong number rather than
+# raising, and would poison every geometric claim built on it while a suite of
+# hand-picked identities stayed green. Cross-checking it against an independent
+# CAS is what catches that; the shipped package still imports nothing but the
+# standard library.
+#
 # Kept on one line because the declaration guard reads this assignment.
-dev = ["pytest>=7.4", "numpy>=1.24", "mcp>=2.0"]
+dev = ["pytest>=7.4", "numpy>=1.24", "mcp>=2.0", "sympy>=1.12"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]

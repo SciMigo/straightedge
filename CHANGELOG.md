@@ -4,9 +4,31 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project aims to
 follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.4.0] - 2026-08-21
+
+A minor release, and a new lane. The library is named after a tool it could not
+draw with; this is that tool — compass-and-straightedge constructions computed
+in exact arithmetic, able to assert what they demonstrate and refused when the
+assertion is false.
+
+That refusal is the point. `preconditions` validates a plan's shape, `qc`
+measures a rendered frame, `labels` checks translation — and none of them can
+tell you that the line you drew through two circle intersections *is* the
+perpendicular bisector. This decides that, and draws the conventional marks for
+the claims it decided, so a right-angle square on the figure is evidence rather
+than decoration.
+
+New public surface: `Construction`, `Exact`, `Tower`, `PrecisionError`, the
+`straightedge.geometry` namespace, a `construction` figure template, the
+`verify_construction` MCP tool and a `draw` CLI command. Nothing was removed;
+code written against 0.3.2 keeps working.
 
 ### Fixed
+- The exact kernel's bit ceiling was not enforced on plain rationals. `__add__`,
+  `__mul__` and `inverse` returned early on the level-0 path without checking,
+  so a construction of large rational coordinates — the commonest way integers
+  grow at all — was the one case the cap did not cover. Found by a test written
+  to exercise the cap, which reported no finding because nothing had raised.
 - **`draw` answered `ok: true` for a figure with nothing on it.** Asked for the
   unit circle at `"pi/4"`, it returned zero bytes, zero data marks and
   `blank: true` — alongside `ok: true`. The mark count is the tool's own
@@ -29,6 +51,203 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   missing, and a guess would send a caller to install what they already have.
 
 ### Added
+- **A constructive-geometry lane**, and with it the check the library did not
+  have. `preconditions` validates a plan's shape, `qc` measures a rendered
+  frame, and `labels` checks translation — not one of them can tell you that the
+  line you drew through two circle intersections *is* the perpendicular
+  bisector. That is a fourth failure mode, the picture is legible and the
+  mathematics is wrong, and it is what this lane exists to decide.
+  - `straightedge.geometry.exact` — arithmetic over the tower of quadratic
+    extensions of Q, which is exactly what ruler and compass reach. Sign is
+    decidable by recursion, so `is_zero` is a proof rather than a tolerance.
+    Both caps refuse with a typed `PrecisionError` rather than falling back to
+    floats. Stdlib only.
+  - `straightedge.geometry.model` — `Point`, `Line`, `Circle`, `Segment`,
+    `Section`, `Polygon` and the `Construction` that holds them in the order
+    they were drawn, with automatic intersection, exact deduplication, and
+    `parents`/`children` kept apart.
+  - `construction`, a figure template: construction steps in, SVG out, with
+    circles drawn whole and lines run to the frame. `to_svg_steps()` gives one
+    frame per step against a fixed viewBox, which is the bridge to the
+    animation lane.
+  - `straightedge.geometry.notation` — `A = 0, 0`, `[ A B ]` for the line
+    through two points, `( A B )` for the compass on the first through the
+    second. The brackets are the drawing, so a reader can tell which tool made
+    which element. Strict in the way `expr.py` is strict: one branch per form,
+    no `eval`, and an unrecognised line rejected **with its number and the form
+    it nearly was** rather than repaired into something that draws. The
+    documented forms and the accepted forms are one tuple, and a test parses
+    every one — which is how a published implementation of this idea came to
+    advertise a section syntax its parser did not accept.
+  - `straightedge.geometry.claims` — twelve predicates (`on`, `collinear`,
+    `parallel`, `perpendicular`, `congruent`, `midpoint`, `equilateral`,
+    `tangent`, `concurrent`, `ratio`, `golden`, `harmonic`), each reducing to
+    `is_zero` on an exact value and returning `qc.Finding`, so every existing
+    consumer reports them unchanged. A claim that holds is silent, a claim that
+    fails is an `error`, and one that could not be certified is a `warn` that
+    says so — never a pass. A `construction` whose claim is false does not get
+    drawn, which is the rule `AGENTS.md` states for the example scenes applied
+    to a figure.
+
+    `golden` is the one worth reading: `AB/BC == φ` looks like it needs `√5`,
+    but squaring twice makes it `AB⁴ == AC²·BC²` — exact, and it adjoins
+    nothing. It accepts φ and rejects 1.618, which is the entire argument for
+    the exact kernel in one test.
+- **A step can name the points it produces** — `( B A ) -> C D`, and they are
+  ordered by geometry rather than by algebra: upper first, then left to right.
+  Automatic names shift when an earlier step consumes a letter, so inserting one
+  anonymous point moved the vesica's crossings from `C, D` to `D, E` and a line
+  written as `[ C D ]` silently joined two different points — no error, a
+  plausible figure. The geometric order is what makes a name mean something:
+  which crossing is "upper" is a fact about the drawing, while which one the
+  algebra emits first depends on the sign of a line coefficient. Naming more
+  points than a step makes is refused rather than ignored.
+- **`straightedge draw`**, so the CLI can draw a figure. `list-templates` had
+  listed both lanes since it was written while every command reached only the
+  animation one, so the CLI advertised 38 figure templates and could draw none
+  of them — the same gap the MCP server had before `draw`, on the other
+  transport. It writes to `--out` or pipes the document to stdout, reports
+  `data_marks` and the UTF-8 byte count under `--json`, and refuses a blank
+  figure rather than leaving an empty file behind. A test asserts the listing
+  and `draw` read one registry.
+- **A proved claim earns its mark on the figure.** A right-angle square where
+  `perpendicular` was decided, ticks on segments decided `congruent`, chevrons on
+  proved parallels — the conventional annotations, drawn *because the arithmetic
+  decided them*. Every other tool draws a right-angle square because a human
+  asserted the angle; here the square is evidence. A claim that fails earns
+  nothing and blocks the drawing; one that could not be certified earns nothing
+  either, because an uncertified right angle drawn as certain is precisely the
+  confident falsehood this lane refuses.
+
+  Groups are numbered by stroke count so two congruences read apart, and only a
+  claim that actually draws groups consumes a number — counting `perpendicular`
+  made the first congruence draw two strokes and sent a reader looking for a
+  single-tick pair that was never there. A tick whose midpoint lands on a
+  right-angle corner slides along its own segment: in the vesica the midpoint of
+  `AB` *is* that corner, and both marks are correct and together unreadable.
+- **Arcs**, written `( O A ~ B )` — the arc of the circle on `O`, counterclockwise
+  from `A` to `B`. Circles are drawn whole everywhere else in this lane and
+  deliberately so, because a clipped element hides the relationships it is not
+  currently being used for; an arc is the exception a *sectional* figure needs.
+  A hemisphere in section is a semicircle, and drawing the whole circle says
+  something false about the solid.
+
+  Both ends must lie on the circle. Taking an arbitrary direction and finding
+  where it meets the circle needs the square root of a length, which is not in
+  general constructible — so such an arc could only be placed approximately, in
+  the one lane where nothing is approximate. An arc restricts what is *drawn*,
+  never what is known: intersections and claims run against the whole circle, so
+  a point on the hidden part is still found and still drawn. Its extent, though,
+  is its own sweep — reserving the whole circle for a semicircle wasted half the
+  page on nothing, which is the reason arcs were wanted.
+- **A mark needs something to mark on.** `congruent` claimed on four radii that
+  were never drawn put four ticks in the middle of empty space, which reads as a
+  rendering fault rather than as a proof. A segment is not an element — it exists
+  where a drawn line passes through both ends, or where two adjacent corners of a
+  drawn polygon are. The claim still holds and is still reported; it simply earns
+  no annotation when there is nothing on the page for one to sit against.
+- **Labels are placed in the first free slot** rather than always to the right.
+  `P` and `Q`, one unit apart on a 200-unit figure, were drawn in the same pixels
+  — and a figure that cannot tell you which point is which has lost the thing
+  labels are for. Six slots are tried in turn, and a label with nowhere to go is
+  dropped rather than stacked: an unlabelled point is a gap a reader can see, two
+  labels in one place is one they cannot.
+- **`tangent` accepts two circles**, not only a circle and a line. Written on the
+  stored `r²` it is one identity covering internal and external contact —
+  `(d² − r₁² − r₂²)² = 4r₁²r₂²` — exact, and needing no square root. The AIME
+  hemisphere problem is the case it was missing: a 42-sphere resting inside a
+  200-hemisphere touches it at exactly `r = 20√58`.
+- **`verify_construction`, an MCP tool.** `draw` refuses a construction whose
+  claim is false and returns a blank, and a template has nowhere to put the
+  reason. This returns the findings without drawing: `holds`, `worst`, and
+  `would_draw` — the last a claim about what `draw` will actually do, with a
+  test that checks the two agree. Same economics as `validate` before `render`,
+  at a smaller scale.
+- **`tools/build_site_figures.py`**, and a test behind it. `build_site_assets.py`
+  was written because every MP4 on the site was made by hand and nothing could
+  reproduce it; the SVG figures had exactly the same problem and were never
+  covered. Each declared figure now names the hint that made it, `--check` fails
+  when one drifts, and the `pages` workflow gates the deploy on it the way it
+  already gates the feed.
+
+  The eight pre-existing figures are deliberately **not** declared: their inputs
+  were never recorded, and a guess that renders something plausible would
+  replace the site's artwork and report success. They are named in the script as
+  outstanding rather than quietly implied to be covered.
+- A post, *The picture is not the proof*, and a third series on the blog. 1.618
+  is right to three places, is not φ, and every checker that compares a measured
+  ratio against a tolerance says it is.
+- `Arc` joins the `straightedge.geometry` namespace. It was reachable through
+  `Element.geometry` and not importable, so a caller received a type they could
+  not name or check against. The guard added with it is written against the
+  *set* of the model's exports rather than against `Arc` — a class added to the
+  model and forgotten in the package is how this one was missed, and the next
+  one would have gone the same way.
+- Four further review findings, all reproduced first:
+  - **A circle was tangent to itself.** The squared identity is satisfied by a
+    circle and its own copy — `d² = 0` and `r₁ = r₂` make both sides `4r⁴` — but
+    coincident circles meet at every one of their points, which is the opposite
+    of touching at one. Dedup makes this easy to reach: redrawing a circle
+    returns the first one, so the two operands are the same element.
+  - **A requested name could be eaten by a crossing that already existed.** The
+    name was spent before the insert, and inserting a point already in the model
+    returns the existing one — so `[ C D ] -> M` met `C` and `D` again on its way
+    to the midpoint, `M` was consumed by a point that already had a name, and the
+    midpoint fell back to an automatic letter. `M` then referred to nothing,
+    silently, which is the failure the naming form exists to prevent. Names are
+    spent only on points a step actually creates.
+  - **A zero-sweep arc drew nothing and reasoned as a whole circle.**
+    `( O A ~ A )` was accepted; SVG renders an arc from a point to itself as
+    nothing at all, while the model still intersected against the full circle —
+    so the figure carried geometry a reader cannot see and a claim could turn on
+    it. Refused, and the refusal names `( O A )` as the way to say "the whole
+    circle".
+  - **The CLI reported a refusal as a parameter mistake.** A construction whose
+    claim is false renders blank, and the generic remedy sent the caller to check
+    parameter shapes that were already correct. The MCP path distinguished this
+    and the CLI did not, so the same refusal read differently by transport. One
+    implementation now, beside `verify`, used by both.
+- Five review findings on the lane above, all reproduced before being fixed and
+  all gaps the suite could not see:
+  - **Float coordinates were silently approximated.** `limit_denominator(10**9)`
+    turned `0.333333333334` into exactly `1/3`, `1.000000000001` into `1` and
+    `1e-12` into `0` — an approximation in the one lane whose premise is that
+    nothing is approximated, and enough to prove a claim exactly of a number
+    nobody supplied. A float is now read through its `repr`, the shortest
+    decimal that round-trips, so `0.1` is one tenth and `0.333333333334` stays
+    itself. A non-finite float is refused.
+  - **Degenerate figures proved arbitrary claims.** Every squared length of a
+    section on one repeated point is zero, so `AB² == r²·BC²` held for *every*
+    `r`: the collapsed section was reported as being in ratio 12345 and as
+    golden, by exact arithmetic, with total confidence. A predicate now owns its
+    domain — sections need parts with length, harmonic ranges need four distinct
+    points, and a ratio of lengths must be positive, since squaring loses the
+    sign and `-2` was satisfied by `2`.
+  - **A malformed claim crashed instead of reporting.** The predicates read
+    `claim.of` positionally, so `midpoint` with one name raised out of an
+    unpacking and reached the MCP tool as a `ValueError`. Arity is declared per
+    claim and checked before dispatch.
+  - **Square-free reduction could run effectively forever.** Trial division to
+    `√n` is unbounded on an integer this class carries to `MAX_BITS`: a 50-bit
+    prime took four seconds, and a construction with a large coordinate reaches
+    it through a circle intersection — so an ordinary request could pin the
+    process. The search is bounded now; an unreduced radicand is still a
+    radicand, so the cost is a generator that might have been shared, never an
+    answer. 4.4s to 0.012s on the reported case.
+  - **Hashing disagreed with equality.** `Exact.rational(Fraction(1, 3))` equals
+    `Fraction(1, 3)` while their rounded-float hashes differed, so a dict keyed
+    on one could not be read with the other — a silent loss of membership rather
+    than an error. `Exact`, `Point`, `Line` and `Circle` are unhashable; nothing
+    hashed them, and no cheap hash agrees with exact algebraic equality.
+- `draw` distinguishes a **refusal** from a parameter mistake. A construction
+  blocked by a false claim has correct parameters, and the blank-figure remedy
+  sent its caller to check them; it now names the failing claim and points at
+  `verify_construction`. A construction that could not be *built* still reports
+  parameter shapes, because that is what is wrong with it.
+- `sympy` joins the `dev` extra as a **test oracle** for the exact kernel —
+  never a runtime path. Random expressions are built twice and required to
+  agree on sign, zero and order, which covers the mistakes nobody has made yet.
+  The shipped package still imports nothing but the standard library.
 - **Parameter shapes in the catalog.** `Template.parameters` reports each
   parameter with its type and default where the code states one, beside the
   existing `params` name list. Names alone are what let an agent send `"pi/4"`

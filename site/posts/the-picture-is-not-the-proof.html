@@ -1,0 +1,236 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#090d14">
+    <meta name="description" content="1.618 is not the golden ratio, and every diagram tool that measures its own drawing says it is. Straightedge computes ruler-and-compass constructions in exact arithmetic, so a claim about a figure is decided rather than estimated.">
+    <meta property="og:title" content="The picture is not the proof">
+    <meta property="og:description" content="A construction that asserts what it demonstrates, and is refused when the assertion is false. Exact arithmetic over the field ruler and compass actually reach.">
+    <meta property="og:image" content="https://raw.githubusercontent.com/SciMigo/straightedge/main/site/assets/svg/construction-vesica.svg">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://scimigo.github.io/straightedge/posts/the-picture-is-not-the-proof.html">
+    <link rel="canonical" href="https://scimigo.github.io/straightedge/posts/the-picture-is-not-the-proof.html">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="The picture is not the proof">
+    <meta name="twitter:description" content="1.618 is not φ. A diagram tool that measures its own drawing cannot tell, and that is the gap this lane closes.">
+    <meta name="twitter:image" content="https://raw.githubusercontent.com/SciMigo/straightedge/main/site/assets/svg/construction-vesica.svg">
+    <title>The picture is not the proof</title>
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "TechArticle",
+      "headline": "The picture is not the proof",
+      "description": "Ruler and compass reach exactly the tower of quadratic extensions of the rationals. Computing in that field rather than in floats turns a claim about a construction into a decision instead of a measurement.",
+      "url": "https://scimigo.github.io/straightedge/posts/the-picture-is-not-the-proof.html",
+      "image": "https://raw.githubusercontent.com/SciMigo/straightedge/main/site/assets/svg/construction-vesica.svg",
+      "datePublished": "2026-08-20",
+      "author": { "@type": "Organization", "name": "SciMigo" },
+      "publisher": { "@type": "Organization", "name": "Straightedge" },
+      "about": ["Constructive geometry", "Exact arithmetic", "Golden ratio", "Compass and straightedge", "Constructible numbers"],
+      "isPartOf": { "@type": "WebSite", "name": "Straightedge", "url": "https://scimigo.github.io/straightedge/" }
+    }
+    </script>
+    <link rel="stylesheet" href="../styles.css">
+    <link rel="stylesheet" href="post.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="wordmark" href="../index.html" aria-label="Straightedge, back to the gallery">
+        <span class="wordmark-mark" aria-hidden="true"></span>
+        <span>Straightedge</span>
+      </a>
+      <a class="repo-link" href="index.html">All posts <span aria-hidden="true">↗</span></a>
+    </header>
+
+    <main class="post">
+      <div class="post-head">
+        <p class="post-kicker">Constructive geometry · 01</p>
+        <h1>The picture is not the proof</h1>
+        <p class="post-dateline">
+          <time datetime="2026-08-20">20 Aug 2026</time>
+          <span class="dot" aria-hidden="true">·</span>
+          <span class="tag">Exact arithmetic</span>
+        </p>
+        <p class="standfirst">
+          Take three points on a line, with the first part 1.618 times the
+          second. Is that a golden section? Every tool that answers by measuring
+          its own drawing says yes. It is not, it is wrong in the fifth decimal
+          place, and no amount of rendering more carefully will ever catch it.
+        </p>
+        <p class="byline">
+          <span>Compass and straightedge · exact coordinates</span>
+          <span>Drawn by <code>construction</code></span>
+        </p>
+      </div>
+
+      <figure class="post-figure">
+        <img src="../assets/svg/construction-vesica.svg"
+             alt="Two overlapping circles of equal radius, the vertical line through their two intersection points, and the horizontal line through their centres, with seven labelled points">
+        <figcaption>
+          Two points were given. The other five were found — and the library
+          knows the difference.
+        </figcaption>
+      </figure>
+
+      <h2>A visual can render successfully and still be wrong</h2>
+
+      <p>
+        That sentence has been in this project's design notes since the
+        beginning, and until now it meant one thing: a caption through an axis
+        label, two formulas on the same spot, a curve leaving its frame. Those
+        are defects of <em>legibility</em>. The checks that catch them measure
+        boxes on a rendered frame, and they work.
+      </p>
+
+      <p>
+        There is a second way to be wrong, and none of those checks can see it.
+        A construction can be perfectly legible — well spaced, correctly
+        labelled, beautiful — and assert something false. Nothing about the
+        pixels is out of place. The mathematics is.
+      </p>
+
+      <p>
+        Ask the usual question about the drawing above: is the vertical line the
+        perpendicular bisector of the base? You can measure it. You will get a
+        dot product of something like <code>-2.2e-16</code>, decide that is
+        close enough to zero, and be right — this time. Now ask whether a
+        section is golden, where the answer differs from the measurement in the
+        fifth decimal. The same method gives the same confident yes, and it is
+        wrong.
+      </p>
+
+      <h2>The field is not a choice</h2>
+
+      <p>
+        The way out is not to measure more precisely. It is to stop measuring.
+      </p>
+
+      <p>
+        Ruler and compass reach exactly the tower of quadratic extensions of the
+        rationals. A straightedge through two known points gives a linear
+        equation; a compass gives a quadratic one; and nothing either tool can do
+        escapes <code>Q(√r₁)(√r₂)…(√rₙ)</code>. That is the classical theorem,
+        and it is why the cube cannot be doubled — a cube root has degree 3, and
+        every number reachable here has degree a power of two.
+      </p>
+
+      <p>
+        So the arithmetic of ruler-and-compass geometry is not an approximation
+        of that field. It <em>is</em> that field, and it can be implemented
+        exactly. An element at level <em>k</em> is <code>a + b√gₖ</code> with
+        <code>a</code> and <code>b</code> from the level below and rationals at
+        the bottom. Addition and multiplication are componentwise; division goes
+        through the conjugate; and sign — the part that matters — is decidable by
+        recursion:
+      </p>
+
+      <pre><code>sign(a + b√g), with g &gt; 0 and therefore √g &gt; 0:
+    a, b both ≥ 0   →  positive
+    a, b both ≤ 0   →  negative
+    opposite signs  →  compare a² against b²g, recursively</code></pre>
+
+      <p>
+        No tolerance appears anywhere in that path. <code>is_zero</code> is a
+        proof.
+      </p>
+
+      <h2>What the drawing above actually knows</h2>
+
+      <p>
+        Two points were given, <code>A = (0, 0)</code> and
+        <code>B = (1, 0)</code>. Everything else came from crossing what was
+        already there:
+      </p>
+
+      <pre><code>A = 0, 0
+B = 1, 0
+( A B )     the circle on A through B
+( B A )     the circle on B through A
+[ C D ]     the line through the two points those circles produced
+[ A B ]</code></pre>
+
+      <p>
+        <code>C</code> and <code>D</code> were never named by anyone — they are
+        where the circles meet, and the model found them. So were <code>E</code>
+        and <code>F</code> on the base, and <code>G</code> where the two lines
+        cross. <code>G</code> is not <em>approximately</em> the midpoint of
+        <code>AB</code>; it is exactly <code>(1/2, 0)</code>, and <code>C</code>
+        is exactly <code>(1/2, √3/2)</code>. The whole construction costs the
+        field one generator: <code>√3</code>, and nothing else.
+      </p>
+
+      <figure class="post-figure">
+        <img src="../assets/svg/construction-steps.svg"
+             alt="The first four steps: two given points and two circles, with the two intersection points they produce">
+        <figcaption>
+          Four steps in. The teal points were placed; the dark ones were found.
+        </figcaption>
+      </figure>
+
+      <h2>A construction that asserts something, and is refused when it lies</h2>
+
+      <p>
+        Once coordinates are exact, a figure can carry claims about itself, and
+        they can be <em>decided</em>:
+      </p>
+
+      <pre><code>"claims": [
+  {"claim": "perpendicular", "of": ["[ C D ]", "[ A B ]"]},
+  {"claim": "midpoint",      "of": ["G", "A", "B"]},
+  {"claim": "congruent",     "of": [["A","B"], ["A","C"], ["B","C"]]}
+]</code></pre>
+
+      <p>
+        Those three hold, so the figure renders — it is the one at the top of
+        this page, and it was produced by the script that builds this site, with
+        the claims checked before a single element was drawn. Change
+        <code>perpendicular</code> to <code>parallel</code> and nothing is
+        drawn at all. A figure whose claim stops being true fails, rather than
+        producing a convincing picture of something false.
+      </p>
+
+      <h2>1.618</h2>
+
+      <p>
+        Which brings back the opening. A section is golden when the whole is to
+        the greater part as the greater is to the lesser. Written out that is
+        <code>AB² = AC·BC</code>, and squaring it gives
+        <code>AB⁴ = AC²·BC²</code> — an identity among <em>squared</em> lengths,
+        with no square root in it anywhere. The predicate is exact and costs the
+        field nothing.
+      </p>
+
+      <p>
+        Give it a section built on <code>φ = (1+√5)/2</code> and it holds. Give
+        it one built on 1.618 and it does not. The two differ by about
+        <code>3.4 × 10⁻⁵</code> — far above any floating-point epsilon, and far
+        below what a drawing can show you. Every checker that compares a measured
+        ratio against a tolerance calls the second one golden. This one calls it
+        what it is.
+      </p>
+
+      <p>
+        That is the entire claim of this lane. Not that the diagrams are prettier
+        — that the ones which assert something have been made to prove it, and
+        are refused when they cannot.
+      </p>
+
+      <nav class="post-nav">
+        <a class="next" href="matrix-product-four-ways.html">
+          Next: Matrix multiplication, four ways <span aria-hidden="true">→</span>
+        </a>
+      </nav>
+    </main>
+
+    <footer class="site-footer">
+      <p>
+        <a href="https://github.com/SciMigo/straightedge">Straightedge on GitHub</a>
+        <span class="dot" aria-hidden="true">·</span>
+        <a href="index.html">All posts</a>
+        <span class="dot" aria-hidden="true">·</span>
+        <a href="feed.xml">Feed</a>
+      </p>
+    </footer>
+  </body>
+</html>
