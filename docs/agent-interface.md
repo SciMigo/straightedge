@@ -116,3 +116,50 @@ what goes wrong without it.
 
 Keep that as the codebase grows. It is cheaper than any amount of generated
 API reference, and it is the part an agent can actually reason with.
+
+## The determinism guarantee
+
+**The same template and the same parameters produce byte-identical SVG — on any
+machine, in any process, on any day.**
+
+This is a guarantee, not an observation, and it is what makes the useful things
+safe to build: caching a figure under the hash of its request, committing
+generated SVG and reading the diff as a real change, regenerating a docs set in
+CI and gating on `--check`, or comparing one render against the last to see what
+moved. Every one of those is silently wrong if a figure can render two ways.
+
+Concretely, the library promises that a render depends on nothing but its
+arguments:
+
+- **No clock, no locale, no filesystem, no network.** Nothing dated or
+  machine-specific reaches the output, so a committed SVG does not diff
+  tomorrow, or on someone else's laptop.
+- **No hash-seed dependence.** Python randomises string hashing per process, so
+  iterating a `set` reorders output between runs while looking perfectly stable
+  within one. Output ordering comes from the input's order or from a declared
+  constant — `roadmap`'s legend, for instance, is ordered by `STATUS_ORDER`
+  rather than by whichever statuses happened to be present.
+- **No global state, in either direction.** A figure that needs randomness seeds
+  a generator of its own. `dirichlet_function` scatters points from a
+  `random.Random(...)` instance, so its scatter is reproducible *and* your
+  `random` stream is exactly where you left it. A figure is not entitled to
+  reach outside its own output.
+- **Stable catalog.** `list_templates()` returns the same ids, parameters and
+  defaults in the same order every time, so an agent can cache what it learned.
+
+### How it is checked
+
+`tests/test_determinism.py`. The load-bearing test spends two subprocesses:
+every figure is rendered under `PYTHONHASHSEED=0` and again under `99999`, and
+the two sets of hashes must match. A same-process double-render cannot see a set
+leak, so nothing less would do. (Dict iteration has been insertion-ordered since
+Python 3.7 and is *not* seed-dependent — sets are the live hazard.)
+
+The subtlety worth knowing if you extend this: a figure rendered with `{}` takes
+its empty defaults and never enters the loops where ordering could vary. A sweep
+over bare renders therefore agrees with itself no matter how badly ordered the
+code beneath it is — it is a test that cannot fail. So every template has a real
+payload in `tests/figure_payloads.py`, and a separate test asserts that each one
+actually changes the output. Verified the only way that means anything: with a
+`set` deliberately introduced into `roadmap`'s legend ordering, the bare sweep
+passed and the payload sweep failed.

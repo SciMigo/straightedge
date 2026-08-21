@@ -58,6 +58,19 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   report success. It refuses instead — on a version with no section, naming the
   ones that exist, and on a section that is empty — and a test asserts every
   shipped version still has notes to publish.
+- A stated determinism guarantee (`docs/agent-interface.md`) and the tests that
+  hold it: the same template and parameters produce byte-identical SVG on any
+  machine, in any process, on any day. Checked across two hash seeds in separate
+  interpreters, because Python randomises string hashing per process and a
+  `set` that reaches output reorders between runs while looking stable inside
+  one.
+- `tests/figure_payloads.py`, a real parameter payload for every figure
+  template. Determinism checked against bare `{}` renders is a test that cannot
+  fail — a template given no parameters takes its empty defaults and never
+  enters the loops where ordering could vary. Each payload is asserted to put
+  data marks on its figure, not merely to change the output — a template handed
+  something it cannot use still returns a document, and refusal chrome differs
+  from a bare render while drawing nothing at all.
 
 ### Changed
 
@@ -81,6 +94,13 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   278 of them, passing the default renders byte-identical output to omitting the
   parameter. Both the CLI and the MCP server read the same catalog, so both
   gained this.
+
+### Fixed
+
+- `dirichlet_function` seeded the process-wide random generator to place its
+  scatter, so rendering that one figure silently reset the `random` sequence of
+  whatever called it. It now seeds a generator of its own: the scatter stays
+  reproducible, and it no longer depends on — or disturbs — global state.
 
 ## [0.4.0] - 2026-08-21
 

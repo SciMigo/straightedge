@@ -128,9 +128,11 @@ class DirichletFunctionTemplate:
                                  stroke="#2196F3", stroke_width="1",
                                  stroke_dasharray="4,4", opacity="0.5"))
 
-        # Generate scattered points - mix of "rational" and "irrational"
-        # Use deterministic randomness for reproducibility
-        random.seed(42 + zoom_level)
+        # Generate scattered points - mix of "rational" and "irrational".
+        # Seeded, so the figure is reproducible -- but on a generator of its
+        # own: `random.seed` would reach into the process-wide stream and
+        # silently reset the sequence of whoever called us.
+        rng = random.Random(42 + zoom_level)
 
         points_rational = []
         points_irrational = []
@@ -139,10 +141,10 @@ class DirichletFunctionTemplate:
         actual_points = num_points * zoom_level
 
         for _ in range(actual_points):
-            x = random.uniform(x_min, x_max)
+            x = rng.uniform(x_min, x_max)
 
             # Alternate between rational and irrational visualization
-            if random.random() < 0.5:
+            if rng.random() < 0.5:
                 # "Rational" point - on the curve
                 y = eval_rational(x)
                 if y_min <= y <= y_max:
