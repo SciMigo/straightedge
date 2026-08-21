@@ -42,7 +42,7 @@ from pathlib import Path
 from typing import Any
 
 from . import __version__
-from .catalog import as_dicts
+from .catalog import ANIMATION_REQUIRES, as_dicts
 from .diagrams import DIAGRAM_REGISTRY, render_diagram
 from .diagrams.legibility import check_figure
 from .diagrams.registry import count_data_marks
@@ -378,22 +378,58 @@ def _missing_render_runtime() -> list[str]:
     same is true of a TeX installation missing the class the emitted preamble
     asks for, which is why the smoke workflow installs texlive-latex-extra.
     """
-    missing: list[str] = []
+    return [note for note in (_CHECKS[name]() for name in ANIMATION_REQUIRES)
+            if note]
+
+
+def _manim_unusable() -> str | None:
+    """Whether Manim can be imported *and used*, not merely found.
+
+    Only ``ImportError`` was caught here, and Manim is a stack of native
+    libraries — cairo, pango, an ffmpeg binding — any of which can fail to load
+    with ``OSError`` or ``RuntimeError`` instead. That used to break `render`
+    alone, which was survivable. Now that this runs while the server is being
+    built, letting it escape would take down `draw`, `plan`, `validate` and
+    every other pure-standard-library tool because an *optional* extra is
+    broken. An installation that cannot be imported is not a runtime, whichever
+    way it says so.
+    """
     try:
         import manim  # noqa: F401
     except ImportError:
-        missing.append("manim (pip install 'straightedge[render]')")
-    for binary, note in (("ffmpeg", "ffmpeg"),
-                         ("latex", "a LaTeX distribution"),
-                         ("dvisvgm", "dvisvgm (Manim's DVI to SVG step)")):
-        if shutil.which(binary) is None:
-            missing.append(note)
+        return "manim (pip install 'straightedge[render]')"
+    except Exception as exc:  # noqa: BLE001 - see the docstring
+        return (f"a working manim (it is installed, but importing it raised "
+                f"{type(exc).__name__}: {exc})")
+    return None
+
+
+def _binary_missing(binary: str, note: str):
+    def check() -> str | None:
+        return None if shutil.which(binary) else note
+    return check
+
+
+def _tex_class_missing() -> str | None:
     # Only probed when TeX is present enough to answer: kpsewhich missing means
     # unknown, not absent, and reporting a guess would send a caller to install
     # something they may already have.
     if shutil.which("kpsewhich") and not _tex_has("standalone.cls"):
-        missing.append("standalone.cls (texlive-latex-extra)")
-    return missing
+        return "standalone.cls (texlive-latex-extra)"
+    return None
+
+
+#: One check per name in :data:`ANIMATION_REQUIRES`, keyed by that name, so the
+#: list a caller reads and the list this host enforces are the same list. They
+#: were two, and the catalog's was shorter: a caller could install all of what
+#: it published and still be refused for the LaTeX class.
+_CHECKS = {
+    "manim": _manim_unusable,
+    "ffmpeg": _binary_missing("ffmpeg", "ffmpeg"),
+    "latex": _binary_missing("latex", "a LaTeX distribution"),
+    "dvisvgm": _binary_missing("dvisvgm", "dvisvgm (Manim's DVI to SVG step)"),
+    "texlive-latex-extra": _tex_class_missing,
+}
 
 
 def _render(request: str, language: str, quality: str, force: bool,

@@ -509,3 +509,53 @@ class TestConstructionsCanBeCheckedBeforeTheyAreDrawn:
         """It returns findings, never an SVG — that is the point of it."""
         result = mcp_server._verify_payload(self.VESICA, [])
         assert "svg" not in result
+
+
+class TestABrokenOptionalExtraDoesNotStopTheServer:
+    """Manim is a stack of native libraries — cairo, pango, an ffmpeg binding —
+    and any of them can fail to load with `OSError` or `RuntimeError` rather
+    than `ImportError`.
+
+    The probe caught only `ImportError`. While it ran inside `render` that was
+    survivable: one tool failed. Running it at startup to decide whether to
+    offer that tool made it fatal — a broken *optional* extra took down `draw`,
+    `plan`, `validate` and every other pure-standard-library tool with it.
+    """
+
+    def _with_manim_raising(self, monkeypatch, exc):
+        import builtins
+
+        real = builtins.__import__
+
+        def fake(name, *args, **kwargs):
+            if name == "manim":
+                raise exc
+            return real(name, *args, **kwargs)
+
+        monkeypatch.setattr(builtins, "__import__", fake)
+
+    @pytest.mark.parametrize("exc", [
+        OSError("cannot load library 'libpangocairo-1.0.so.0'"),
+        RuntimeError("cairo returned an unexpected status"),
+        ImportError("No module named 'manim'"),
+    ])
+    def test_the_probe_reports_rather_than_raises(self, monkeypatch, exc):
+        self._with_manim_raising(monkeypatch, exc)
+        missing = mcp_server._missing_render_runtime()
+        assert any("manim" in note for note in missing), missing
+
+    def test_the_server_still_builds(self, monkeypatch):
+        import asyncio
+
+        pytest.importorskip("mcp")
+        self._with_manim_raising(monkeypatch, OSError("libpango is missing"))
+        names = {t.name for t in asyncio.run(mcp_server.build_server().list_tools())}
+        assert {"list_templates", "draw", "verify_construction",
+                "plan", "validate"} <= names
+        assert "render" not in names
+
+    def test_the_note_says_it_is_installed_but_unusable(self, monkeypatch):
+        """"Install manim" is the wrong advice for a manim that is installed."""
+        self._with_manim_raising(monkeypatch, OSError("libpango is missing"))
+        note = next(n for n in mcp_server._missing_render_runtime() if "manim" in n)
+        assert "installed" in note and "OSError" in note

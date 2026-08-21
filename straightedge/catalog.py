@@ -55,10 +55,16 @@ from typing import Callable
 
 from .examples import EXAMPLES, REQUESTS
 
-#: What the animation lane needs on the host, beyond `pip install`. Three of the
-#: four are system packages, which is why the `render` extra alone is not enough
+#: What the animation lane needs on the host, beyond `pip install`. Four of the
+#: five are system packages, which is why the `render` extra alone is not enough
 #: and why `mcp_server` probes for them before offering to render at all.
-ANIMATION_REQUIRES = ("manim", "ffmpeg", "latex", "dvisvgm")
+#:
+#: `texlive-latex-extra` is here because the probe enforces it — scenes use
+#: MathTex and the emitted preamble asks for `standalone.cls`. Leaving it out
+#: made this list a promise the runtime did not keep: a caller could install
+#: everything named here and still be refused. `mcp_server` builds its probe
+#: from these names, so the two cannot drift.
+ANIMATION_REQUIRES = ("manim", "ffmpeg", "latex", "dvisvgm", "texlive-latex-extra")
 
 
 @dataclass(frozen=True)

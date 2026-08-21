@@ -411,16 +411,28 @@ class TestATemplateSaysWhatItCosts:
             if t.lane == "animation":
                 assert t.requires == list(ANIMATION_REQUIRES)
 
-    def test_it_matches_what_the_server_actually_probes(self):
-        """Two lists of the same four things drift. This is the one that would
-        drift silently: the probe fails loudly, the catalog just lies."""
-        import inspect
+    def test_it_is_exactly_what_the_server_enforces(self):
+        """Both directions, as an exact set.
 
+        The first version of this checked only that each published name appears
+        somewhere in the probe's source — which cannot see a requirement the
+        probe *enforces* and the catalog never mentions. It missed one:
+        `standalone.cls`, so a caller could install everything `requires`
+        published and still have `render` withheld. The probe now builds its
+        checks from this very list, and this asserts the mapping is total.
+        """
         from straightedge import mcp_server
         from straightedge.catalog import ANIMATION_REQUIRES
 
-        source = inspect.getsource(mcp_server._missing_render_runtime)
-        for name in ANIMATION_REQUIRES:
-            assert name in source, (
-                f"the catalog says an animation needs {name!r} and the runtime "
-                "probe never looks for it")
+        assert set(mcp_server._CHECKS) == set(ANIMATION_REQUIRES), (
+            "a requirement is enforced by the probe or published by the "
+            "catalog, but not both")
+
+    def test_every_check_can_name_itself(self):
+        """A check that returns a note the caller cannot act on is no better
+        than a silent refusal."""
+        from straightedge import mcp_server
+
+        for name, check in mcp_server._CHECKS.items():
+            note = check()
+            assert note is None or note.strip(), f"{name} returned an empty note"
