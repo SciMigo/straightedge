@@ -44,6 +44,7 @@ from typing import Any
 from . import __version__
 from .catalog import as_dicts
 from .diagrams import DIAGRAM_REGISTRY, render_diagram
+from .diagrams.legibility import check_figure
 from .diagrams.registry import count_data_marks
 from .errors import BlankFigureError, RequestError, StraightedgeError, UnknownTemplateError
 from .estimate import estimate
@@ -96,7 +97,11 @@ def build_server():
             "`params` (list_templates reports which parameters each one reads). "
             "Check `data_marks` in the reply: a template given parameters it "
             "cannot interpret still draws its axes and frame, so zero marks "
-            "means the figure is empty however many bytes came back."
+            "means the figure is empty however many bytes came back. Read "
+            "`findings` too: each one carries the box of the defect it names, so "
+            "an `error` — two labels in the same pixels, a caption past the edge "
+            "— tells you where to move something rather than only that the "
+            "figure is wrong."
         ),
     )
     def draw(type: str = "", params: dict | None = None) -> dict[str, Any]:
@@ -272,6 +277,11 @@ def _draw_payload(diagram_type: str, params: dict | None) -> dict[str, Any]:
         "bytes": len(svg.encode("utf-8")),
         "characters": len(svg),
         "data_marks": marks,
+        # Where the figure is *wrong*, not merely that it rendered. Each finding
+        # carries the box of the thing it is about, which is the answer a caller
+        # can act on — and is only available because this lane computes its own
+        # geometry rather than asking a browser for it.
+        "findings": [asdict(f) for f in check_figure(svg)],
         # Kept for callers that branch on it; it is now always False, because a
         # figure with no marks raises BlankFigureError instead.
         "blank": False,
