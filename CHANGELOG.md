@@ -4,7 +4,29 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project aims to
 follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.5.0] - 2026-08-21
+
+A minor release about whether the output is any good, and whether a caller can
+find out. The figure lane gained a check it never had — the animation lane has
+measured its own frames since the beginning, while a figure's only test was
+"did anything get drawn", so a diagram could stack four labels in the same
+pixels and report success. `check_figure` reads an emitted figure back as
+geometry and returns findings with the coordinates of what they name.
+
+The other half is the catalog telling the truth about itself. It published
+parameter names with no types beside them, because it understood one of the six
+ways this codebase states a default; a caller with nothing in front of them
+guesses, which is how `angle` once arrived as `pi/4`. It now reads all six, and
+every template ships a worked example that the suite holds to its claim — a
+figure example must draw, an animation example must plan, a request must route
+where it says. Determinism is stated as a guarantee and tested across hash
+seeds in separate interpreters rather than assumed.
+
+New public surface — `example` and `example_request` on `Template`,
+`diagrams.legibility.check_figure`, an `examples` flag on the MCP listing — so
+a minor rather than a patch. Nothing was removed and nothing renamed: the new
+fields are appended after `summary`, so positional construction against 0.4
+still means what it did.
 
 ### Added
 - **A legibility check over the whole figure lane, and findings that say where.**
