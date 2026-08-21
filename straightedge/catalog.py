@@ -48,9 +48,12 @@ from __future__ import annotations
 import ast
 import inspect
 import textwrap
+from copy import deepcopy
 from dataclasses import asdict, dataclass, field
 from typing import Callable
 
+
+from .examples import EXAMPLES, REQUESTS
 
 @dataclass(frozen=True)
 class Template:
@@ -66,6 +69,42 @@ class Template:
     # got a blank figure. Kept beside `params` rather than replacing it.
     parameters: list[dict] = field(default_factory=list)
     summary: str = ""
+    # Appended after `summary`, not slotted in beside `parameters` where they
+    # read better. `Template(id, lane, output, invocation, params, parameters,
+    # summary)` is code somebody has already written against 0.4, and inserting
+    # a field ahead of `summary` does not break it — it silently files the
+    # summary string under `example` and leaves `summary` empty. New optional
+    # fields go on the end.
+    #
+    # Types told a caller what shape to send; they still did not say what a
+    # working call looks like. Nothing in `parameters` reveals that `solid_spec`
+    # is a dict of {kind, params, name} rather than the string "cube", or that a
+    # roadmap with tracks and items draws an empty frame until it is also given
+    # a top-level `start_date`. Both were found by writing these.
+    example: dict = field(default_factory=dict)
+    # The animation lane's other door: routing is by keyword and Chinese-first,
+    # so a phrasing that reaches this template is worth more than the rule that
+    # decides it. Empty for figures, and for the two templates reachable only
+    # by id.
+    example_request: str = ""
+
+    def __post_init__(self) -> None:
+        """Take a copy of the example, so a template owns the one it publishes.
+
+        `frozen=True` stops the attribute being rebound and does nothing about
+        the dict it points at. Every template is handed the entry straight out
+        of the module-global `EXAMPLES` table, so one caller writing
+        `template.example["params"]["angle"] = 999` edits that table — and the
+        next `list_templates()`, in that process, for everyone, returns 999.
+        The catalog is documented as returning the same thing every time, and
+        that is not a promise a shared reference can keep.
+
+        Copied here rather than at each of the three construction sites,
+        because the fourth one is the problem. `params` and `parameters` need
+        no copy: they are rebuilt from source on every call and belong to
+        nobody.
+        """
+        object.__setattr__(self, "example", deepcopy(self.example))
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -104,6 +143,8 @@ def _animation_templates() -> list[Template]:
             invocation="prompt",
             params=[],
             parameters=[],
+            example=EXAMPLES.get(topic, {}),
+            example_request=REQUESTS.get(topic, ""),
             summary=f"{topic} (generic)",
         ))
 
@@ -122,6 +163,8 @@ def _animation_templates() -> list[Template]:
             # cone_slice and tangent_shift went unnoticed until a sweep.
             invocation="prompt" if reach else "concept-id",
             params=param_names.get(concept, []),
+            example=EXAMPLES.get(concept, {}),
+            example_request=REQUESTS.get(concept, ""),
             # Names only in this lane: an animation parameter is declared by a
             # precondition, which states the name and not a default to read a
             # type off. Saying nothing beats guessing.
@@ -244,6 +287,7 @@ def _figure_templates() -> list[Template]:
             invocation="name",
             params=sorted(_dict_get_keys(template.render, receiver="params")),
             parameters=_dict_get_parameters(template.render, receiver="params"),
+            example=EXAMPLES.get(name, {}),
             summary=_first_docline(type(template)),
         ))
     return templates
