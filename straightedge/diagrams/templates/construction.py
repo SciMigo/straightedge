@@ -246,6 +246,7 @@ class ConstructionTemplate:
                                 class_name="diagram construction")
 
         return to_svg(construction,
+                      claims=claims if isinstance(claims, list) else [],
                       width=int(width),
                       labels=True if labels is None else bool(labels),
                       guides=guides if guides in ("dashed", "hidden") else "dashed",

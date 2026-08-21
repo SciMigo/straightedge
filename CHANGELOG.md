@@ -93,6 +93,32 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `data_marks` and the UTF-8 byte count under `--json`, and refuses a blank
   figure rather than leaving an empty file behind. A test asserts the listing
   and `draw` read one registry.
+- **A proved claim earns its mark on the figure.** A right-angle square where
+  `perpendicular` was decided, ticks on segments decided `congruent`, chevrons on
+  proved parallels — the conventional annotations, drawn *because the arithmetic
+  decided them*. Every other tool draws a right-angle square because a human
+  asserted the angle; here the square is evidence. A claim that fails earns
+  nothing and blocks the drawing; one that could not be certified earns nothing
+  either, because an uncertified right angle drawn as certain is precisely the
+  confident falsehood this lane refuses.
+
+  Groups are numbered by stroke count so two congruences read apart, and only a
+  claim that actually draws groups consumes a number — counting `perpendicular`
+  made the first congruence draw two strokes and sent a reader looking for a
+  single-tick pair that was never there. A tick whose midpoint lands on a
+  right-angle corner slides along its own segment: in the vesica the midpoint of
+  `AB` *is* that corner, and both marks are correct and together unreadable.
+- **Labels are placed in the first free slot** rather than always to the right.
+  `P` and `Q`, one unit apart on a 200-unit figure, were drawn in the same pixels
+  — and a figure that cannot tell you which point is which has lost the thing
+  labels are for. Six slots are tried in turn, and a label with nowhere to go is
+  dropped rather than stacked: an unlabelled point is a gap a reader can see, two
+  labels in one place is one they cannot.
+- **`tangent` accepts two circles**, not only a circle and a line. Written on the
+  stored `r²` it is one identity covering internal and external contact —
+  `(d² − r₁² − r₂²)² = 4r₁²r₂²` — exact, and needing no square root. The AIME
+  hemisphere problem is the case it was missing: a 42-sphere resting inside a
+  200-hemisphere touches it at exactly `r = 20√58`.
 - **`verify_construction`, an MCP tool.** `draw` refuses a construction whose
   claim is false and returns a blank, and a template has nowhere to put the
   reason. This returns the findings without drawing: `holds`, `worst`, and

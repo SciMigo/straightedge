@@ -19,7 +19,7 @@ from straightedge.diagrams import render_diagram
 from straightedge.diagrams.registry import count_data_marks
 from straightedge.diagrams.templates.construction import verify
 from straightedge.geometry import exact as exact_module
-from straightedge.geometry.claims import CLAIMS, Claim, check
+from straightedge.geometry.claims import CLAIMS, Claim, Mark, check, marks
 from straightedge.geometry.model import Construction
 from straightedge.qc import worst_severity
 
@@ -374,3 +374,127 @@ class TestArityIsCheckedBeforeDispatch:
 
     def test_a_correct_arity_still_dispatches(self):
         assert holds(vesica(), {"claim": "midpoint", "of": ["G", "A", "B"]})
+
+
+class TestAProvedClaimEarnsItsMark:
+    """The conventional marks, drawn only for claims the arithmetic decided.
+
+    Every other tool draws a right-angle square because a human asserted the
+    angle. Here the square is evidence: the claim was checked first, and a claim
+    that failed or could not be certified earns nothing — an uncertified right
+    angle drawn as certain is the confident falsehood this lane refuses.
+    """
+
+    PERP = {"claim": "perpendicular", "of": ["[ C D ]", "[ A B ]"]}
+    SIDES = {"claim": "congruent", "of": [["A", "B"], ["A", "C"], ["B", "C"]]}
+
+    def test_a_true_perpendicular_earns_a_square(self):
+        found = marks(vesica(), [self.PERP])
+        assert [m.kind for m in found] == ["right_angle"]
+        assert found[0].label == str(Claim.parse(self.PERP))
+
+    def test_a_false_claim_earns_nothing(self):
+        assert marks(vesica(), [{"claim": "parallel",
+                                 "of": ["[ C D ]", "[ A B ]"]}]) == []
+
+    def test_a_claim_that_could_not_be_certified_earns_nothing(self, monkeypatch):
+        """Uncertified is not proved, and must not be dressed up as proved."""
+        c = Construction()
+        big = 10 ** 30
+        a, b, d = c.set_point(0, 0), c.set_point(big, big), c.set_point(2 * big, 2 * big)
+        monkeypatch.setattr(exact_module, "MAX_BITS", 16)
+        assert marks(c, [{"claim": "collinear", "of": [a, b, d]}]) == []
+
+    def test_an_unknown_claim_earns_nothing(self):
+        assert marks(vesica(), [{"claim": "wobbly", "of": ["A"]}]) == []
+
+    def test_congruent_ticks_every_segment(self):
+        found = marks(vesica(), [self.SIDES])
+        assert len(found) == 3 and {m.kind for m in found} == {"tick"}
+        assert {m.count for m in found} == {1}          # one group, one stroke
+
+    def test_only_a_claim_that_draws_groups_consumes_a_group(self):
+        """`perpendicular` draws a square and no ticks.
+
+        Counting it as a group made the first congruence draw two strokes, so a
+        reader looked for a single-tick pair that was never on the figure.
+        """
+        found = marks(vesica(), [self.PERP, self.SIDES])
+        ticks = [m for m in found if m.kind == "tick"]
+        assert {m.count for m in ticks} == {1}
+
+    def test_two_groups_are_told_apart_by_stroke_count(self):
+        found = marks(vesica(), [self.SIDES,
+                                 {"claim": "midpoint", "of": ["G", "A", "B"]}])
+        assert {m.count for m in found} == {1, 2}
+
+    def test_a_tick_is_moved_off_a_right_angle_corner(self):
+        """AB's midpoint *is* the corner the bisector crosses it at.
+
+        Both marks are correct and together they are unreadable, so the tick
+        slides along its own segment rather than one of them being dropped.
+        """
+        found = marks(vesica(), [self.PERP, self.SIDES])
+        corner = [m for m in found if m.kind == "right_angle"][0]
+        assert all(not (m.at == corner.at) for m in found if m.kind == "tick")
+
+    def test_marks_are_construction_coordinates_not_pixels(self):
+        """Sizing happens at render time, so a mark is the same size on a
+        unit figure and a 200-unit one."""
+        found = marks(vesica(), [self.PERP])
+        assert isinstance(found[0], Mark)
+        assert (found[0].at.x - Fraction(1, 2)).is_zero()
+
+
+class TestCirclesCanBeTangentToEachOther:
+    """`tangent` was circle-line only, so a figure could not assert the thing
+    the hemisphere problem is about."""
+
+    @staticmethod
+    def _pair(cx, r_through, dx, d_through):
+        c = Construction()
+        one = c.construct_circle(c.set_point(cx, 0), c.set_point(r_through, 0))
+        two = c.construct_circle(c.set_point(dx, 0), c.set_point(d_through, 0))
+        return c, one, two
+
+    def test_external_tangency(self):
+        c, one, two = self._pair(0, 1, 2, 3)          # radii 1 and 1, centres 2 apart
+        assert check(c, [{"claim": "tangent", "of": [one, two]}]) == []
+
+    def test_internal_tangency(self):
+        c, one, two = self._pair(0, 4, 2, 4)          # radius 4 and radius 2 inside it
+        assert check(c, [{"claim": "tangent", "of": [one, two]}]) == []
+
+    def test_disjoint_circles_are_not_tangent(self):
+        c, one, two = self._pair(0, 1, 5, 6)
+        assert check(c, [{"claim": "tangent", "of": [one, two]}]) != []
+
+    def test_overlapping_circles_are_not_tangent(self):
+        c, one, two = self._pair(0, 2, 1, 3)
+        assert check(c, [{"claim": "tangent", "of": [one, two]}]) != []
+
+    def test_the_hemisphere_problem(self):
+        """AIME: a 42-sphere inside a 200-hemisphere touches at r = 20*sqrt(58)."""
+        c = Construction()
+        big = c.construct_circle(c.set_point(0, 0), c.set_point(200, 0))
+        r = c.tower.sqrt(23200)
+        small = c.construct_circle(c.set_point(r, 42), c.set_point(r, 0))
+        assert check(c, [{"claim": "tangent", "of": [big, small]}]) == []
+
+    def test_one_unit_further_out_is_not_tangent(self):
+        c = Construction()
+        big = c.construct_circle(c.set_point(0, 0), c.set_point(200, 0))
+        r = c.tower.sqrt(23200) + 1
+        small = c.construct_circle(c.set_point(r, 42), c.set_point(r, 0))
+        assert check(c, [{"claim": "tangent", "of": [big, small]}]) != []
+
+    def test_a_line_is_still_accepted(self):
+        c = Construction()
+        circle = c.construct_circle(c.set_point(0, 0), c.set_point(1, 0))
+        line = c.construct_line(c.set_point(1, -1), c.set_point(1, 1))
+        assert check(c, [{"claim": "tangent", "of": [circle, line]}]) == []
+
+    def test_neither_a_line_nor_a_circle_is_refused(self):
+        c = vesica()
+        findings = check(c, [{"claim": "tangent", "of": ["( A B )", "A"]}])
+        assert len(findings) == 1 and "line or a circle" in findings[0].message

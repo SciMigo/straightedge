@@ -7,6 +7,7 @@
 .gc-given{fill:#2f7d72;stroke:none}
 .gc-label{font-size:13.0px;fill:#1f2933}
 .gc-title{font-size:16.0px;font-weight:600;fill:#1f2933}
+.gc-mark{stroke:#2f7d72;stroke-width:1.5;fill:none;stroke-linecap:round}
 text{font-family:'Noto Sans SC',Helvetica,Arial,sans-serif}
 </style></defs><text x="14.0" y="26.0" class="gc-title">Every point but two was found, not placed</text><circle cx="155.31" cy="185.31" r="109.38" class="gc-circle"/><circle cx="264.69" cy="185.31" r="109.38" class="gc-circle"/><circle cx="155.31" cy="185.31" r="3.4" class="gc-given"/><text x="163.31" y="178.31" text-anchor="start" class="gc-label">A</text><circle cx="264.69" cy="185.31" r="3.4" class="gc-given"/><text x="272.69" y="178.31" text-anchor="start" class="gc-label">B</text><circle cx="210.0" cy="90.59" r="3.4" class="gc-point"/><text x="218.0" y="83.59" text-anchor="start" class="gc-label">C</text><circle cx="210.0" cy="280.03" r="3.4" class="gc-point"/><text x="218.0" y="273.03" text-anchor="start" class="gc-label">D</text>
 </svg>

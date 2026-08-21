@@ -40,7 +40,7 @@ from ..qc import Finding
 from .exact import Exact
 from .model import Circle, Construction, Line, Point, Polygon, Section, Segment
 
-__all__ = ["Claim", "check", "CLAIMS"]
+__all__ = ["Claim", "check", "marks", "Mark", "CLAIMS", "ARITY"]
 
 #: Above this, a float disagreement is taken as proof of *inequality* and the
 #: exact path is skipped. The asymmetry is the whole safety argument: this can
@@ -254,10 +254,28 @@ def _equilateral(c: Construction, claim: Claim) -> tuple[bool, str]:
 
 
 def _tangent(c: Construction, claim: Claim) -> tuple[bool, str]:
+    """A circle touching a line, or a circle touching another circle."""
     circle = _circle(c, claim.of[0])
-    line = _line(c, claim.of[1])
-    value = line.evaluate(circle.center)
-    norm = line.a * line.a + line.b * line.b
+    other = _element(c, claim.of[1])
+
+    if isinstance(other, Circle):
+        # Two circles touch when the distance between centres is r₁+r₂
+        # (externally) or |r₁−r₂| (internally). Only r² is stored, so square
+        # once more to clear both roots at the same time:
+        #     d² = r₁² + r₂² ± 2r₁r₂   ⟹   (d² − r₁² − r₂²)² = 4r₁²r₂²
+        # which is one identity covering both cases, exact, and needing no √.
+        dx = other.center.x - circle.center.x
+        dy = other.center.y - circle.center.y
+        gap = dx * dx + dy * dy - circle.radius_sq - other.radius_sq
+        touching = _is_zero(gap * gap - circle.radius_sq * other.radius_sq * 4,
+                            _scale_of(circle.center, other.center))
+        inside = gap.sign() < 0
+        return touching, f"tangent ({'internally' if inside else 'externally'})"
+
+    if not isinstance(other, Line):
+        raise _Unresolved(f"{claim.of[1]!r} is not a line or a circle")
+    value = other.evaluate(circle.center)
+    norm = other.a * other.a + other.b * other.b
     # distance² == r²  ⟺  value² == r²·(a²+b²)
     return _is_zero(value * value - circle.radius_sq * norm), "tangent"
 
@@ -481,3 +499,144 @@ def check(construction: Construction, claims: Sequence[Any]) -> list[Finding]:
                 f"the construction does not satisfy this: it is not {description}",
                 str(claim), _box(construction, claim)))
     return findings
+
+
+# ---------------------------------------------------------------------------
+# Marks: what a proved claim earns on the drawing
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class Mark:
+    """One conventional annotation, in construction coordinates.
+
+    A right-angle square, a tick on a segment, a chevron on a parallel. These
+    are the marks a geometry figure has always carried, and here they are drawn
+    **only for claims that were proved** — so the square at a corner is evidence
+    rather than decoration. Every other tool draws them because a human asserted
+    them; this one draws them because the arithmetic decided.
+
+    Positions are construction coordinates and directions are *toward* points,
+    not vectors: a mark has to be a fixed size on the page whatever the drawing
+    is scaled to, so the renderer normalises in screen space. Sizing here would
+    make a right angle on a 200-unit figure invisible and one on a unit figure
+    enormous.
+    """
+
+    kind: str                       # "right_angle" | "tick" | "chevron"
+    at: Point                       # where it sits
+    toward_a: Point                 # first direction
+    toward_b: Point                 # second direction
+    count: int = 1                  # tick/chevron multiplicity, to group them
+    label: str = ""                 # the claim it came from
+
+
+def _midpoint(a: Point, b: Point) -> Point:
+    return Point((a.x + b.x) / 2, (a.y + b.y) / 2)
+
+
+def _marks_for(c: Construction, claim: Claim, group: int) -> list[Mark]:
+    """The marks one *proved* claim earns. Never called for a claim that failed."""
+    kind = claim.kind
+    tag = str(claim)
+
+    if kind == "perpendicular":
+        from .model import intersect_lines
+        one, two = (_line(c, name) for name in claim.of[:2])
+        meeting = intersect_lines(one, two)
+        if not meeting:
+            return []                       # perpendicular and parallel at once
+        corner = meeting[0]
+        # A point along each line, to give the square its two directions.
+        along_one = Point(corner.x - one.b, corner.y + one.a)
+        along_two = Point(corner.x - two.b, corner.y + two.a)
+        return [Mark("right_angle", corner, along_one, along_two, label=tag)]
+
+    if kind == "parallel":
+        one, two = (_line(c, name) for name in claim.of[:2])
+        out = []
+        for line in (one, two):
+            # A point on the line, and a second to give its direction.
+            base = Point(-line.a * line.c / (line.a * line.a + line.b * line.b),
+                         -line.b * line.c / (line.a * line.a + line.b * line.b))
+            out.append(Mark("chevron", base,
+                            Point(base.x - line.b, base.y + line.a), base,
+                            group, tag))
+        return out
+
+    if kind in ("congruent", "equilateral", "midpoint"):
+        segments = _segments_of(c, claim)
+        return [Mark("tick", _midpoint(seg.start, seg.end), seg.start, seg.end,
+                     group, tag) for seg in segments]
+    return []
+
+
+def _segments_of(c: Construction, claim: Claim) -> list[Segment]:
+    if claim.kind == "congruent":
+        return [_segment(c, spec) for spec in claim.of]
+    if claim.kind == "midpoint":
+        m, a, b = (_point(c, name) for name in claim.of[:3])
+        return [Segment(a, m), Segment(m, b)]
+    geometry = _element(c, claim.of[0])
+    return list(geometry.sides) if isinstance(geometry, Polygon) else []
+
+
+def marks(construction: Construction, claims: Sequence[Any]) -> list[Mark]:
+    """Marks for every claim that holds, and nothing for one that does not.
+
+    A claim that fails already blocks the drawing, and one that could not be
+    certified must not be dressed up as proved — an uncertified right angle is
+    exactly the confident falsehood the lane refuses. So the check runs first
+    and only silence earns a mark.
+
+    Groups are numbered so two independent congruences read apart: one pair gets
+    single ticks, the next double, the way they are drawn on paper.
+    """
+    out: list[Mark] = []
+    group = 0
+    for raw in claims:
+        try:
+            claim = Claim.parse(raw)
+        except ValueError:
+            continue
+        if claim.kind not in CLAIMS or check(construction, [claim]):
+            continue                        # failed, warned, or unknown
+        # Only a claim that *draws* groups consumes a group number. Counting
+        # every proved claim let `perpendicular` — which draws a square and no
+        # ticks — take group 1, so the first congruence was drawn with two
+        # strokes and the reader had to look for a single-tick pair that was
+        # never there. The number is a visual grouping, not a claim index.
+        try:
+            produced = _marks_for(construction, claim, group + 1)
+        except (_Unresolved, PrecisionError):
+            continue
+        if any(m.kind in ("tick", "chevron") for m in produced):
+            group += 1
+        out.extend(produced)
+    return _nudged(out)
+
+
+def _nudged(found: list[Mark]) -> list[Mark]:
+    """Move a tick off a right-angle corner it would be drawn on top of.
+
+    A segment's tick sits at its midpoint, and in the vesica the midpoint of
+    `AB` *is* the corner where the bisector crosses it — so the congruence tick
+    and the right-angle square landed in the same place. Both are correct and
+    together they are unreadable. The tick slides along its own segment, which
+    keeps it on the thing it is marking.
+    """
+    corners = [m.at for m in found if m.kind == "right_angle"]
+    if not corners:
+        return found
+    out: list[Mark] = []
+    for mark in found:
+        if mark.kind == "tick" and any(mark.at == corner for corner in corners):
+            # A quarter of the way toward one end: clear of the corner, still
+            # unambiguously on this segment rather than a neighbouring one.
+            end = mark.toward_b
+            shifted = Point((mark.at.x * 3 + end.x) / 4, (mark.at.y * 3 + end.y) / 4)
+            out.append(Mark(mark.kind, shifted, mark.toward_a, mark.toward_b,
+                            mark.count, mark.label))
+        else:
+            out.append(mark)
+    return out

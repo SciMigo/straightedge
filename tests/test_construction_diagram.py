@@ -268,3 +268,96 @@ class TestFloatCoordinatesAreNotApproximated:
         from straightedge.diagrams.templates.construction import _coordinate
         with pytest.raises(ValueError):
             _coordinate(value)
+
+
+class TestLabelsNeverLandOnEachOther:
+    """Two points close together had their labels drawn in the same pixels.
+
+    `P` and `Q`, one unit apart on a 200-unit figure, came out as a single
+    smudge — and a figure that cannot tell you which point is which has lost the
+    thing labels are for. Every label is placed in the first free slot now.
+    """
+
+    CROWDED = {"steps": [
+        "O = 0, 0", "X = 200, 0", "( O X )", "E = 158, 0", "( O E )",
+        "P = 0, 42", "Q = 1, 42", "[ P Q ] -> HL HR CL C", "[ O X ]"],
+        "width": 760}
+
+    @staticmethod
+    def _boxes(svg):
+        from straightedge.diagrams.renderer import text_width
+        out = []
+        for node in ET.fromstring(svg).iter(f"{SVG_NS}text"):
+            content = node.text or ""
+            if not content.strip():
+                continue
+            size = 16.0 if "gc-title" in (node.get("class") or "") else 13.0
+            width = text_width(content, size, safe=True)
+            x, y = float(node.get("x")), float(node.get("y"))
+            anchor = node.get("text-anchor")
+            if anchor == "end":
+                x0, x1 = x - width, x
+            elif anchor == "middle":
+                x0, x1 = x - width / 2, x + width / 2
+            else:
+                x0, x1 = x, x + width
+            out.append((content, x0, x1, y - size * 0.75, y + size * 0.25))
+        return out
+
+    def test_no_two_labels_overlap(self):
+        boxes = self._boxes(_render(self.CROWDED))
+        for i, (ca, ax0, ax1, ay0, ay1) in enumerate(boxes):
+            for cb, bx0, bx1, by0, by1 in boxes[i + 1:]:
+                overlap_x = min(ax1, bx1) - max(ax0, bx0)
+                overlap_y = min(ay1, by1) - max(ay0, by0)
+                assert not (overlap_x > 1 and overlap_y > 1), (
+                    f"{ca!r} and {cb!r} overlap by {overlap_x:.1f}x{overlap_y:.1f}")
+
+    def test_the_crowded_points_are_all_still_labelled(self):
+        labels = {c for c, *_ in self._boxes(_render(self.CROWDED))}
+        assert {"P", "Q", "C", "O"} <= labels
+
+    def test_a_label_never_leaves_the_canvas(self):
+        svg = _render(self.CROWDED)
+        width, _ = _dims(svg)
+        for content, x0, x1, _, _ in self._boxes(svg):
+            assert x0 >= -1 and x1 <= width + 1, f"{content!r} leaves the canvas"
+
+    def test_a_label_is_dropped_rather_than_stacked(self):
+        """An unlabelled point is a gap a reader can see; two labels in one
+        place is one they cannot."""
+        from straightedge.geometry.draw import _place_label, _Viewport
+        view = _Viewport((0.0, 0.0, 1.0, 1.0), 200)
+        taken = [(-1e6, 1e6, -1e6, 1e6)]        # everything is occupied
+        assert _place_label(100.0, 100.0, "Z", view, taken) is None
+
+
+class TestTheProofIsDrawnOnTheFigure:
+    VESICA = ["A = 0, 0", "B = 1, 0", "( A B )", "( B A ) -> C D",
+              "[ C D ]", "[ A B ]"]
+
+    def test_a_held_claim_puts_marks_on_the_drawing(self):
+        plain = _render({"steps": self.VESICA})
+        marked = _render({"steps": self.VESICA, "claims": [
+            {"claim": "perpendicular", "of": ["[ C D ]", "[ A B ]"]}]})
+        assert "gc-mark" not in _drawn_classes(plain)
+        assert "gc-mark" in _drawn_classes(marked)
+
+    def test_a_false_claim_draws_neither_marks_nor_figure(self):
+        svg = _render({"steps": self.VESICA, "claims": [
+            {"claim": "parallel", "of": ["[ C D ]", "[ A B ]"]}]})
+        assert count_data_marks(svg) == 0
+
+    def test_marks_do_not_change_the_frame(self):
+        """An annotation is drawn on the figure, not around it."""
+        plain = _dims(_render({"steps": self.VESICA}))
+        marked = _dims(_render({"steps": self.VESICA, "claims": [
+            {"claim": "congruent", "of": [["A", "C"], ["B", "C"]]}]}))
+        assert plain == marked
+
+
+def _drawn_classes(svg: str) -> set:
+    """Classes used by elements, not merely named in the stylesheet."""
+    root = ET.fromstring(svg)
+    return {(n.get("class") or "").split()[0] for n in root.iter()
+            if n.tag != f"{SVG_NS}style" and n.get("class")}
