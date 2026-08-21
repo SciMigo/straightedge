@@ -74,7 +74,9 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   and no example may use a parameter its template never reads. The `draw` and
   `plan` tools and the CLI all read the same catalog, so all of them gained it.
   `list_templates` grew about a third; MCP callers that only need names can pass
-  `examples=false`.
+  `examples=false`. `example` and `example_request` are appended after
+  `summary`, so `Template(id, lane, output, invocation, params, parameters,
+  summary)` — positional, as 0.4 allowed — still means what it did.
 
   Writing them is also what turned up that extraction was missing parameters
   read inside a helper — six templates' worth, including `gantt`, which had

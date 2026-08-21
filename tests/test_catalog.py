@@ -337,3 +337,55 @@ class TestInference:
         total = sum(len(t.params) for t in figures)
         typed = sum(1 for t in figures for p in t.parameters if p.get("type"))
         assert typed / total > 0.78, f"only {typed}/{total} parameters typed"
+
+
+class TestATemplateOwnsWhatItPublishes:
+    """`frozen=True` stops the attribute being rebound and does nothing about
+    the dict it points at.
+
+    Every template was handed the entry straight out of the module-global
+    `EXAMPLES` table, so one caller writing into `template.example` edited that
+    table — and the next `list_templates()`, in that process, for everyone,
+    returned the edit. The catalog is documented as returning the same thing
+    every time, which is not a promise a shared reference can keep.
+    """
+
+    def test_writing_into_an_example_does_not_reach_the_next_caller(self):
+        from straightedge.examples import EXAMPLES
+
+        before = EXAMPLES["unit_circle"]["params"]["angle"]
+        mine = next(t for t in list_templates() if t.id == "unit_circle")
+        mine.example["params"]["angle"] = 999
+        theirs = next(t for t in list_templates() if t.id == "unit_circle")
+        assert theirs.example["params"]["angle"] == before
+        assert EXAMPLES["unit_circle"]["params"]["angle"] == before, (
+            "the module-global example table was edited")
+
+    def test_two_calls_hand_out_separate_objects(self):
+        a = next(t for t in list_templates() if t.id == "roadmap")
+        b = next(t for t in list_templates() if t.id == "roadmap")
+        assert a.example == b.example
+        assert a.example is not b.example
+        assert a.example["params"] is not b.example["params"]
+
+    def test_nested_containers_are_copied_too(self):
+        """A shallow copy would leave the lists and dicts inside it shared,
+        which is where a real caller writes."""
+        mine = next(t for t in list_templates() if t.id == "roadmap")
+        count = len(mine.example["params"]["items"])
+        mine.example["params"]["items"].append({"id": "junk"})
+        assert len(next(t for t in list_templates()
+                        if t.id == "roadmap").example["params"]["items"]) == count
+
+
+class TestTheConstructorStaysCompatible:
+
+    def test_summary_is_still_the_seventh_positional_argument(self):
+        """Code written against 0.4 passes these seven by position. A field
+        inserted ahead of `summary` does not raise — it files the summary
+        string under `example` and leaves `summary` empty, which is the kind of
+        breakage that reaches production looking like a data problem."""
+        t = Template("x", "figure", "svg", "name", [], [], "a summary")
+        assert t.summary == "a summary"
+        assert t.example == {}
+        assert t.example_request == ""

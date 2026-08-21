@@ -48,6 +48,7 @@ from __future__ import annotations
 import ast
 import inspect
 import textwrap
+from copy import deepcopy
 from dataclasses import asdict, dataclass, field
 from typing import Callable
 
@@ -67,6 +68,14 @@ class Template:
     # circle at "pi/4" because nothing said `angle` is a number of degrees, and
     # got a blank figure. Kept beside `params` rather than replacing it.
     parameters: list[dict] = field(default_factory=list)
+    summary: str = ""
+    # Appended after `summary`, not slotted in beside `parameters` where they
+    # read better. `Template(id, lane, output, invocation, params, parameters,
+    # summary)` is code somebody has already written against 0.4, and inserting
+    # a field ahead of `summary` does not break it — it silently files the
+    # summary string under `example` and leaves `summary` empty. New optional
+    # fields go on the end.
+    #
     # Types told a caller what shape to send; they still did not say what a
     # working call looks like. Nothing in `parameters` reveals that `solid_spec`
     # is a dict of {kind, params, name} rather than the string "cube", or that a
@@ -78,7 +87,24 @@ class Template:
     # decides it. Empty for figures, and for the two templates reachable only
     # by id.
     example_request: str = ""
-    summary: str = ""
+
+    def __post_init__(self) -> None:
+        """Take a copy of the example, so a template owns the one it publishes.
+
+        `frozen=True` stops the attribute being rebound and does nothing about
+        the dict it points at. Every template is handed the entry straight out
+        of the module-global `EXAMPLES` table, so one caller writing
+        `template.example["params"]["angle"] = 999` edits that table — and the
+        next `list_templates()`, in that process, for everyone, returns 999.
+        The catalog is documented as returning the same thing every time, and
+        that is not a promise a shared reference can keep.
+
+        Copied here rather than at each of the three construction sites,
+        because the fourth one is the problem. `params` and `parameters` need
+        no copy: they are rebuilt from source on every call and belong to
+        nobody.
+        """
+        object.__setattr__(self, "example", deepcopy(self.example))
 
     def to_dict(self) -> dict:
         return asdict(self)
