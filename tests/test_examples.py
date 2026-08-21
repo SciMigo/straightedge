@@ -33,21 +33,6 @@ def _animations():
     return [t for t in list_templates() if t.lane == "animation"]
 
 
-# Parameters an example uses that the catalog does not yet list. These are gaps
-# in extraction, not bad examples -- each key below is read by its template,
-# just from inside a helper that takes `params`, which discovery does not follow
-# yet. Written down so the set can shrink without breaking the test, and so a
-# newly-added template cannot join it unnoticed.
-UNDERREPORTED = {
-    "architecture_diagram": {"annotations", "components", "connections"},
-    "circle_chord_rational": {"point_label", "triple"},
-    "comparison": {"columns"},
-    "descent_triangles": {"first", "note", "second"},
-    "gantt": {"tasks"},
-    "t_account": {"accounts"},
-}
-
-
 class TestEveryTemplateHasOne:
 
     def test_nothing_is_missing(self):
@@ -85,12 +70,22 @@ class TestFigureExamples:
                 assert f'"{key}"' in source or f"'{key}'" in source, (
                     f"{t.id}'s example passes {key!r}, which appears nowhere in its module")
 
-    def test_undeclared_keys_are_only_the_known_extraction_gaps(self):
+    def test_every_key_an_example_uses_is_a_parameter_the_catalog_lists(self):
+        """This began as a subset check against a named list of six templates
+        whose parameters extraction could not see — they read `params` inside a
+        helper, and only whole-body delegation was followed. Following every
+        helper closed all six, so the list is gone and the check is now the
+        plain one: an example may only use parameters the catalog publishes.
+
+        Which is the point of writing examples against a published catalog. An
+        example needing a key the catalog does not list means one of the two is
+        wrong, and until they agree a caller reading the catalog cannot write
+        the call the example shows them."""
         for t in _figures():
             extra = set(t.example["params"]) - set(t.params)
-            assert extra <= UNDERREPORTED.get(t.id, set()), (
-                f"{t.id}'s example uses {sorted(extra - UNDERREPORTED.get(t.id, set()))}, "
-                "which the catalog does not list and which is not a known gap")
+            assert not extra, (
+                f"{t.id}'s example uses {sorted(extra)}, which the catalog does "
+                "not list among its parameters")
 
 
 class TestAnimationExamples:

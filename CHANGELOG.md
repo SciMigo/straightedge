@@ -75,6 +75,12 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `plan` tools and the CLI all read the same catalog, so all of them gained it.
   `list_templates` grew about a third; MCP callers that only need names can pass
   `examples=false`.
+
+  Writing them is also what turned up that extraction was missing parameters
+  read inside a helper — six templates' worth, including `gantt`, which had
+  never listed `tasks`, the only parameter it really has. That is fixed above,
+  so the examples and the catalog now agree exactly: a test asserts no example
+  uses a key the catalog does not publish.
 - A stated determinism guarantee (`docs/agent-interface.md`) and the tests that
   hold it: the same template and parameters produce byte-identical SVG on any
   machine, in any process, on any day. Checked across two hash seeds in separate
