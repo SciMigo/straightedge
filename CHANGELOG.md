@@ -4,6 +4,75 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project aims to
 follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **`architecture_diagram` drew every unanchored note at the same coordinates.**
+  Two notes meant one painted over the other, and the reader saw neither — the
+  template this project proposes as its answer to Mermaid for system
+  architecture, with its notes illegible. They stack now, one line each, and
+  are left-aligned rather than centred on the left margin, which is what used
+  to throw most of a 300px note off the canvas.
+
+- **A component label is fitted to the box it sits in.** Drawn at whatever
+  width it happened to be, "Gateway (WebSocket/MQTT)" measured 186px in a 140px
+  box and reached far enough out to collide with the label on the connection
+  leaving it. It wraps to two lines now — the box is 44px tall and the text is
+  the diagram's content, so there is room for it rather than a reason to trim.
+  Where even two lines cannot hold it the line is trimmed with a visible
+  ellipsis, and each component is wrapped in a `<g>` whose first child is a
+  `<title>` carrying the whole label — so it is that component's accessible
+  name and tooltip, not the document's. The same applies to a note in the
+  bottom stack, which wraps onto reserved lines and keeps its full text: it
+  used to be trimmed to one line with the remainder held nowhere, so on a
+  narrow diagram the note the caller supplied was not in the output at all.
+
+  Between them these were four of the eight legibility errors 0.5.0 shipped
+  with.
+
+- **The frame check no longer skips axis-aligned strokes.** It skipped on
+  *area*, and a level line is zero-area however long it is — so a guide, an
+  axis, a gridline or a connector could leave the canvas entirely and the one
+  check that exists to catch that said nothing. `matrix_transform` drew its
+  eigenvector ray to x=477 on a 460-wide canvas. A point is still skipped:
+  there is nothing to clip and no extent to report an overhang of.
+
+- **`unit_circle`'s labels no longer collide.** Three separate causes, all
+  reported by a human opening the picture and looking, which is the loop the
+  checker exists to replace. An axis name sat level with the tick label nearest
+  it — `x` five pixels from its own `1` — so each name was drawn through a
+  tick. The common-angle label was drawn on the ray the figure was already
+  marking, so at `π/4` the label and the `(0.71, 0.71)` readout overlapped by
+  half and the reader lost both, including the one they asked for; the angle
+  being shown is no longer labelled twice. And the readout ran off the canvas
+  near the edges — a third of `(1.00, 0.00)` was never painted at 0° — so it
+  turns back inward when the natural side does not fit.
+
+  Swept across every 15°: 51 errors to 4. The match against the shown angle is a
+  circular distance rather than a bare modulus — `%` is non-negative, so
+  `(45 - 45.2) % 360` is 359.8 and a figure drawn at 45.2° kept the 45° label
+  on the same ray.
+
+- **`matrix_transform`'s eigenvector rays are clipped to their panel.** They
+  are drawn 1.5x the panel range deliberately, so the direction reads as a line
+  rather than a segment — which is only right if the panel cuts them off, and
+  nothing did. A ray crossed the gutter, the other panel and the edge of the
+  figure, ending 17px past a 460px canvas. The grid beside it was clipped; the
+  clip was emitted inside the grid branch, so the rays had nothing to reach for
+  and turning the grid off took it away entirely. The label stays outside the
+  clip: cutting a guide short is the point, and cutting its label short is the
+  defect. A repeated eigenvalue also drew the same ray twice, which is darker
+  rather than clearer.
+
+  This is the second piece of evidence in #14, and the piece the 0.5.0 checker
+  could not see.
+
+- **`riemann_sum` drew one gridline past each edge of its plot**, found by the
+  check above the moment it could see them: the grid loops ran to
+  `int(max) + 2` where the integers inside the plot stop at `int(max)`. One
+  line landed 8px off the right edge of the figure, invisible and unreported.
+
 ## [0.5.0] - 2026-08-21
 
 A minor release about whether the output is any good, and whether a caller can

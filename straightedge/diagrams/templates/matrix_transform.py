@@ -233,6 +233,17 @@ class MatrixTransformTemplate:
             rect(ox, oy, pw, ph, fill="white", stroke="#ddd", stroke_width="1", rx="4")
         )
 
+        # The panel's clip, emitted whether or not a grid asks for it. Anything
+        # drawn to read as a line rather than a segment runs past the panel on
+        # purpose, and needs the panel to cut it off; the eigenvector rays did
+        # not have one to reach for, so they crossed the gutter, the other panel
+        # and the edge of the figure.
+        clip_ref = f"url(#clip-{ox:.0f})"
+        elements.append(
+            f'<clipPath id="clip-{ox:.0f}"><rect x="{ox}" y="{oy}" '
+            f'width="{pw}" height="{ph}" rx="4"/></clipPath>'
+        )
+
         # Coordinate transforms
         scale = pw / (2 * x_range)
         cx = ox + pw / 2
@@ -272,13 +283,8 @@ class MatrixTransformTemplate:
                     grid_els.append(
                         line(ox + 2, sy, ox + pw - 2, sy, **{"class": "mt-grid"})
                     )
-            # Clip grid to panel
             elements.append(
-                f'<clipPath id="clip-{ox:.0f}"><rect x="{ox}" y="{oy}" '
-                f'width="{pw}" height="{ph}" rx="4"/></clipPath>'
-            )
-            elements.append(
-                group("\n".join(grid_els), clip_path=f"url(#clip-{ox:.0f})")
+                group("\n".join(grid_els), clip_path=clip_ref)
             )
 
         # Axes
@@ -339,29 +345,46 @@ class MatrixTransformTemplate:
 
         # Eigenvectors
         if show_eigen and matrix is not None:
-            eigenpairs = _eigenvalues_2x2(orig_matrix)
-            for eigenval, eigenvec in eigenpairs:
-                # Draw eigenvector line extending through the panel
+            eigen_els: List[str] = []
+            eigen_labels: List[str] = []
+            drawn: List[Tuple[float, float]] = []
+            for eigenval, eigenvec in _eigenvalues_2x2(orig_matrix):
+                # A repeated eigenvalue hands back the same direction twice, and
+                # the same dashed ray drawn over itself is darker, not clearer.
+                if any(abs(eigenvec[0] * b - eigenvec[1] * a) < 1e-9
+                       for a, b in drawn):
+                    continue
+                drawn.append(eigenvec)
+                # Deliberately longer than the panel so the direction reads as a
+                # line rather than a segment -- which is only right if the panel
+                # actually cuts it off. Unclipped, it crossed the gutter, the
+                # other panel and the edge of the figure.
                 scale_factor = x_range * 1.5
                 p1 = (-eigenvec[0] * scale_factor, -eigenvec[1] * scale_factor)
                 p2 = (eigenvec[0] * scale_factor, eigenvec[1] * scale_factor)
                 s1, s2 = to_svg(p1), to_svg(p2)
-                elements.append(
+                eigen_els.append(
                     line(
                         s1[0], s1[1], s2[0], s2[1],
                         stroke=self.COLOR_EIGEN, stroke_width="1.5",
                         stroke_dasharray="6,3", opacity="0.8",
                     )
                 )
-                # Label at tip
+                # Label at tip — outside the clip. The ray is clipped because
+                # it overruns on purpose; a label that overruns is just a label
+                # the reader cannot finish, and clipping it silently is what the
+                # legibility check now calls out.
                 tip = to_svg((eigenvec[0] * x_range * 0.7, eigenvec[1] * x_range * 0.7))
-                elements.append(
+                eigen_labels.append(
                     text(
                         tip[0] + 4, tip[1] - 4,
                         f"\u03bb={eigenval:.1f}",
                         **{"class": "mt-eigen-label"},
                     )
                 )
+            if eigen_els:
+                elements.append(group("\n".join(eigen_els), clip_path=clip_ref))
+            elements.extend(eigen_labels)
 
         # Panel label
         elements.append(

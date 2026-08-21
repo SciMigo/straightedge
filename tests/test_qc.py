@@ -475,3 +475,38 @@ class TestRepeatedCollisionsCollapse:
         a = _text("first", -1.6, -1.2, -0.2, 0.2)
         b = _text("second", 1.2, 1.6, -0.2, 0.2)
         assert len(check([line, a, b])) == 2
+
+
+class TestAxisAlignedStrokesAreChecked:
+    """A level line is zero-area however long it is.
+
+    `_check_frame` skipped on area, so it skipped every axis-aligned stroke --
+    and axis-aligned is what a guide, an axis, a gridline or a connector
+    usually is. `matrix_transform` drew its eigenvector ray from x=192 to
+    x=477 on a 460-wide canvas and the frame check said nothing about it; the
+    grid in `riemann_sum` put a line 8px off the right edge of the figure for
+    the same reason. Both were invisible to the one check that exists to catch
+    exactly that.
+    """
+
+    def test_a_horizontal_line_leaving_the_frame_is_reported(self):
+        box = Box("guide", 2.0, 12.0, 0.0, 0.0)          # zero height, far right
+        found = check([box, Box("body", -1.0, 1.0, -1.0, 1.0)], frame=(14.0, 8.0))
+        assert [f for f in found if f.check == "out_of_frame"], "level line went unseen"
+
+    def test_a_vertical_line_leaving_the_frame_is_reported(self):
+        box = Box("axis", 0.0, 0.0, 2.0, 9.0)            # zero width, off the top
+        found = check([box, Box("body", -1.0, 1.0, -1.0, 1.0)], frame=(14.0, 8.0))
+        assert [f for f in found if f.check == "out_of_frame"]
+
+    def test_a_line_inside_the_frame_is_not_reported(self):
+        box = Box("guide", -3.0, 3.0, 0.0, 0.0)
+        found = check([box, Box("body", -1.0, 1.0, -1.0, 1.0)], frame=(14.0, 8.0))
+        assert not [f for f in found if f.check == "out_of_frame"]
+
+    def test_a_point_is_still_skipped(self):
+        """Nothing to clip, and no extent to report an overhang of. The area
+        guard was right about points and wrong about lines."""
+        box = Box("dot", 20.0, 20.0, 20.0, 20.0)
+        found = check([box, Box("body", -1.0, 1.0, -1.0, 1.0)], frame=(14.0, 8.0))
+        assert not [f for f in found if f.check == "out_of_frame"]

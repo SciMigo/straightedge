@@ -18,6 +18,7 @@ from ..renderer import (
     style,
     svg_document,
     text,
+    text_width,
 )
 
 
@@ -115,13 +116,18 @@ class UnitCircleTemplate:
 
         # Axis labels
         if show_labels:
+            # An axis name goes clear of the tick label nearest it, and clear
+            # of the common-angle label that sits just past the arrow. `x` was
+            # five pixels from its own `1` and `y` was ten from its own, so
+            # each name was drawn straight through a tick; lifting `x` only as
+            # far as the axis line then put it through the `0` at 1.15r.
             label_elements = [
-                text(svg_width - padding + 5, center_y + 15, "x", **{"class": "uc-axis-label"}),
-                text(center_x + 10, padding - 5, "y", **{"class": "uc-axis-label"}),
-                text(center_x + radius + 10, center_y + 15, "1", **{"class": "uc-label"}),
-                text(center_x - radius - 15, center_y + 15, "-1", **{"class": "uc-label"}),
-                text(center_x + 8, center_y - radius - 5, "1", **{"class": "uc-label"}),
-                text(center_x + 8, center_y + radius + 15, "-1", **{"class": "uc-label"}),
+                text(svg_width - padding + 5, center_y - 20, "x", **{"class": "uc-axis-label"}),
+                text(center_x + 14, padding - 2, "y", **{"class": "uc-axis-label"}),
+                text(center_x + radius - 3, center_y + 16, "1", **{"class": "uc-label"}),
+                text(center_x - radius - 5, center_y + 16, "-1", **{"class": "uc-label"}),
+                text(center_x - 16, center_y - radius + 4, "1", **{"class": "uc-label"}),
+                text(center_x - 20, center_y + radius + 4, "-1", **{"class": "uc-label"}),
             ]
             elements.append(group("\n".join(label_elements)))
 
@@ -133,6 +139,17 @@ class UnitCircleTemplate:
             angle_elements = []
             for deg, label in COMMON_ANGLES.items():
                 if deg == 360:
+                    continue
+                # Not at the angle being shown. That point already carries its
+                # own marker and, with `show_coordinates`, its own readout, so
+                # labelling it again put two labels on one ray overlapping by
+                # half — at every angle that happens to be a common one. The
+                # reader loses both, and one of them is what they asked for.
+                # Circular distance, not a bare modulus: `%` is non-negative,
+                # so `(45 - 45.2) % 360` is 359.8 and a figure drawn at 45.2°
+                # kept the 45° label sitting on the same ray. Wrong by a fifth
+                # of a degree, and only on one side.
+                if abs((deg - angle_deg + 180) % 360 - 180) < 0.5:
                     continue
                 rad = math.radians(deg)
                 px, py = to_svg(math.cos(rad), math.sin(rad))
@@ -224,6 +241,21 @@ class UnitCircleTemplate:
             offset_x = 15 if cos_val >= 0 else -15
             offset_y = -15 if sin_val >= 0 else 15
             anchor = "start" if cos_val >= 0 else "end"
+            # Away from the circle is the natural side and, near the edges, off
+            # the canvas: at 0° the readout starts at x=355 and is 67px wide on
+            # a 400px figure, so a third of it was never painted. Turned back
+            # inward when the natural side does not fit — on the wrong side
+            # beats not drawn.
+            width = text_width(coord_text, 11, safe=True)
+            left = px + offset_x - (width if anchor == "end" else 0)
+            if left + width > svg_width - 4:
+                offset_x, anchor = -15, "end"
+            elif left < 4:
+                offset_x, anchor = 15, "start"
+            if py + offset_y - 11 < 4:
+                offset_y = 15
+            elif py + offset_y + 4 > svg_height - 4:
+                offset_y = -15
             elements.append(text(px + offset_x, py + offset_y, coord_text, **{"class": "uc-coord-label", "text_anchor": anchor}))
 
         # Title

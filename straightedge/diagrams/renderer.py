@@ -78,6 +78,18 @@ def text(x: float, y: float, content: str, **attrs: Any) -> str:
     return f'<text x="{x}" y="{y}" {attr_str}>{escape(content)}</text>'
 
 
+def title(content: str) -> str:
+    """An SVG ``<title>``: the accessible name, and the browser's tooltip.
+
+    Worth emitting whenever the drawn label is not the whole label. A component
+    box 140px wide cannot show "Session Cache (Redis)" at 12px, so the drawn
+    text wraps or is trimmed — and a reader who wants the full string, or a
+    screen reader, or a test asserting the diagram names what it was given, has
+    nowhere to find it. This is where it lives.
+    """
+    return f"<title>{escape(content)}</title>"
+
+
 def group(content: str, **attrs: Any) -> str:
     """Create an SVG group element."""
     attr_str = _attrs_to_str(attrs)

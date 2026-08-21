@@ -10,12 +10,15 @@ from typing import Any, Dict, List, Optional, Tuple
 from ..registry import register
 from ..renderer import (
     defs,
+    fit_text,
+    wrap_units,
     group,
     line,
     path,
     rect,
     style,
     svg_document,
+    title as svg_title,
     text,
 )
 
@@ -49,6 +52,14 @@ _CYLINDER_RY = 8
 
 # Layout constants
 _PADDING = 60
+#: One line of the bottom note stack, at the 10px note size, plus the gap that
+#: keeps the last baseline off the canvas edge — a baseline sitting exactly on
+#: it still hangs the descenders over.
+_NOTE_LINE = 14
+_NOTE_PAD = 6
+#: Component label size, and the step between its two lines.
+_LABEL_PX = 12
+_LABEL_LINE = 13
 _LAYER_GAP_H = 180  # horizontal gap between layers (left-to-right)
 _LAYER_GAP_V = 100  # vertical gap between layers (top-to-bottom)
 _NODE_GAP_H = 60  # gap between nodes in same layer (left-to-right)
@@ -251,13 +262,7 @@ def _render_component(
         d = _cylinder_path(x0, y0, w, h, ry)
         elements.append(path(d, fill=fill, stroke=stroke, stroke_width="1.4"))
         center = (x0 + w / 2, y0 + h / 2)
-        elements.append(text(
-            center[0], center[1] + 5, label,
-            text_anchor="middle",
-            font_size="12px",
-            font_family="sans-serif",
-            fill="#333",
-        ))
+        elements.extend(_label_lines(label, center[0], center[1] + 5))
     else:
         w, h = _BOX_W, _BOX_H
         extra: Dict[str, Any] = {}
@@ -271,15 +276,14 @@ def _render_component(
             **extra,
         ))
         center = (cx + w / 2, cy + h / 2)
-        elements.append(text(
-            center[0], center[1] + 4, label,
-            text_anchor="middle",
-            font_size="12px",
-            font_family="sans-serif",
-            fill="#333",
-        ))
+        elements.extend(_label_lines(label, center[0], center[1] + 4))
 
-    return "\n".join(elements), center
+    # One group per component, with the title inside it. A `<title>` names its
+    # *parent*, so emitting these as siblings of the shapes made seven of them
+    # children of the root `<svg>` — every one naming the whole document, and
+    # all but the first ignored. Grouped, each names the component it belongs
+    # to, which is what makes it the tooltip and the accessible name.
+    return group("\n".join([svg_title(label), *elements])), center
 
 
 # ---------------------------------------------------------------------------
@@ -318,6 +322,34 @@ def _edge_anchor(
     sy = abs(half_h / dy) if dy != 0 else float("inf")
     s = min(sx, sy)
     return (cx + dx * s, cy + dy * s)
+
+
+def _label_lines(label: str, cx: float, cy: float) -> List[str]:
+    """The component label, wrapped to fit the box it is drawn in.
+
+    Drawn raw, a label wider than the 140px box simply overhung it: "Gateway
+    (WebSocket/MQTT)" measured 186px and reached 46px into the space either
+    side, far enough to collide with the label on the connection leaving it.
+    Two lines fit comfortably in 44px of box, so wrap rather than truncate --
+    the text is the diagram's content, and there is room for it.
+    """
+    # `wrap_units` picks the break, `fit_text` guarantees the width. They do not
+    # measure the same way: the wrapper counts Latin at a flat half-em, which
+    # under-reads a real string — "Session Cache (Redis)" fits its budget by
+    # that count and measures 145px against a 140px box. `fit_text` uses the
+    # per-character table with the font-substitution headroom, which is the
+    # measure the legibility check applies, so a line that survives it is a line
+    # the checker agrees fits.
+    room = _BOX_W - 12
+    lines = [fit_text(part, room, _LABEL_PX)
+             for part in wrap_units(label, room / _LABEL_PX, max_lines=2)]
+    top = cy - _LABEL_LINE * (len(lines) - 1) / 2
+    return [text(cx, top + _LABEL_LINE * i, part,
+                 text_anchor="middle",
+                 font_size=f"{_LABEL_PX}px",
+                 font_family="sans-serif",
+                 fill="#333")
+            for i, part in enumerate(lines)]
 
 
 def _render_connection(
@@ -385,6 +417,28 @@ class ArchitectureDiagramTemplate:
             node_ids, connections, direction,
         )
 
+        # An annotation with no `near`, or one naming a component that is not
+        # here, has nowhere to point. Those go in a stack along the bottom, and
+        # the stack needs room: every one of them used to be placed at the same
+        # single spot, so two notes were drawn one on top of the other and the
+        # reader saw neither.
+        anchored = set(node_ids)
+        loose = [a for a in annotations
+                 if not (a.get("near") and str(a["near"]) in anchored)
+                 and a.get("text")]
+        # Wrapped before the height is reserved, so a note that needs two lines
+        # gets two. It used to get one and an ellipsis, with the trimmed half
+        # kept nowhere at all — on a narrow diagram the note the caller supplied
+        # was simply not in the document. Whatever the lines cannot hold is
+        # still the group's accessible name.
+        note_room = svg_w - _PADDING * 2
+        notes = [(str(a["text"]),
+                  [fit_text(part, note_room, 10)
+                   for part in wrap_units(str(a["text"]), note_room / 10, max_lines=2)])
+                 for a in loose]
+        svg_h += _NOTE_LINE * sum(len(lines) for _, lines in notes)
+        svg_h += _NOTE_PAD if loose else 0
+
         # Reserve space for caption
         if caption:
             svg_h += 30
@@ -413,19 +467,14 @@ class ArchitectureDiagramTemplate:
         for conn in connections:
             elements.append(_render_connection(conn, center_map, kind_map))
 
-        # Render annotations
+        # Annotations that point at something, drawn where they point.
         for ann in annotations:
             ann_text = ann.get("text", "")
             near_id = ann.get("near", "")
-            if not ann_text:
+            if not ann_text or not (near_id and near_id in center_map):
                 continue
-            if near_id and near_id in center_map:
-                ax, ay = center_map[near_id]
-                ay += (_CYLINDER_H if kind_map.get(near_id) in ("database", "datastore") else _BOX_H) / 2 + 16
-            else:
-                # No anchor — place at bottom-left
-                ax = _PADDING
-                ay = svg_h - 50
+            ax, ay = center_map[near_id]
+            ay += (_CYLINDER_H if kind_map.get(near_id) in ("database", "datastore") else _BOX_H) / 2 + 16
             elements.append(text(
                 ax, ay, ann_text,
                 text_anchor="middle",
@@ -434,6 +483,25 @@ class ArchitectureDiagramTemplate:
                 font_family="sans-serif",
                 fill="#888",
             ))
+
+        # The rest go in a stack along the bottom, left-aligned. Centring a
+        # 300px note on the left margin put most of it off the canvas, and every
+        # one used to be placed at the same single spot, drawn over each other.
+        note_top = (svg_h - (30 if caption else 0)
+                    - _NOTE_LINE * sum(len(lines) for _, lines in notes)
+                    - (_NOTE_PAD if loose else 0))
+        placed = 0
+        for full, lines in notes:
+            drawn = [text(_PADDING, note_top + _NOTE_LINE * (placed + i) + _NOTE_LINE,
+                          part,
+                          text_anchor="start",
+                          font_size="10px",
+                          font_style="italic",
+                          font_family="sans-serif",
+                          fill="#888")
+                     for i, part in enumerate(lines)]
+            placed += len(lines)
+            elements.append(group("\n".join([svg_title(full), *drawn])))
 
         # Caption
         if caption:
