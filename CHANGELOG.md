@@ -27,7 +27,7 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Changed
 
 - The catalog now reads five more ways a template can state a parameter's type,
-  taking typed coverage from 219 of 334 parameters to 290 of 365. It previously
+  taking typed coverage from 219 of 334 parameters to 287 of 358. It previously
   understood only `params.get("x", default)`; the lane writes
   `params.get("x") or default` exactly as often (72 reads each), so half of
   every parameter was published as a bare name with nothing beside it. Also read

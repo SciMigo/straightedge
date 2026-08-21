@@ -484,6 +484,26 @@ def _names(node) -> str | None:
 _MODULE_CACHE: dict[str, ast.Module] = {}
 
 
+def _is_the_dict(node, name: str) -> bool:
+    """Whether ``node`` hands on the params dict itself, not something from it.
+
+    ``params`` and ``params or {}`` are the dict; ``params.get("root")`` and
+    ``params["rows"][0]`` are values *inside* it, and a helper receiving one of
+    those reads item fields, not parameters. Deliberately narrow: failing to
+    follow a hand-off loses a parameter, which the caller can recover from, and
+    following the wrong one publishes a parameter that does not exist, which
+    they cannot.
+    """
+    if isinstance(node, ast.Name):
+        return node.id == name
+    if isinstance(node, ast.BoolOp) and isinstance(node.op, ast.Or):
+        # `params or {}` — still the dict, or an empty stand-in for it.
+        return (any(_is_the_dict(v, name) for v in node.values)
+                and all(_is_the_dict(v, name) or isinstance(v, ast.Dict)
+                        for v in node.values))
+    return False
+
+
 def _scopes(func: Callable, receiver: str) -> list[tuple[ast.AST, str]]:
     """Every function that reads the params dict, and the name each reads it under.
 
@@ -521,12 +541,14 @@ def _scopes(func: Callable, receiver: str) -> list[tuple[ast.AST, str]]:
             target = module_functions.get(call.func.id)
             if target is None:
                 continue
-            # Which argument carries the dict? `_render(params or {})` passes it
-            # inside an expression, so look for the name anywhere in the argument.
-            index = next(
-                (i for i, arg in enumerate(call.args)
-                 if name_here in {n.id for n in ast.walk(arg) if isinstance(n, ast.Name)}),
-                None)
+            # Which argument carries the dict *itself*? Looking for the name
+            # anywhere in the argument is too loose, and loose here means
+            # inventing: `_build_tree_from_dict(params.get("root"))` mentions
+            # `params` while passing a value out of it, and following that
+            # promoted the node's own `left`, `right` and `value` into
+            # `binary_tree`'s top-level parameters.
+            index = next((i for i, arg in enumerate(call.args)
+                          if _is_the_dict(arg, name_here)), None)
             if index is None or index >= len(target.args.args):
                 continue
             inner = target.args.args[index].arg

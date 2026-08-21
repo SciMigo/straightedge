@@ -200,10 +200,17 @@ def _typing_side(settings):
     _ = settings.get("accent") or "#333"
 
 
+def _typing_node(node):
+    """Reads an item's own fields, not the template's parameters."""
+    _ = node.get("left")
+    _ = node.get("value")
+
+
 def _typing_outline(params):
     """`render` as an outline: the reads live in the helpers it calls."""
     _ = _typing_side(params)
     _ = _typing_or_idiom(params)
+    _ = _typing_node(params.get("root"))
     _ = params.get("caption") or ""
 
 
@@ -260,6 +267,22 @@ class TestInference:
         assert {"caption", "accent", "steps", "gap", "label"} <= got.keys()
         assert got["accent"]["type"] == "string", "the helper renamed it; follow by position"
 
+    def test_a_value_out_of_the_dict_is_not_the_dict(self):
+        """`_build_tree_from_dict(params.get("root"))` mentions `params` and
+        passes something from inside it. Following that promoted a tree node's
+        own `left`, `right` and `value` into `binary_tree`'s parameters --
+        inventing three that do not exist. Losing a parameter is recoverable;
+        publishing one that is not there is not, so this stays narrow."""
+        got = self._params(_typing_outline)
+        assert "root" in got, "the read of `root` itself is still a parameter"
+        assert not {"left", "value"} & got.keys(), (
+            f"item fields promoted to parameters: {sorted({'left', 'value'} & got.keys())}")
+
+    def test_no_template_advertises_an_item_field(self):
+        by_id = {t.id: t for t in list_templates()}
+        assert not {"left", "right", "value"} & set(by_id["binary_tree"].params)
+        assert not {"children", "reports", "directs", "status"} & set(by_id["org_chart"].params)
+
     def test_a_helper_is_followed_by_position_not_by_name(self):
         got = self._params(_typing_side)
         assert "accent" not in got, "receiver is `settings` here, not `params`"
@@ -307,7 +330,7 @@ class TestInference:
     def test_most_parameters_carry_a_type(self):
         """A floor, not a target. Reading only `params.get(x, default)` typed
         219 of 334; adding the `or`, coercion, named-constant, delegation and
-        helper-scope idioms took it to 290 of 365. Dropping back under this line means an
+        helper-scope idioms took it to 287 of 358. Dropping back under this line means an
         idiom stopped being read, which is invisible from the outside: the
         catalog still lists the name, just with nothing beside it."""
         figures = [t for t in list_templates() if t.lane == "figure"]
