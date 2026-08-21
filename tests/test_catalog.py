@@ -138,7 +138,8 @@ def test_the_shape_is_stable():
     t = list_templates()[0]
     assert isinstance(t, Template)
     assert set(vars(t)) == {"id", "lane", "output", "invocation", "params",
-                            "parameters", "example", "example_request", "summary"}
+                            "parameters", "example", "example_request", "summary",
+                            "requires"}
 
 
 def test_a_collection_default_keeps_its_contents():
@@ -389,3 +390,85 @@ class TestTheConstructorStaysCompatible:
         assert t.summary == "a summary"
         assert t.example == {}
         assert t.example_request == ""
+
+
+class TestATemplateSaysWhatItCosts:
+    """`lane` and `output` said an animation is an MP4. Neither said that
+    producing one needs Manim, ffmpeg, LaTeX and dvisvgm on the host, three of
+    which pip cannot install. An agent choosing between a figure and an
+    animation was choosing between milliseconds and a dependency error it could
+    only discover by hitting it."""
+
+    def test_the_figure_lane_requires_nothing(self):
+        for t in list_templates():
+            if t.lane == "figure":
+                assert t.requires == [], f"{t.id} claims to need {t.requires}"
+
+    def test_every_animation_says_what_it_needs(self):
+        from straightedge.catalog import ANIMATION_REQUIRES
+
+        for t in list_templates():
+            if t.lane == "animation":
+                assert t.requires == list(ANIMATION_REQUIRES)
+
+    def test_it_is_exactly_what_the_server_enforces(self):
+        """Both directions, as an exact set.
+
+        The first version of this checked only that each published name appears
+        somewhere in the probe's source — which cannot see a requirement the
+        probe *enforces* and the catalog never mentions. It missed one:
+        `standalone.cls`, so a caller could install everything `requires`
+        published and still have `render` withheld. The probe now builds its
+        checks from this very list, and this asserts the mapping is total.
+        """
+        from straightedge import mcp_server
+        from straightedge.catalog import ANIMATION_REQUIRES
+
+        assert set(mcp_server._CHECKS) == set(ANIMATION_REQUIRES), (
+            "a requirement is enforced by the probe or published by the "
+            "catalog, but not both")
+
+    def test_every_check_can_name_itself(self):
+        """A check that returns a note the caller cannot act on is no better
+        than a silent refusal."""
+        from straightedge import mcp_server
+
+        for name, check in mcp_server._CHECKS.items():
+            note = check()
+            assert note is None or note.strip(), f"{name} returned an empty note"
+
+
+class TestTheProseMatchesThePublishedList:
+    """The counts in the README and the changelog said four while the catalog
+    published five, because `texlive-latex-extra` was added to the list and not
+    to the sentences describing it.
+
+    The numeral is cosmetic; the *list* is not. A reader who installs what the
+    README names and finds `render` still withheld has been told something
+    untrue by the document that was supposed to save them the trip.
+    """
+
+    def test_the_readme_names_every_requirement(self):
+        """Scoped to the paragraph that makes the promise, not the whole file.
+
+        Searching the whole README passed with the requirement deleted, because
+        the word "standalone" also appears two hundred lines away describing
+        example scenes. A substring check against a document long enough is a
+        check against nothing.
+        """
+        import pathlib
+
+        from straightedge.catalog import ANIMATION_REQUIRES
+
+        readme = (pathlib.Path(__file__).resolve().parent.parent
+                  / "README.md").read_text()
+        start = readme.index("There is also an **animation lane**")
+        section = readme[start:readme.index("\n## ", start)].lower()
+        for name in ANIMATION_REQUIRES:
+            # `texlive-latex-extra` is the Debian package name; the README names
+            # the class it provides, which is what a reader on another
+            # distribution needs to recognise.
+            token = "`standalone`" if name == "texlive-latex-extra" else name
+            assert token.lower() in section, (
+                f"the catalog requires {name!r} and the README's animation "
+                "section never says so")

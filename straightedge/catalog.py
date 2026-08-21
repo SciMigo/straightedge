@@ -55,6 +55,18 @@ from typing import Callable
 
 from .examples import EXAMPLES, REQUESTS
 
+#: What the animation lane needs on the host, beyond `pip install`. Four of the
+#: five are system packages, which is why the `render` extra alone is not enough
+#: and why `mcp_server` probes for them before offering to render at all.
+#:
+#: `texlive-latex-extra` is here because the probe enforces it — scenes use
+#: MathTex and the emitted preamble asks for `standalone.cls`. Leaving it out
+#: made this list a promise the runtime did not keep: a caller could install
+#: everything named here and still be refused. `mcp_server` builds its probe
+#: from these names, so the two cannot drift.
+ANIMATION_REQUIRES = ("manim", "ffmpeg", "latex", "dvisvgm", "texlive-latex-extra")
+
+
 @dataclass(frozen=True)
 class Template:
     """One thing the library can draw."""
@@ -87,6 +99,15 @@ class Template:
     # decides it. Empty for figures, and for the two templates reachable only
     # by id.
     example_request: str = ""
+    # What running this costs, beyond the library. Appended after the existing
+    # fields for the same reason `example` was: positional construction written
+    # against an earlier version has to keep meaning what it did.
+    #
+    # The figure lane requires nothing — pure standard library, milliseconds, no
+    # subprocess. The animation lane needs five things, and pip installs one of
+    # them, so a caller who picks an animation template on a bare host finds out
+    # by failing. Saying it here lets them choose instead.
+    requires: list[str] = field(default_factory=list)
 
     def __post_init__(self) -> None:
         """Take a copy of the example, so a template owns the one it publishes.
@@ -145,6 +166,7 @@ def _animation_templates() -> list[Template]:
             parameters=[],
             example=EXAMPLES.get(topic, {}),
             example_request=REQUESTS.get(topic, ""),
+            requires=list(ANIMATION_REQUIRES),
             summary=f"{topic} (generic)",
         ))
 
@@ -165,6 +187,7 @@ def _animation_templates() -> list[Template]:
             params=param_names.get(concept, []),
             example=EXAMPLES.get(concept, {}),
             example_request=REQUESTS.get(concept, ""),
+            requires=list(ANIMATION_REQUIRES),
             # Names only in this lane: an animation parameter is declared by a
             # precondition, which states the name and not a default to read a
             # type off. Saying nothing beats guessing.

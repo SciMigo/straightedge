@@ -42,7 +42,7 @@ from pathlib import Path
 from typing import Any
 
 from . import __version__
-from .catalog import as_dicts
+from .catalog import ANIMATION_REQUIRES, as_dicts
 from .diagrams import DIAGRAM_REGISTRY, render_diagram
 from .diagrams.legibility import check_figure
 from .diagrams.registry import count_data_marks
@@ -75,6 +75,7 @@ def build_server():
             "turn a request into a plan cheaply, validate to check a plan will "
             "draw what was asked before spending a render, and render only once "
             "the plan looks right — render is the expensive step."
+            + _lane_note()
         ),
     )
 
@@ -175,25 +176,56 @@ def build_server():
             }
         return _guarded(go)
 
-    @server.tool(
-        description=(
-            "Render to an MP4 and check the result. Expensive — about ten "
-            "minutes of one CPU core. Give a request or a template id (see "
-            "plan); a template renders in any language with no keyword routing. "
-            "Refuses a plan with a blocking precondition unless force=True. "
-            "Returns the output path and the QC findings on the finished frame."
-        ),
-    )
-    def render(request: str = "", language: str = "en", quality: str = "l",
-               force: bool = False, template: str = "",
-               params: dict | None = None) -> dict[str, Any]:
-        return _guarded(
-            lambda: _render(request, language, quality, force, template, params))
+    # Only where it can actually run. The animation lane needs Manim, ffmpeg,
+    # LaTeX and dvisvgm — none of which pip installs for you, and three of which
+    # are system packages. Advertising `render` on a host without them offers a
+    # tool whose every call fails: an agent picks it because it is there, waits,
+    # and gets a dependency error instead of a video. The guard that produces
+    # that error already existed; it just fired after the caller had committed.
+    #
+    # The lane is not hidden — `list_templates` still reports every animation
+    # template and now says what running one costs, and `plan` and `validate`
+    # still work on them, because neither needs the runtime. What goes away is
+    # the one tool that cannot keep its promise on this host.
+    missing = _missing_render_runtime()
+    if not missing:
+        @server.tool(
+            description=(
+                "Render to an MP4 and check the result. Expensive — about ten "
+                "minutes of one CPU core. Give a request or a template id (see "
+                "plan); a template renders in any language with no keyword "
+                "routing. Refuses a plan with a blocking precondition unless "
+                "force=True. Returns the output path and the QC findings on the "
+                "finished frame."
+            ),
+        )
+        def render(request: str = "", language: str = "en", quality: str = "l",
+                   force: bool = False, template: str = "",
+                   params: dict | None = None) -> dict[str, Any]:
+            return _guarded(
+                lambda: _render(request, language, quality, force, template, params))
 
     return server
 
 
 # --------------------------------------------------------------- tool bodies
+
+
+def _lane_note() -> str:
+    """What this host can and cannot do, said once, up front.
+
+    An agent that reads five tools and no `render` should not have to work out
+    why. The figure lane is always available: pure standard library, no Manim,
+    no LaTeX, milliseconds.
+    """
+    missing = _missing_render_runtime()
+    if not missing:
+        return ""
+    return (" This host cannot render animations — it is missing "
+            + ", ".join(missing)
+            + " — so the render tool is not offered. The figure lane (draw) is "
+              "unaffected: it is pure standard library and needs none of them, "
+              "and plan and validate still work on animation templates.")
 
 
 def _parameters_for(name: str) -> list[dict]:
@@ -346,22 +378,58 @@ def _missing_render_runtime() -> list[str]:
     same is true of a TeX installation missing the class the emitted preamble
     asks for, which is why the smoke workflow installs texlive-latex-extra.
     """
-    missing: list[str] = []
+    return [note for note in (_CHECKS[name]() for name in ANIMATION_REQUIRES)
+            if note]
+
+
+def _manim_unusable() -> str | None:
+    """Whether Manim can be imported *and used*, not merely found.
+
+    Only ``ImportError`` was caught here, and Manim is a stack of native
+    libraries — cairo, pango, an ffmpeg binding — any of which can fail to load
+    with ``OSError`` or ``RuntimeError`` instead. That used to break `render`
+    alone, which was survivable. Now that this runs while the server is being
+    built, letting it escape would take down `draw`, `plan`, `validate` and
+    every other pure-standard-library tool because an *optional* extra is
+    broken. An installation that cannot be imported is not a runtime, whichever
+    way it says so.
+    """
     try:
         import manim  # noqa: F401
     except ImportError:
-        missing.append("manim (pip install 'straightedge[render]')")
-    for binary, note in (("ffmpeg", "ffmpeg"),
-                         ("latex", "a LaTeX distribution"),
-                         ("dvisvgm", "dvisvgm (Manim's DVI to SVG step)")):
-        if shutil.which(binary) is None:
-            missing.append(note)
+        return "manim (pip install 'straightedge[render]')"
+    except Exception as exc:  # noqa: BLE001 - see the docstring
+        return (f"a working manim (it is installed, but importing it raised "
+                f"{type(exc).__name__}: {exc})")
+    return None
+
+
+def _binary_missing(binary: str, note: str):
+    def check() -> str | None:
+        return None if shutil.which(binary) else note
+    return check
+
+
+def _tex_class_missing() -> str | None:
     # Only probed when TeX is present enough to answer: kpsewhich missing means
     # unknown, not absent, and reporting a guess would send a caller to install
     # something they may already have.
     if shutil.which("kpsewhich") and not _tex_has("standalone.cls"):
-        missing.append("standalone.cls (texlive-latex-extra)")
-    return missing
+        return "standalone.cls (texlive-latex-extra)"
+    return None
+
+
+#: One check per name in :data:`ANIMATION_REQUIRES`, keyed by that name, so the
+#: list a caller reads and the list this host enforces are the same list. They
+#: were two, and the catalog's was shorter: a caller could install all of what
+#: it published and still be refused for the LaTeX class.
+_CHECKS = {
+    "manim": _manim_unusable,
+    "ffmpeg": _binary_missing("ffmpeg", "ffmpeg"),
+    "latex": _binary_missing("latex", "a LaTeX distribution"),
+    "dvisvgm": _binary_missing("dvisvgm", "dvisvgm (Manim's DVI to SVG step)"),
+    "texlive-latex-extra": _tex_class_missing,
+}
 
 
 def _render(request: str, language: str, quality: str, force: bool,

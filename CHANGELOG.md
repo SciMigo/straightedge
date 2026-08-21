@@ -6,6 +6,37 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **The MCP server offers `render` only where it can run.** The animation lane
+  needs Manim, ffmpeg, LaTeX, dvisvgm and the `standalone` document class; pip
+  installs one of the five. Advertised
+  regardless, `render` was a tool an agent picks because it is listed, waits on,
+  and gets a dependency error from — the guard that raises that error already
+  existed, it just fired after the caller had committed. A host without the
+  runtime now sees five tools that all work rather than six with a trap, and the
+  server's instructions say what is missing and that `draw`, `plan` and
+  `validate` are unaffected.
+
+- **A template says what running it costs.** `lane` and `output` said an
+  animation is an MP4; neither said producing one needs five things on the host.
+  Every entry now carries `requires` — empty for the figure lane, the five
+  packages for the animation lane — so an agent can choose between milliseconds
+  and a ten-minute render without discovering the difference by failing.
+
+  The runtime probe builds its checks *from* that list rather than keeping its
+  own, so the names a caller reads and the names the host is held to cannot
+  drift. They had: the probe also refused a TeX installation missing
+  `standalone.cls`, which the catalog never mentioned, so a caller could install
+  everything published and still be denied.
+
+- **The README leads with the figure lane.** It is the part that needs nothing,
+  runs in milliseconds and checks its own output; the animation lane is now
+  below a rule, with its real host dependencies stated rather than implied by an
+  extras name. The claim about checking is narrowed to what actually happens:
+  the CLI and the MCP server return legibility findings with a drawn figure,
+  which is not the same as every call to `render_diagram` doing so.
+
 ### Fixed
 
 - **`architecture_diagram` drew every unanchored note at the same coordinates.**
