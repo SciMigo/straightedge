@@ -21,9 +21,12 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   leaving it. It wraps to two lines now — the box is 44px tall and the text is
   the diagram's content, so there is room for it rather than a reason to trim.
   Where even two lines cannot hold it the line is trimmed with a visible
-  ellipsis, and the whole label is emitted as an SVG `<title>`, so it stays the
-  accessible name, the browser's tooltip, and findable by anything reading the
-  document rather than looking at it.
+  ellipsis, and each component is wrapped in a `<g>` whose first child is a
+  `<title>` carrying the whole label — so it is that component's accessible
+  name and tooltip, not the document's. The same applies to a note in the
+  bottom stack, which wraps onto reserved lines and keeps its full text: it
+  used to be trimmed to one line with the remainder held nowhere, so on a
+  narrow diagram the note the caller supplied was not in the output at all.
 
   Between them these were four of the eight legibility errors 0.5.0 shipped
   with.
@@ -46,7 +49,10 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   near the edges — a third of `(1.00, 0.00)` was never painted at 0° — so it
   turns back inward when the natural side does not fit.
 
-  Swept across every 15°: 51 errors to 4.
+  Swept across every 15°: 51 errors to 4. The match against the shown angle is a
+  circular distance rather than a bare modulus — `%` is non-negative, so
+  `(45 - 45.2) % 360` is 359.8 and a figure drawn at 45.2° kept the 45° label
+  on the same ray.
 
 - **`matrix_transform`'s eigenvector rays are clipped to their panel.** They
   are drawn 1.5x the panel range deliberately, so the direction reads as a line

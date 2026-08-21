@@ -145,7 +145,11 @@ class UnitCircleTemplate:
                 # labelling it again put two labels on one ray overlapping by
                 # half — at every angle that happens to be a common one. The
                 # reader loses both, and one of them is what they asked for.
-                if abs((deg - angle_deg) % 360) < 0.5:
+                # Circular distance, not a bare modulus: `%` is non-negative,
+                # so `(45 - 45.2) % 360` is 359.8 and a figure drawn at 45.2°
+                # kept the 45° label sitting on the same ray. Wrong by a fifth
+                # of a degree, and only on one side.
+                if abs((deg - angle_deg + 180) % 360 - 180) < 0.5:
                     continue
                 rad = math.radians(deg)
                 px, py = to_svg(math.cos(rad), math.sin(rad))

@@ -262,7 +262,6 @@ def _render_component(
         d = _cylinder_path(x0, y0, w, h, ry)
         elements.append(path(d, fill=fill, stroke=stroke, stroke_width="1.4"))
         center = (x0 + w / 2, y0 + h / 2)
-        elements.append(svg_title(label))
         elements.extend(_label_lines(label, center[0], center[1] + 5))
     else:
         w, h = _BOX_W, _BOX_H
@@ -277,10 +276,14 @@ def _render_component(
             **extra,
         ))
         center = (cx + w / 2, cy + h / 2)
-        elements.append(svg_title(label))
         elements.extend(_label_lines(label, center[0], center[1] + 4))
 
-    return "\n".join(elements), center
+    # One group per component, with the title inside it. A `<title>` names its
+    # *parent*, so emitting these as siblings of the shapes made seven of them
+    # children of the root `<svg>` — every one naming the whole document, and
+    # all but the first ignored. Grouped, each names the component it belongs
+    # to, which is what makes it the tooltip and the accessible name.
+    return group("\n".join([svg_title(label), *elements])), center
 
 
 # ---------------------------------------------------------------------------
@@ -423,7 +426,18 @@ class ArchitectureDiagramTemplate:
         loose = [a for a in annotations
                  if not (a.get("near") and str(a["near"]) in anchored)
                  and a.get("text")]
-        svg_h += _NOTE_LINE * len(loose) + (_NOTE_PAD if loose else 0)
+        # Wrapped before the height is reserved, so a note that needs two lines
+        # gets two. It used to get one and an ellipsis, with the trimmed half
+        # kept nowhere at all — on a narrow diagram the note the caller supplied
+        # was simply not in the document. Whatever the lines cannot hold is
+        # still the group's accessible name.
+        note_room = svg_w - _PADDING * 2
+        notes = [(str(a["text"]),
+                  [fit_text(part, note_room, 10)
+                   for part in wrap_units(str(a["text"]), note_room / 10, max_lines=2)])
+                 for a in loose]
+        svg_h += _NOTE_LINE * sum(len(lines) for _, lines in notes)
+        svg_h += _NOTE_PAD if loose else 0
 
         # Reserve space for caption
         if caption:
@@ -453,38 +467,41 @@ class ArchitectureDiagramTemplate:
         for conn in connections:
             elements.append(_render_connection(conn, center_map, kind_map))
 
-        # Render annotations
-        note_top = (svg_h - (30 if caption else 0)
-                    - _NOTE_LINE * len(loose) - (_NOTE_PAD if loose else 0))
-        placed = 0
+        # Annotations that point at something, drawn where they point.
         for ann in annotations:
             ann_text = ann.get("text", "")
             near_id = ann.get("near", "")
-            if not ann_text:
+            if not ann_text or not (near_id and near_id in center_map):
                 continue
-            if near_id and near_id in center_map:
-                ax, ay = center_map[near_id]
-                ay += (_CYLINDER_H if kind_map.get(near_id) in ("database", "datastore") else _BOX_H) / 2 + 16
-                anchor = "middle"
-            else:
-                # No anchor: down the bottom stack, one line each. Left-aligned
-                # rather than centred on the left margin — centring a 300px
-                # note on x=60 puts most of it off the canvas, which is how
-                # these notes came to be reported as running past the frame as
-                # well as over each other.
-                ax = _PADDING
-                ay = note_top + _NOTE_LINE * placed + _NOTE_LINE
-                anchor = "start"
-                ann_text = fit_text(ann_text, svg_w - _PADDING * 2, 10)
-                placed += 1
+            ax, ay = center_map[near_id]
+            ay += (_CYLINDER_H if kind_map.get(near_id) in ("database", "datastore") else _BOX_H) / 2 + 16
             elements.append(text(
                 ax, ay, ann_text,
-                text_anchor=anchor,
+                text_anchor="middle",
                 font_size="10px",
                 font_style="italic",
                 font_family="sans-serif",
                 fill="#888",
             ))
+
+        # The rest go in a stack along the bottom, left-aligned. Centring a
+        # 300px note on the left margin put most of it off the canvas, and every
+        # one used to be placed at the same single spot, drawn over each other.
+        note_top = (svg_h - (30 if caption else 0)
+                    - _NOTE_LINE * sum(len(lines) for _, lines in notes)
+                    - (_NOTE_PAD if loose else 0))
+        placed = 0
+        for full, lines in notes:
+            drawn = [text(_PADDING, note_top + _NOTE_LINE * (placed + i) + _NOTE_LINE,
+                          part,
+                          text_anchor="start",
+                          font_size="10px",
+                          font_style="italic",
+                          font_family="sans-serif",
+                          fill="#888")
+                     for i, part in enumerate(lines)]
+            placed += len(lines)
+            elements.append(group("\n".join([svg_title(full), *drawn])))
 
         # Caption
         if caption:

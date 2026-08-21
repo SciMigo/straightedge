@@ -594,3 +594,30 @@ class TestMatrixTransformKeepsItsGuidesInThePanel:
         sits outside the clipped group for that reason."""
         assert not [f for f in check_figure(self._svg())
                     if f.check == "text_clipped"]
+
+
+class TestTheShownAngleIsMatchedCircularly:
+    """`abs((deg - angle_deg) % 360) < 0.5` is asymmetric: `%` is non-negative,
+    so `(45 - 45.2) % 360` is 359.8 and a figure drawn at 45.2° kept the 45°
+    label sitting on the same ray. Wrong by a fifth of a degree, on one side."""
+
+    @pytest.mark.parametrize("angle", [45.0, 45.2, 44.8, 0.0, 0.2, 359.8])
+    def test_a_common_angle_within_half_a_degree_is_not_labelled_twice(self, angle):
+        svg = render_diagram({"type": "unit_circle", "params": {
+            "angle": angle, "show_common_angles": True, "show_coordinates": True}})
+        labels = [b.label for b in boxes_from_svg(svg) if b.kind == "text"]
+        # The property is that the label for the ray being shown is gone — not
+        # that the figure has no overlaps at all, which would also catch the
+        # `sin=`/`cos=` crowding at shallow angles that this does not touch.
+        expected = {0.0: "0", 45.0: "π/4", 90.0: "π/2", 180.0: "π", 270.0: "3π/2"}
+        nearest = min(expected, key=lambda d: abs((d - angle + 180) % 360 - 180))
+        if abs((nearest - angle + 180) % 360 - 180) < 0.5:
+            assert expected[nearest] not in labels, (
+                f"at {angle}° the {expected[nearest]} label was drawn on the "
+                "ray the figure is already marking")
+
+    def test_a_genuinely_different_angle_keeps_its_labels(self):
+        """Half a degree is the tolerance, not a licence to drop neighbours."""
+        svg = render_diagram({"type": "unit_circle", "params": {
+            "angle": 47, "show_common_angles": True, "show_coordinates": True}})
+        assert "π/4" in [b.label for b in boxes_from_svg(svg) if b.kind == "text"]

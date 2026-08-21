@@ -435,3 +435,85 @@ class TestLabelsFitAndNotesStack:
         svg = render_diagram(self.HINT)
         for elem in self.HINT["params"]["elements"]:
             assert f"<title>{elem['label']}</title>" in svg
+
+    def test_each_title_names_its_own_component(self):
+        """A `<title>` names its *parent*. Emitted beside the shapes they were
+        seven children of the root `<svg>`, every one naming the whole document
+        and all but the first ignored — the string was in the file and the
+        tooltip and accessible name this claims to provide were not.
+        """
+        import xml.etree.ElementTree as ET
+
+        ns = "{http://www.w3.org/2000/svg}"
+        root = ET.fromstring(render_diagram(self.HINT))
+        assert not [c for c in root if c.tag == f"{ns}title"], (
+            "a title at root level names the document, not a component")
+        titled = {}
+        for g in root.iter(f"{ns}g"):
+            first = list(g)[0] if len(g) else None
+            if first is not None and first.tag == f"{ns}title":
+                titled[first.text] = g
+        for elem in self.HINT["params"]["elements"]:
+            assert elem["label"] in titled, f"{elem['label']!r} names no group"
+            shapes = [c.tag.split("}")[-1] for c in titled[elem["label"]]]
+            assert any(t in ("rect", "path") for t in shapes), (
+                f"{elem['label']!r} titles a group with no shape in it")
+
+
+class TestALooseNoteKeepsItsText:
+    """A note with nowhere to point goes in the bottom stack, and used to be
+    trimmed to one line with an ellipsis and nothing holding the rest.
+
+    Component labels got a `<title>` for exactly this and notes did not, so on a
+    narrow diagram the note the caller supplied was not in the document at all —
+    the ellipsis makes the loss visible on screen and recoverable nowhere.
+    """
+
+    LONG = "Idempotency via client message id to deduplicate retries across reconnects"
+
+    def _svg(self, *notes, elements=None):
+        return render_diagram({"type": "architecture_diagram", "params": {
+            "elements": elements or [{"id": "a", "kind": "service", "label": "Only"}],
+            "notes": list(notes)}})
+
+    def _titles(self, svg):
+        import xml.etree.ElementTree as ET
+
+        ns = "{http://www.w3.org/2000/svg}"
+        return [t.text for t in ET.fromstring(svg).iter(f"{ns}title")]
+
+    def test_a_trimmed_note_is_still_in_the_document(self):
+        assert self.LONG in self._titles(self._svg(self.LONG))
+
+    def test_it_is_not_trimmed_when_the_canvas_has_room(self):
+        """The old behaviour trimmed to one line whatever the width. A chained
+        diagram lays out left-to-right and is 800px wide, which this note fits
+        on a single line — so nothing should be cut from it at all."""
+        import re
+
+        els = [{"id": c, "kind": "service", "label": c} for c in "abcd"]
+        conns = [{"from": a, "to": b} for a, b in zip("abc", "bcd")]
+        svg = render_diagram({"type": "architecture_diagram", "params": {
+            "elements": els, "connections": conns, "notes": [self.LONG]}})
+        drawn = "".join(re.findall(r'font-style="italic"[^>]*>([^<]*)<', svg))
+        assert "…" not in drawn, f"trimmed with room to spare: {drawn!r}"
+        assert self.LONG in drawn, "the note was not drawn in full"
+
+    def test_a_note_too_long_for_two_lines_keeps_its_text(self):
+        note = "A" * 400
+        svg = self._svg(note)
+        assert note in self._titles(svg), "nothing holds what the lines could not"
+
+    def test_the_reserved_height_holds_every_line(self):
+        from straightedge.diagrams.legibility import check_figure
+
+        svg = self._svg(self.LONG, "A" * 400, "short")
+        assert not [f for f in check_figure(svg) if f.severity == "error"]
+
+    def test_notes_still_do_not_share_a_line(self):
+        from straightedge.diagrams.legibility import boxes_from_svg
+
+        svg = self._svg("first note here", "second note here", "third note here")
+        ys = sorted(b.y0 for b in boxes_from_svg(svg)
+                    if b.kind == "text" and b.label.endswith("note here"))
+        assert len(ys) == 3 and len(set(ys)) == 3, f"notes overlap at {ys}"
