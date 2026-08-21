@@ -69,7 +69,7 @@ mcp = ["mcp>=2.0"]
 # standard library.
 #
 # Kept on one line because the declaration guard reads this assignment.
-dev = ["pytest>=7.4", "numpy>=1.24", "mcp>=2.0", "sympy>=1.12"]
+dev = ["pytest>=7.4", "pytest-xdist>=3.5", "numpy>=1.24", "mcp>=2.0", "sympy>=1.12"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
