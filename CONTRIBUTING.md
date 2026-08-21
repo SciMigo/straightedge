@@ -11,7 +11,15 @@ see when it doesn't."
 python -m venv .venv && . .venv/bin/activate
 pip install -e '.[render,dev]'      # add ,mcp for the server, ,stt for audio
 pytest -q                            # the fast suite: no Manim needed for most of it
+pytest -q -n auto                    # the same suite across every core
 ```
+
+The suite is process-parallel safe — no test writes to a shared path or depends
+on another's ordering — and CI runs it that way on one leg, so that stays true
+rather than merely being claimed here. `-n auto` is worth having in muscle
+memory: 57s to 21s on eight cores. It is not the default, because a failure is easier to read
+when the output is not interleaved and `-x` still means what you expect. Reach
+for it on a full run and drop it when you are chasing one test.
 
 The core (`build_plan`, `validate`, `list_templates`, the checks) imports without
 Manim. Only rendering needs the `render` extra.
