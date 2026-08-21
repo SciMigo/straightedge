@@ -497,6 +497,15 @@ class Construction:
         a, b = self._require_point(start), self._require_point(end)
         if o == a:
             raise ValueError(f"an arc needs a radius; {center} and {start} coincide")
+        if a == b:
+            # SVG draws an arc from a point back to itself as nothing at all,
+            # while the model would still reason about the whole circle — so the
+            # figure would carry geometry a reader cannot see, and a claim could
+            # turn on it. Whatever `( O A ~ A )` was meant to say, it is not what
+            # would have been drawn.
+            raise ValueError(
+                f"an arc needs two distinct ends; {start} and {end} coincide. "
+                f"For the whole circle write ( {center} {start} ).")
         arc = Arc(o, a, b)
         if not arc.circle.contains(b):
             raise ValueError(
@@ -558,13 +567,20 @@ class Construction:
                 continue
             crossings = self._crossings(element.geometry, other.geometry)
             for point in sorted(crossings, key=_upper_then_left):
-                wanted = queued.pop(0) if queued else None
+                # A name is spent only on a point this step actually *creates*.
+                # Popping before the insert let an already-present crossing eat
+                # one: in the vesica, `[ C D ] -> M` met C and D again before
+                # reaching the midpoint, so M was consumed by a point that
+                # already had a name and the midpoint fell back to an automatic
+                # one. The name then referred to nothing, silently.
+                fresh = self._existing(point) is None
+                wanted = queued.pop(0) if (fresh and queued) else None
                 found.append(self._add(point, wanted, ("intersection",),
                                        (element_id, other.id), False))
         if queued:
             raise ValueError(
                 f"{element_id} was given {len(names)} name(s) for the points it "
-                f"produces but made {len(names) - len(queued)}")
+                f"produces but made {len(names) - len(queued)} new one(s)")
         return found
 
     def _crossings(self, one: Geometry, two: Geometry) -> list[Point]:

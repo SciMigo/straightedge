@@ -178,6 +178,19 @@ def _dispatch(args: argparse.Namespace, out: _Emitter) -> int:
             # Chrome with no data is the one failure that looks like success, so
             # it is a refusal here as it is over MCP — and it must not leave a
             # blank file behind for someone to find later.
+            from .diagrams.templates.construction import refusal_findings
+
+            refused = refusal_findings(name, _read_params(args.params))
+            if refused:
+                # The parameters are fine; the figure asserts something false.
+                # Sending this caller to check parameter shapes would point away
+                # from the mistake.
+                raise BlankFigureError(
+                    f"{name!r} was refused: it asserts something it does not satisfy",
+                    remedy="Fix the construction or drop the claim. The "
+                           "parameters are not the problem.",
+                    details={"template": name,
+                             "findings": [str(f) for f in refused]})
             raise BlankFigureError(
                 f"{name!r} drew no data marks",
                 remedy="A parameter of the wrong type is read as absent; check "

@@ -160,6 +160,30 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - A post, *The picture is not the proof*, and a third series on the blog. 1.618
   is right to three places, is not φ, and every checker that compares a measured
   ratio against a tolerance says it is.
+- Four further review findings, all reproduced first:
+  - **A circle was tangent to itself.** The squared identity is satisfied by a
+    circle and its own copy — `d² = 0` and `r₁ = r₂` make both sides `4r⁴` — but
+    coincident circles meet at every one of their points, which is the opposite
+    of touching at one. Dedup makes this easy to reach: redrawing a circle
+    returns the first one, so the two operands are the same element.
+  - **A requested name could be eaten by a crossing that already existed.** The
+    name was spent before the insert, and inserting a point already in the model
+    returns the existing one — so `[ C D ] -> M` met `C` and `D` again on its way
+    to the midpoint, `M` was consumed by a point that already had a name, and the
+    midpoint fell back to an automatic letter. `M` then referred to nothing,
+    silently, which is the failure the naming form exists to prevent. Names are
+    spent only on points a step actually creates.
+  - **A zero-sweep arc drew nothing and reasoned as a whole circle.**
+    `( O A ~ A )` was accepted; SVG renders an arc from a point to itself as
+    nothing at all, while the model still intersected against the full circle —
+    so the figure carried geometry a reader cannot see and a claim could turn on
+    it. Refused, and the refusal names `( O A )` as the way to say "the whole
+    circle".
+  - **The CLI reported a refusal as a parameter mistake.** A construction whose
+    claim is false renders blank, and the generic remedy sent the caller to check
+    parameter shapes that were already correct. The MCP path distinguished this
+    and the CLI did not, so the same refusal read differently by transport. One
+    implementation now, beside `verify`, used by both.
 - Five review findings on the lane above, all reproduced before being fixed and
   all gaps the suite could not see:
   - **Float coordinates were silently approximated.** `limit_denominator(10**9)`

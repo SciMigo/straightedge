@@ -274,6 +274,14 @@ def _tangent(c: Construction, claim: Claim) -> tuple[bool, str]:
         # once more to clear both roots at the same time:
         #     d² = r₁² + r₂² ± 2r₁r₂   ⟹   (d² − r₁² − r₂²)² = 4r₁²r₂²
         # which is one identity covering both cases, exact, and needing no √.
+        if circle == other:
+            # The identity is satisfied by a circle and itself — d² = 0 and
+            # r₁ = r₂ make both sides 4r⁴ — but coincident circles meet at every
+            # one of their points, which is the opposite of touching at one.
+            # A predicate has to own its domain; the algebra alone does not.
+            raise _Unresolved(
+                "tangency is undefined between a circle and itself: coincident "
+                "circles meet everywhere, not at one point")
         dx = other.center.x - circle.center.x
         dy = other.center.y - circle.center.y
         gap = dx * dx + dy * dy - circle.radius_sq - other.radius_sq

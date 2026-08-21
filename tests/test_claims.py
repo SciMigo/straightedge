@@ -538,6 +538,32 @@ class TestCirclesCanBeTangentToEachOther:
         small = c.construct_circle(c.set_point(r, 42), c.set_point(r, 0))
         assert check(c, [{"claim": "tangent", "of": [big, small]}]) != []
 
+    def test_a_circle_is_not_tangent_to_itself(self):
+        """The identity holds for a circle and itself — d² = 0 and r₁ = r₂ make
+        both sides 4r⁴ — but coincident circles meet at *every* one of their
+        points, which is the opposite of touching at one."""
+        c = Construction()
+        circle = c.construct_circle(c.set_point(0, 0), c.set_point(1, 0))
+        findings = check(c, [{"claim": "tangent", "of": [circle, circle]}])
+        assert len(findings) == 1 and findings[0].severity == "error"
+        assert "coincident" in findings[0].message
+
+    def test_a_redrawn_circle_is_the_same_circle(self):
+        """Dedup means the second draw returns the first id, so this is the
+        same case arriving by a different route."""
+        c = Construction()
+        a, b = c.set_point(0, 0), c.set_point(1, 0)
+        one, two = c.construct_circle(a, b), c.construct_circle(a, b)
+        assert one == two
+        assert check(c, [{"claim": "tangent", "of": [one, two]}]) != []
+
+    def test_concentric_circles_of_different_size_are_still_rejected(self):
+        c = Construction()
+        o = c.set_point(0, 0)
+        one = c.construct_circle(o, c.set_point(1, 0))
+        two = c.construct_circle(o, c.set_point(4, 0))
+        assert check(c, [{"claim": "tangent", "of": [one, two]}]) != []
+
     def test_a_line_is_still_accepted(self):
         c = Construction()
         circle = c.construct_circle(c.set_point(0, 0), c.set_point(1, 0))

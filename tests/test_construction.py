@@ -371,3 +371,55 @@ class TestArcs:
         c.construct_circle(o, c.set_point(200, 0))
         _, min_y, _, max_y = c.limits()
         assert min_y == pytest.approx(-200.0) and max_y == pytest.approx(200.0)
+
+
+class TestNamesAreSpentOnlyOnNewPoints:
+    """A requested name was eaten by a crossing that already existed.
+
+    `_add` returns the existing element for a point already in the model, so the
+    name went nowhere — and the point the author actually wanted named fell back
+    to an automatic letter. The name then referred to nothing, silently, which is
+    the failure the naming form was added to prevent.
+    """
+
+    def test_an_existing_crossing_does_not_consume_a_name(self):
+        from straightedge.diagrams.templates.construction import build
+        c = build(["A = 0, 0", "B = 1, 0", "( A B )", "( B A ) -> C D",
+                   "[ A B ]", "[ C D ] -> M"])
+        assert "M" in c.points, "the name was eaten by C or D"
+        midpoint = c.points["M"]
+        assert (midpoint.x - Fraction(1, 2)).is_zero() and midpoint.y.is_zero()
+
+    def test_the_count_is_of_new_points(self):
+        from straightedge.diagrams.templates.construction import build
+        with pytest.raises(ValueError, match="new one"):
+            build(["A = 0, 0", "B = 1, 0", "( A B )", "( B A ) -> C D",
+                   "[ A B ]", "[ C D ] -> M N"])
+
+    def test_naming_still_works_when_every_crossing_is_new(self):
+        from straightedge.diagrams.templates.construction import build
+        c = build(["A = 0, 0", "B = 1, 0", "( A B )", "( B A ) -> UP LOW"])
+        assert float(c.points["UP"].y) > 0 > float(c.points["LOW"].y)
+
+
+class TestAZeroSweepArcIsRefused:
+    def test_identical_ends_are_rejected(self):
+        """SVG draws an arc from a point to itself as nothing, while the model
+        would still reason about the whole circle — geometry a reader cannot see
+        that a claim could turn on."""
+        c = Construction()
+        o, p = c.set_point(0, 0), c.set_point(200, 0)
+        with pytest.raises(ValueError, match="two distinct ends"):
+            c.construct_arc(o, p, p)
+
+    def test_the_refusal_names_the_alternative(self):
+        c = Construction()
+        o, p = c.set_point(0, 0), c.set_point(200, 0)
+        with pytest.raises(ValueError, match=r"\( A B \)"):
+            c.construct_arc(o, p, p)
+
+    def test_a_real_arc_is_unaffected(self):
+        c = Construction()
+        o = c.set_point(0, 0)
+        arc = c.construct_arc(o, c.set_point(200, 0), c.set_point(-200, 0))
+        assert c[arc].geometry.reflex is False

@@ -215,6 +215,27 @@ def verify(params: Dict[str, Any]) -> List[Finding]:
     return check_claims(construction, claims) if isinstance(claims, list) else []
 
 
+def refusal_findings(diagram_type: str, params: Dict[str, Any]) -> List[Finding]:
+    """Why a template refused to draw, when it can say — otherwise empty.
+
+    Only `construction` refuses on grounds other than unreadable parameters: a
+    claim it does not satisfy blocks the drawing deliberately. A blank figure is
+    otherwise a parameter-shape mismatch, and telling the caller to check shapes
+    that are already correct sends them to look in the wrong place.
+
+    Claim failures only. A construction that could not be *built* — a notation
+    error, an unknown id — is a parameter problem after all.
+
+    Shared by the MCP `draw` tool and the CLI `draw` command. It lived in the
+    MCP server first, which left the CLI reporting a parameter mistake for a
+    construction whose parameters were fine.
+    """
+    if diagram_type != "construction":
+        return []
+    return [f for f in verify(params)
+            if f.severity == "error" and f.check.startswith("claim:")]
+
+
 @register("construction")
 class ConstructionTemplate:
     """Compass-and-straightedge construction with exactly placed points."""

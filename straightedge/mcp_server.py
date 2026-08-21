@@ -216,26 +216,6 @@ def _verify_payload(steps: Any, claims: list | None) -> dict[str, Any]:
     }
 
 
-def _refusal_findings(name: str, params: dict | None) -> list[dict]:
-    """Why a template refused to draw, when it can say — otherwise empty.
-
-    Only `construction` can refuse on grounds other than unreadable parameters:
-    a claim it does not satisfy blocks the drawing deliberately. Everything else
-    that comes back blank came back blank because the params did not fit.
-
-    Claim failures only. A construction that could not be *built* — a notation
-    error, an unknown id — is a parameter problem after all, and belongs on the
-    branch that reports parameter shapes; sending its caller to
-    `verify_construction` would point away from the mistake.
-    """
-    if name != "construction":
-        return []
-    from .diagrams.templates.construction import verify as _verify
-
-    return [asdict(f) for f in _verify(params or {})
-            if f.severity == "error" and f.check.startswith("claim:")]
-
-
 def _draw_payload(diagram_type: str, params: dict | None) -> dict[str, Any]:
     """Render one figure, and say whether anything actually landed on it."""
     name = (diagram_type or "").strip()
@@ -263,7 +243,9 @@ def _draw_payload(diagram_type: str, params: dict | None) -> dict[str, Any]:
         # A construction that asserts something false is *refused*, and telling
         # its caller to check parameter shapes sends them to look at input that
         # is already correct. Where the template can say why, it says why.
-        refused = _refusal_findings(name, params)
+        from .diagrams.templates.construction import refusal_findings
+
+        refused = [asdict(f) for f in refusal_findings(name, params or {})]
         if refused:
             raise BlankFigureError(
                 f"{name!r} was refused: it asserts something it does not satisfy",

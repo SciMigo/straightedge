@@ -230,3 +230,41 @@ class TestDrawReachesTheFigureLane:
                                          "( A B )", "( B A ) -> C D",
                                          "[ C D ]"]})])
         assert payload["ok"] and payload["data_marks"] > 0
+
+
+class TestTheCliSaysWhyAConstructionWasRefused:
+    """A construction with correct parameters and a false claim renders blank.
+
+    The generic blank-figure remedy sends the caller to check parameter shapes,
+    which are already right. The MCP path distinguished this and the CLI did
+    not — the same refusal reported two different ways depending on transport.
+    """
+
+    STEPS = ["A = 0, 0", "B = 1, 0", "( A B )", "( B A ) -> C D",
+             "[ C D ]", "[ A B ]"]
+
+    def _draw(self, capsys, claims):
+        return _run_json(capsys, ["draw", "construction", "--json", "--params",
+                                  json.dumps({"steps": self.STEPS,
+                                              "claims": claims})])[1]
+
+    def test_a_false_claim_reports_the_claim(self, capsys):
+        payload = self._draw(capsys, [{"claim": "parallel",
+                                       "of": ["[ C D ]", "[ A B ]"]}])
+        error = payload["error"]
+        assert error["code"] == "blank_figure"
+        assert "refused" in error["message"]
+        assert "parameters are not the problem" in error["remedy"]
+        assert "claim:parallel" in error["details"]["findings"][0]
+
+    def test_a_real_parameter_mistake_still_says_so(self, capsys):
+        payload = _run_json(capsys, ["draw", "construction", "--json",
+                                     "--params",
+                                     json.dumps({"steps": "not a construction"})])[1]
+        assert payload["error"]["code"] == "blank_figure"
+        assert "parameter" in payload["error"]["remedy"]
+
+    def test_a_true_claim_still_draws(self, capsys):
+        payload = self._draw(capsys, [{"claim": "perpendicular",
+                                       "of": ["[ C D ]", "[ A B ]"]}])
+        assert payload["ok"] and payload["data_marks"] > 0
