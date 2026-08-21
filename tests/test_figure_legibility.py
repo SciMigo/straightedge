@@ -22,7 +22,7 @@ may drift down for two reasons — a template being fixed, or the checker being
 wrong — tells you nothing when it moves; a named list that fails when an entry
 starts passing makes you look at which happened.
 
-Those three are listed in :data:`KNOWN_ILLEGIBLE` and the list is **strict**: a
+Those two are listed in :data:`KNOWN_ILLEGIBLE` and the list is **strict**: a
 template on it that starts passing fails the suite, so the list can only shrink.
 An open-ended allowlist is how a check like this becomes decoration.
 
@@ -97,7 +97,6 @@ CORPUS: dict[str, dict] = {
 KNOWN_ILLEGIBLE: dict[str, str] = {
     "binary_tree": "a node label runs past the frame",
     "linked_list": "a label runs 4px past the frame",
-    "unit_circle": "the '1' tick labels collide with the axis names",
 }
 
 
@@ -163,9 +162,17 @@ class TestEveryFindingSaysWhere:
             assert x1 >= x0 and y1 >= y0
 
     def test_a_collision_names_both_labels(self):
-        [*found] = [f for f in _errors("unit_circle") if f.check == "text_overlap"]
-        assert found
-        assert all("'" in f.message for f in found), "a collision must name what collided"
+        """Against a figure built to collide, not against whichever template
+        happens to be broken today. This used to read `unit_circle`, which was
+        illegible when it was written and no longer is — so the test went from
+        checking the message format to depending on a defect staying unfixed."""
+        svg = _svg('<text x="20" y="50" font-size="12">alpha</text>'
+                   '<text x="24" y="50" font-size="12">beta</text>')
+        found = [f for f in check_figure(svg) if f.check == "text_overlap"]
+        assert found, "two labels in the same pixels went unreported"
+        for f in found:
+            assert "'alpha'" in f.message and "'beta'" in f.message, (
+                f"a collision must name what collided: {f.message}")
 
 
 class TestTheExtractor:
@@ -480,3 +487,59 @@ class TestTheFrameComesFromTheRootElement:
 
         svg = '<svg xmlns="http://www.w3.org/2000/svg" width="200px" height="100px"></svg>'
         assert _canvas(svg) == (0.0, 0.0, 200.0, 100.0)
+
+
+class TestUnitCircleLabelsClearEachOther:
+    """The collisions a human reviewer reported by eye, before this module
+    existed — and the ones fixing those turned up.
+
+    An axis name sat level with the tick label nearest it (`x` five pixels from
+    its own `1`), the common-angle label was drawn on the ray the figure was
+    already marking, so `π/4` and `(0.71, 0.71)` overlapped by half, and the
+    coordinate readout ran off the canvas near the edges.
+    """
+
+    FULL = {"angle": 45, "show_common_angles": True, "show_tan": True,
+            "show_coordinates": True, "show_triangle": True,
+            "show_sin": True, "show_cos": True}
+
+    def _errors(self, **over):
+        params = {**self.FULL, **over}
+        return [f for f in check_figure(render_diagram(
+            {"type": "unit_circle", "params": params})) if f.severity == "error"]
+
+    def test_the_reported_figure_is_clean(self):
+        assert not self._errors(), [f.message for f in self._errors()]
+
+    def test_an_axis_name_clears_its_tick_label(self):
+        svg = render_diagram({"type": "unit_circle", "params": self.FULL})
+        by = {}
+        for b in boxes_from_svg(svg):
+            if b.kind == "text" and b.label in ("x", "y", "1"):
+                by.setdefault(b.label, []).append(b)
+        for name in ("x", "y"):
+            for tick in by["1"]:
+                a = by[name][0]
+                assert not (a.x0 < tick.x1 and tick.x0 < a.x1
+                            and a.y0 < tick.y1 and tick.y0 < a.y1), (
+                    f"axis name {name!r} overlaps a '1' tick")
+
+    def test_the_shown_angle_is_not_also_labelled_as_a_common_one(self):
+        """Both labels sit on the same ray, so drawing both loses both."""
+        svg = render_diagram({"type": "unit_circle", "params": self.FULL})
+        labels = [b.label for b in boxes_from_svg(svg) if b.kind == "text"]
+        assert "(0.71, 0.71)" in labels
+        assert "π/4" not in labels, "the angle being shown was labelled twice"
+
+    def test_a_common_angle_is_still_labelled_when_it_is_not_the_one_shown(self):
+        """The suppression must be one label, not the whole set."""
+        svg = render_diagram({"type": "unit_circle", "params": {**self.FULL, "angle": 20}})
+        labels = [b.label for b in boxes_from_svg(svg) if b.kind == "text"]
+        assert "π/4" in labels
+
+    @pytest.mark.parametrize("angle", [0, 45, 90, 180, 270, 300])
+    def test_the_readout_stays_on_the_canvas(self, angle):
+        svg = render_diagram({"type": "unit_circle", "params": {**self.FULL, "angle": angle}})
+        for b in boxes_from_svg(svg):
+            if b.kind == "text" and b.label.startswith("("):
+                assert b.x0 >= 0 and b.x1 <= 400, f"readout at x {b.x0:.0f}..{b.x1:.0f}"

@@ -35,6 +35,19 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   eigenvector ray to x=477 on a 460-wide canvas. A point is still skipped:
   there is nothing to clip and no extent to report an overhang of.
 
+- **`unit_circle`'s labels no longer collide.** Three separate causes, all
+  reported by a human opening the picture and looking, which is the loop the
+  checker exists to replace. An axis name sat level with the tick label nearest
+  it — `x` five pixels from its own `1` — so each name was drawn through a
+  tick. The common-angle label was drawn on the ray the figure was already
+  marking, so at `π/4` the label and the `(0.71, 0.71)` readout overlapped by
+  half and the reader lost both, including the one they asked for; the angle
+  being shown is no longer labelled twice. And the readout ran off the canvas
+  near the edges — a third of `(1.00, 0.00)` was never painted at 0° — so it
+  turns back inward when the natural side does not fit.
+
+  Swept across every 15°: 51 errors to 4.
+
 - **`riemann_sum` drew one gridline past each edge of its plot**, found by the
   check above the moment it could see them: the grid loops ran to
   `int(max) + 2` where the integers inside the plot stop at `int(max)`. One
