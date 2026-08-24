@@ -12,6 +12,7 @@ from . import polar_graph  # noqa: F401
 from . import dirichlet_function  # noqa: F401
 from . import step_function  # noqa: F401
 from . import array_state  # noqa: F401
+from . import algorithm_trace  # noqa: F401
 from . import matrix_state  # noqa: F401
 from . import linked_list  # noqa: F401
 from . import binary_tree  # noqa: F401
@@ -52,6 +53,7 @@ __all__ = [
     "dirichlet_function",
     "step_function",
     "array_state",
+    "algorithm_trace",
     "matrix_state",
     "linked_list",
     "binary_tree",
