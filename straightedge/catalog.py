@@ -299,17 +299,25 @@ def _concept_summary(concept: str) -> str:
 
 def _figure_templates() -> list[Template]:
     from straightedge.diagrams import DIAGRAM_REGISTRY
+    from straightedge.diagrams.themes import TEMPLATE_THEME_NAMES
 
     templates = []
     for name in sorted(DIAGRAM_REGISTRY):
         template = DIAGRAM_REGISTRY[name]
+        parameters = _dict_get_parameters(template.render, receiver="params")
+        supported_themes = TEMPLATE_THEME_NAMES.get(name)
+        if supported_themes:
+            for parameter in parameters:
+                if parameter["name"] == "theme":
+                    parameter["enum"] = list(supported_themes)
+                    break
         templates.append(Template(
             id=name,
             lane="figure",
             output="svg",
             invocation="name",
             params=sorted(_dict_get_keys(template.render, receiver="params")),
-            parameters=_dict_get_parameters(template.render, receiver="params"),
+            parameters=parameters,
             example=EXAMPLES.get(name, {}),
             summary=_first_docline(type(template)),
         ))

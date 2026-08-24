@@ -6,6 +6,7 @@ from typing import Any, Dict, List, Optional
 
 from ..registry import register
 from ..renderer import DEFAULT_STYLES, defs, line, path, rect, style, svg_document, text, circle
+from ..themes import DATA_STRUCTURE_THEMES, DiagramTheme, resolve_theme
 
 
 STATE_COLORS = {
@@ -35,9 +36,10 @@ def _normalize_highlights(highlights: Any) -> Dict[str, str]:
 
 @register("linked_list")
 class LinkedListTemplate:
-    """Render a singly or doubly linked list visualization."""
+    """Render a themed singly or doubly linked list visualization."""
 
     def render(self, params: Dict[str, Any]) -> str:
+        theme = resolve_theme(params.get("theme", "professional"), DATA_STRUCTURE_THEMES)
         nodes = params.get("nodes", [])
         if not isinstance(nodes, list):
             nodes = []
@@ -77,8 +79,11 @@ class LinkedListTemplate:
         node_y = top_margin
 
         elements: List[str] = []
-        elements.append(style(DEFAULT_STYLES + self._extra_styles()))
-        elements.append(defs(self._arrow_markers()))
+        elements.append(style(DEFAULT_STYLES + self._extra_styles(theme)))
+        elements.append(defs(self._arrow_markers(theme)))
+        if theme.name != "professional":
+            elements.append(rect(0, 0, svg_width, svg_height, fill=theme.background,
+                                 **{"class": "linked-background"}))
 
         node_positions: Dict[str, float] = {}
 
@@ -98,7 +103,7 @@ class LinkedListTemplate:
                     node_y,
                     x + value_width,
                     node_y + node_height,
-                    stroke="#343a40",
+                    stroke="#343a40" if theme.name == "professional" else theme.text,
                     stroke_width="1.2",
                 )
             )
@@ -130,7 +135,7 @@ class LinkedListTemplate:
                     center_y,
                     end_x,
                     center_y,
-                    stroke="#333",
+                    stroke="#333" if theme.name == "professional" else theme.text,
                     stroke_width="2",
                     marker_end="url(#linked-arrow)",
                     **{"class": "linked-list-arrow"},
@@ -144,7 +149,7 @@ class LinkedListTemplate:
                         back_y,
                         start_x,
                         back_y,
-                        stroke="#666",
+                        stroke="#666" if theme.name == "professional" else theme.muted,
                         stroke_width="1.8",
                         marker_end="url(#linked-arrow)",
                         **{"class": "linked-list-back-arrow"},
@@ -162,7 +167,7 @@ class LinkedListTemplate:
                     center_y,
                     null_x,
                     center_y,
-                    stroke="#333",
+                    stroke="#333" if theme.name == "professional" else theme.text,
                     stroke_width="2",
                     marker_end="url(#linked-arrow)",
                     **{"class": "linked-list-arrow"},
@@ -192,7 +197,7 @@ class LinkedListTemplate:
                 elements.append(
                     path(
                         curve,
-                        stroke="#9C27B0",
+                        stroke="#9C27B0" if theme.name == "professional" else theme.accent,
                         stroke_width="2",
                         fill="none",
                         marker_end="url(#linked-arrow)",
@@ -212,7 +217,9 @@ class LinkedListTemplate:
                 if node_key not in node_positions:
                     continue
                 label = str(pointer.get("label", ""))
-                color = pointer.get("color", POINTER_COLORS[i % len(POINTER_COLORS)])
+                palette = POINTER_COLORS if theme.name == "professional" else (
+                    theme.secondary, theme.success, theme.warning)
+                color = pointer.get("color", palette[i % len(palette)])
                 x = node_positions[node_key] + node_width / 2
                 line_start_y = node_y - 20
                 line_end_y = node_y
@@ -251,27 +258,36 @@ class LinkedListTemplate:
         return svg_document("\n".join(elements), svg_width, svg_height)
 
     @staticmethod
-    def _extra_styles() -> str:
-        return """
-.linked-node { stroke: #343a40; stroke-width: 1.2; fill: #f8f9fa; }
-.linked-node-current { fill: #fff3cd; }
-.linked-node-visited { fill: #d1ecf1; }
-.linked-node-target { fill: #d4edda; }
-.linked-node-found { fill: #d4edda; }
-.linked-node-invalid { fill: #f8d7da; }
-.linked-node-rejected { fill: #f8d7da; }
-.linked-node-comparison { fill: #FF9800; }
-.linked-node-value { font-size: 14px; font-family: sans-serif; fill: #212529; }
-.linked-node-pointer-dot { fill: #212529; }
-.linked-pointer-label { font-size: 12px; font-family: sans-serif; font-weight: 600; }
-.linked-null-label { font-size: 12px; font-family: sans-serif; fill: #6c757d; }
-.linked-caption { font-size: 13px; font-family: sans-serif; fill: #333; }
+    def _extra_styles(theme: DiagramTheme) -> str:
+        if theme.name == "professional":
+            surface, current, visited = "#f8f9fa", "#fff3cd", "#d1ecf1"
+            target, danger, comparison = "#d4edda", "#f8d7da", "#FF9800"
+            ink, muted = "#212529", "#6c757d"
+        else:
+            surface, current, visited = theme.surface, theme.warning_soft, theme.secondary_soft
+            target, danger, comparison = theme.success_soft, theme.danger_soft, theme.warning
+            ink, muted = theme.text, theme.muted
+        return f"""
+.linked-node {{ stroke: {ink}; stroke-width: 1.2; fill: {surface}; }}
+.linked-node-current {{ fill: {current}; }}
+.linked-node-visited {{ fill: {visited}; }}
+.linked-node-target {{ fill: {target}; }}
+.linked-node-found {{ fill: {target}; }}
+.linked-node-invalid {{ fill: {danger}; }}
+.linked-node-rejected {{ fill: {danger}; }}
+.linked-node-comparison {{ fill: {comparison}; }}
+.linked-node-value {{ font-size: 14px; font-family: sans-serif; fill: {ink}; }}
+.linked-node-pointer-dot {{ fill: {ink}; }}
+.linked-pointer-label {{ font-size: 12px; font-family: sans-serif; font-weight: 600; }}
+.linked-null-label {{ font-size: 12px; font-family: sans-serif; fill: {muted}; }}
+.linked-caption {{ font-size: 13px; font-family: sans-serif; fill: {ink}; }}
 """
 
     @staticmethod
-    def _arrow_markers() -> str:
-        return """
+    def _arrow_markers(theme: DiagramTheme) -> str:
+        ink = "#333" if theme.name == "professional" else theme.text
+        return f"""
 <marker id="linked-arrow" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
-  <polygon points="0 0, 10 3.5, 0 7" fill="#333"/>
+  <polygon points="0 0, 10 3.5, 0 7" fill="{ink}"/>
 </marker>
 """

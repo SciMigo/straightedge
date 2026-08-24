@@ -4,6 +4,25 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project aims to
 follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- Selected pure-SVG families now accept a discoverable `theme` parameter:
+  project roadmaps, organisation charts, unit circles, and linked lists. Each
+  template publishes only its supported values through the catalog rather than
+  making agents guess from one global list. `professional` remains the
+  byte-identical default; presentation, friendly, classroom, playful, pastel,
+  dark, high-contrast, and print-friendly variants are available where they
+  fit the visual family.
+- `straightedge.diagrams.themes` supplies dependency-free semantic colour roles
+  shared by those renderers, plus family-specific theme-name constants.
+
+### Documentation
+
+- Added `docs/diagram-themes.md`, including the distinction between SVG diagram
+  themes and the existing Manim animation styles.
+
 ## [0.6.0] - 2026-08-21
 
 A minor release about telling the truth: about what a figure looks like, and

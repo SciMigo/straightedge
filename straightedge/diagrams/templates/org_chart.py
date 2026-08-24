@@ -42,6 +42,9 @@ an HR export arrives in.
 ``status`` is one of ``filled`` (the default), ``vacant`` and ``interim``; only
 ``vacant`` and ``interim`` are drawn differently, and both are called out in the
 legend rather than left to be guessed.
+
+``theme`` is one of the family-specific values published by the template
+catalog; ``professional`` is the default.
 """
 from __future__ import annotations
 
@@ -49,6 +52,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from ..registry import register
 from ..renderer import fit_text, path, rect, style, svg_document, text, text_width
+from ..themes import ORG_CHART_THEMES, DiagramTheme, resolve_theme
 
 MAX_WIDTH = 1160
 MARGIN = 28
@@ -85,24 +89,30 @@ RULE = "#94a3b8"
 VACANT = "#b45309"
 DOTTED = "#7c6f9e"
 
-_CSS = f"""
-.oc-title{{font-size:{TITLE_PX}px;font-weight:600;fill:{INK}}}
-.oc-card{{fill:#eef2f7;stroke:{RULE};stroke-width:1.4}}
-.oc-card.root{{fill:{ACCENT};stroke:{ACCENT}}}
-.oc-card.vacant{{fill:#fdf6ec;stroke:{VACANT};stroke-width:1.4;stroke-dasharray:5 3}}
-.oc-row{{fill:#f8fafc;stroke:#cbd5e1;stroke-width:1}}
-.oc-row.vacant{{fill:#fdf6ec;stroke:{VACANT};stroke-dasharray:5 3}}
-.oc-row.interim{{fill:#f5f3fa;stroke:{DOTTED};stroke-dasharray:2 3}}
-.oc-card.interim{{fill:#f5f3fa;stroke:{DOTTED};stroke-width:1.4;stroke-dasharray:2 3}}
-.oc-name{{font-size:{NAME_PX}px;font-weight:600;fill:{INK}}}
-.oc-name.root{{fill:#ffffff}}
-.oc-role{{font-size:{ROLE_PX}px;fill:{MUTED}}}
-.oc-role.root{{fill:#d7ece7}}
-.oc-role.vacant{{fill:{VACANT};font-style:italic}}
-.oc-edge{{stroke:{RULE};stroke-width:1.4;fill:none}}
-.oc-dotted{{stroke:{DOTTED};stroke-width:1.4;fill:none;stroke-dasharray:4 3}}
-.oc-dotted-label{{font-size:10.5px;fill:{DOTTED}}}
-.oc-legend{{font-size:11px;fill:{MUTED}}}
+def _css(theme: DiagramTheme) -> str:
+    card = "#eef2f7" if theme.name == "professional" else theme.surface
+    row = "#f8fafc" if theme.name == "professional" else theme.surface_alt
+    row_rule = "#cbd5e1" if theme.name == "professional" else theme.grid
+    interim = "#f5f3fa" if theme.name == "professional" else theme.secondary_soft
+    vacant = "#b45309" if theme.name == "professional" else theme.warning
+    return f"""
+.oc-title{{font-size:{TITLE_PX}px;font-weight:600;fill:{theme.text}}}
+.oc-card{{fill:{card};stroke:{theme.rule};stroke-width:1.4}}
+.oc-card.root{{fill:{theme.primary};stroke:{theme.primary}}}
+.oc-card.vacant{{fill:{theme.warning_soft};stroke:{vacant};stroke-width:1.4;stroke-dasharray:5 3}}
+.oc-row{{fill:{row};stroke:{row_rule};stroke-width:1}}
+.oc-row.vacant{{fill:{theme.warning_soft};stroke:{vacant};stroke-dasharray:5 3}}
+.oc-row.interim{{fill:{interim};stroke:{theme.accent};stroke-dasharray:2 3}}
+.oc-card.interim{{fill:{interim};stroke:{theme.accent};stroke-width:1.4;stroke-dasharray:2 3}}
+.oc-name{{font-size:{NAME_PX}px;font-weight:600;fill:{theme.text}}}
+.oc-name.root{{fill:{theme.on_primary}}}
+.oc-role{{font-size:{ROLE_PX}px;fill:{theme.muted}}}
+.oc-role.root{{fill:{theme.primary_soft}}}
+.oc-role.vacant{{fill:{vacant};font-style:italic}}
+.oc-edge{{stroke:{theme.rule};stroke-width:1.4;fill:none}}
+.oc-dotted{{stroke:{theme.accent};stroke-width:1.4;fill:none;stroke-dasharray:4 3}}
+.oc-dotted-label{{font-size:10.5px;fill:{theme.accent}}}
+.oc-legend{{font-size:11px;fill:{theme.muted}}}
 text{{font-family:'Noto Sans SC',Helvetica,Arial,sans-serif}}
 """
 
@@ -234,6 +244,7 @@ def columns_per_bank(count: int, width: int = MAX_WIDTH) -> int:
 class OrgChartTemplate:
     def render(self, params: Dict[str, Any]) -> str:
         params = params or {}
+        theme = resolve_theme(params.get("theme", "professional"), ORG_CHART_THEMES)
         root = _node(params.get("root")) if params.get("root") else None
         if root is None:
             people = params.get("people") or params.get("employees") or []
@@ -287,8 +298,9 @@ class OrgChartTemplate:
         height = int(bank_top + sum(bank_heights) + BANK_GAP * max(0, len(banks) - 1)
                      + MARGIN + 30)
 
-        p: List[str] = ["<defs>" + style(_CSS) + "</defs>"]
-        p.append(rect(0, 0, width, height, fill="#ffffff", **{"class": "grid-paper"}))
+        p: List[str] = ["<defs>" + style(_css(theme)) + "</defs>"]
+        background = "#ffffff" if theme.name == "professional" else theme.background
+        p.append(rect(0, 0, width, height, fill=background, **{"class": "grid-paper"}))
         if title:
             p.append(text(MARGIN, 40, fit_text(title, width - 2 * MARGIN, TITLE_PX, bold=True),
                           **{"class": "oc-title"}))

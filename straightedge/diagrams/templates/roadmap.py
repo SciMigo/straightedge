@@ -23,6 +23,9 @@ image_hint usage::
 ``tentative`` and only colours the bar. ``depends_on`` draws a connector between
 two placed items; a dependency whose target starts before its source finishes is
 routed around rather than drawn backwards through the lane.
+
+``theme`` is one of the family-specific values published by the template
+catalog; ``professional`` is the default.
 """
 from __future__ import annotations
 
@@ -32,6 +35,7 @@ from typing import Any, Dict, List, Tuple
 from ..registry import register
 from ..renderer import path, rect, style, svg_document, text
 from ..renderer import text_width as _measure
+from ..themes import ROADMAP_THEMES, DiagramTheme, resolve_theme
 
 WIDTH = 1160
 MARGIN = 28
@@ -58,16 +62,30 @@ MILESTONE = "#d97706"
 # CSS4 generics (`ui-sans-serif`, `system-ui`) is mis-parsed by some SVG
 # rasterisers — cairosvg reads the *weight* as the size and renders 700px text —
 # and this output is meant to survive conversion outside a browser.
-_CSS = """
-.r-t{font-size:23px;font-weight:700;fill:#17202a}
-.r-sub{font-size:12px;fill:#68717a}
-.r-trk{font-size:13px;font-weight:650;fill:#17202a}
-.r-axis{font-size:11px;fill:#68717a}
-.r-bar-text{font-size:11.5px;font-weight:600;fill:#17202a}
-.r-bar-text-in{font-size:11.5px;font-weight:600;fill:#ffffff}
-.r-ms{font-size:11px;font-weight:600;fill:#d97706}
-.r-dep{stroke:#9aa4ad;stroke-width:1.2;fill:none;opacity:0.75}
-text{font-family:Inter,Helvetica,Arial,sans-serif}
+def _status_colors(theme: DiagramTheme) -> Dict[str, str]:
+    if theme.name == "professional":
+        return dict(STATUS_COLORS)
+    return {
+        "planned": theme.secondary,
+        "active": theme.primary,
+        "at-risk": theme.danger,
+        "complete": theme.success,
+        "tentative": theme.accent,
+    }
+
+
+def _css(theme: DiagramTheme) -> str:
+    dependency = "#9aa4ad" if theme.name == "professional" else theme.rule
+    return f"""
+.r-t{{font-size:23px;font-weight:700;fill:{theme.text}}}
+.r-sub{{font-size:12px;fill:{theme.muted}}}
+.r-trk{{font-size:13px;font-weight:650;fill:{theme.text}}}
+.r-axis{{font-size:11px;fill:{theme.muted}}}
+.r-bar-text{{font-size:11.5px;font-weight:600;fill:{theme.text}}}
+.r-bar-text-in{{font-size:11.5px;font-weight:600;fill:{theme.on_primary}}}
+.r-ms{{font-size:11px;font-weight:600;fill:{theme.warning}}}
+.r-dep{{stroke:{dependency};stroke-width:1.2;fill:none;opacity:0.75}}
+text{{font-family:Inter,Helvetica,Arial,sans-serif}}
 """
 
 
@@ -115,6 +133,11 @@ def _ticks(start: date, end: date) -> List[date]:
 class RoadmapTemplate:
     def render(self, params: Dict[str, Any]) -> str:
         params = params or {}
+        theme = resolve_theme(params.get("theme", "professional"), ROADMAP_THEMES)
+        status_colors = _status_colors(theme)
+        dependency = "#9aa4ad" if theme.name == "professional" else theme.rule
+        lane_fill = "#f4f2ec" if theme.name == "professional" else theme.surface_alt
+        lane_radius = 8 if theme.name == "professional" else theme.radius
         start = _date(params.get("start_date"))
         end = _date(params.get("end_date"))
         tracks = [t for t in params.get("tracks") or [] if isinstance(t, dict)]
@@ -162,8 +185,9 @@ class RoadmapTemplate:
         bottom = y
         height_total = int(bottom + LEGEND_H + MARGIN)
 
-        p: List[str] = ["<defs>" + style(_CSS) + "</defs>"]
-        p.append(rect(0, 0, WIDTH, height_total, fill="#fbfaf7", **{"class": "grid-paper"}))
+        p: List[str] = ["<defs>" + style(_css(theme)) + "</defs>"]
+        p.append(rect(0, 0, WIDTH, height_total, fill=theme.background,
+                      **{"class": "grid-paper"}))
 
         title = str(params.get("title") or "").strip()
         count = sum(len(v) for v in by_track.values())
@@ -184,15 +208,15 @@ class RoadmapTemplate:
             flip = mx + 11 + text_width(label, 11, bold=True) > WIDTH - MARGIN
             anchor, tx = ("end", mx - 11) if flip else ("start", mx + 11)
             p.append(path(f"M {mx:.1f} 88 L {mx + 6:.1f} 95 L {mx:.1f} 102 "
-                          f"L {mx - 6:.1f} 95 Z", fill=MILESTONE, **{"class": "r-ms-mark"}))
-            p.append(path(f"M {mx:.1f} 102 V {bottom:.1f}", stroke=MILESTONE,
+                          f"L {mx - 6:.1f} 95 Z", fill=theme.warning, **{"class": "r-ms-mark"}))
+            p.append(path(f"M {mx:.1f} 102 V {bottom:.1f}", stroke=theme.warning,
                           stroke_dasharray="2 4", opacity="0.5", fill="none",
                           **{"class": "grid-ms"}))
             p.append(text(tx, 99, label, text_anchor=anchor, **{"class": "r-ms"}))
 
         for tick in _ticks(start, end):
             tx = x_for(tick)
-            p.append(path(f"M {tx:.1f} {HEADER_H - 14} V {bottom:.1f}", stroke="#e1e5e9",
+            p.append(path(f"M {tx:.1f} {HEADER_H - 14} V {bottom:.1f}", stroke=theme.grid,
                           fill="none", **{"class": "grid-axis"}))
             p.append(text(tx, HEADER_H - 22, tick.strftime("%b %d"),
                           text_anchor="middle", **{"class": "r-axis"}))
@@ -214,13 +238,13 @@ class RoadmapTemplate:
                     d = (f"M {sx:.1f} {sy:.1f} H {sx + 10:.1f} V {vy:.1f} "
                          f"H {tx2 - 12:.1f} V {ty:.1f} H {tx2 - 4:.1f}")
                 p.append(path(d, **{"class": "r-dep"}))
-                p.append(path(f"M {tx2:.1f} {ty:.1f} l -5 -3.4 v 6.8 Z", fill="#9aa4ad",
+                p.append(path(f"M {tx2:.1f} {ty:.1f} l -5 -3.4 v 6.8 Z", fill=dependency,
                               **{"class": "r-dep-head"}))
 
         for index, (track, rows, top, height) in enumerate(layout):
             if index % 2 == 0:
-                p.append(rect(MARGIN, top, WIDTH - 2 * MARGIN, height, rx=8,
-                              fill="#f4f2ec", **{"class": "grid-lane"}))
+                p.append(rect(MARGIN, top, WIDTH - 2 * MARGIN, height, rx=lane_radius,
+                              fill=lane_fill, **{"class": "grid-lane"}))
             p.append(text(MARGIN + 12, top + height / 2 + 4,
                           str(track.get("label") or track.get("id") or ""),
                           **{"class": "r-trk"}))
@@ -228,8 +252,8 @@ class RoadmapTemplate:
                 for item in row:
                     bx = x_for(item["start"])
                     bw = max(MIN_BAR_W, x_for(item["end"], edge=True) - bx)
-                    colour = STATUS_COLORS.get(item["status"], STATUS_COLORS["planned"])
-                    p.append(rect(bx, item["y"], bw, BAR_H, rx=6, fill=colour,
+                    colour = status_colors.get(item["status"], status_colors["planned"])
+                    p.append(rect(bx, item["y"], bw, BAR_H, rx=max(1, theme.radius - 1), fill=colour,
                                   **{"class": "r-bar"}))
                     caption, ty = item["title"], item["y"] + BAR_H / 2 + 4
                     if text_width(caption, 11.5, bold=True) + 16 <= bw:
@@ -240,19 +264,19 @@ class RoadmapTemplate:
                         p.append(text(bx - 8, ty, caption, text_anchor="end",
                                       **{"class": "r-bar-text"}))
             p.append(path(f"M {MARGIN} {top + height:.1f} H {WIDTH - MARGIN}",
-                          stroke="#e1e5e9", fill="none", **{"class": "grid-rule"}))
+                          stroke=theme.grid, fill="none", **{"class": "grid-rule"}))
 
         used = [s for s in STATUS_ORDER
                 if any(i["status"] == s for v in by_track.values() for i in v)]
         lx, ly = float(MARGIN), bottom + 26
         for status in used:
-            p.append(rect(lx, ly - 9, 11, 11, rx=3, fill=STATUS_COLORS[status],
+            p.append(rect(lx, ly - 9, 11, 11, rx=min(3, theme.radius), fill=status_colors[status],
                           **{"class": "legend-swatch"}))
             p.append(text(lx + 17, ly, status, **{"class": "r-axis"}))
             lx += 30 + text_width(status, 11)
         if params.get("milestones"):
             p.append(path(f"M {lx + 5:.1f} {ly - 9:.1f} l 5 5 l -5 5 l -5 -5 Z",
-                          fill=MILESTONE, **{"class": "legend-ms"}))
+                          fill=theme.warning, **{"class": "legend-ms"}))
             p.append(text(lx + 17, ly, "milestone", **{"class": "r-axis"}))
 
         return svg_document("".join(p), width=WIDTH, height=height_total,
