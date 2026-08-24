@@ -30,10 +30,12 @@ resolve to rather than the width this host happens to render.
 
 from __future__ import annotations
 
+import base64
 import math
 import re
 import xml.etree.ElementTree as ET
 from typing import Iterable
+from urllib.parse import unquote
 
 from ..qc import _EDGE_TOLERANCE, Box, Finding, check as check_boxes
 from .renderer import text_width
@@ -275,6 +277,68 @@ def _points_attr(raw: str) -> list[tuple[float, float]]:
 #: clip-path rectangle "cover" the text beneath it, which was a finding about
 #: nothing.
 _DEFINITIONS = ("defs", "clipPath", "marker", "mask", "symbol", "pattern")
+_XLINK = "{http://www.w3.org/1999/xlink}"
+_DATA_SVG_RE = re.compile(r"data:image/svg\+xml(?:;charset=[^;,]+)?(;base64)?,", re.IGNORECASE)
+
+
+def _embedded_document(node: ET.Element) -> str | None:
+    """The SVG an ``<image>`` carries inline as a ``data:`` URI, or ``None``.
+
+    `algorithm_trace` embeds each child figure this way to keep its CSS and
+    ids from colliding with the storyboard's. A browser paints the child's
+    labels all the same, so the check has to see them all the same — an image
+    it cannot open is left as it was, invisible, rather than guessed at.
+    """
+    href = node.get("href") or node.get(_XLINK + "href") or ""
+    match = _DATA_SVG_RE.match(href)
+    if not match:
+        return None
+    payload = href[match.end():]
+    try:
+        return (base64.b64decode(payload).decode("utf-8") if match.group(1)
+                else unquote(payload))
+    except (ValueError, UnicodeDecodeError):
+        return None
+
+
+def _collect_embedded(node: ET.Element, inner: str, matrix, boxes, clip, truncated) -> None:
+    """Walk an embedded SVG in the space its ``<image>`` paints it in.
+
+    ``preserveAspectRatio`` decides the scale: ``meet`` (the default) fits the
+    whole child inside the image box, ``slice`` fills it, ``none`` stretches.
+    The child's own viewBox origin and the alignment offset both fold into one
+    affine, so every label lands where a viewer would draw it — smaller, when
+    the child is shrunk to fit.
+    """
+    x, y = _length(node.get("x")), _length(node.get("y"))
+    width, height = _length(node.get("width")), _length(node.get("height"))
+    min_x, min_y, inner_w, inner_h = _canvas(inner)
+    if width <= 0 or height <= 0 or inner_w <= 0 or inner_h <= 0:
+        return
+    try:
+        root = ET.fromstring(inner)
+    except ET.ParseError:
+        return
+    aspect = (node.get("preserveAspectRatio") or "xMidYMid meet").split()
+    align = aspect[0]
+    if align == "none":
+        sx, sy = width / inner_w, height / inner_h
+    else:
+        fit = max if "slice" in aspect else min
+        sx = sy = fit(width / inner_w, height / inner_h)
+    spare_x, spare_y = width - inner_w * sx, height - inner_h * sy
+    ox = 0.0 if "xMin" in align else spare_x if "xMax" in align else spare_x / 2
+    oy = 0.0 if "YMin" in align else spare_y if "YMax" in align else spare_y / 2
+    placed = _compose(matrix, (sx, 0.0, 0.0, sy,
+                               x + ox - min_x * sx, y + oy - min_y * sy))
+    # The image box clips what it paints, exactly as a clip path would.
+    corners = [_point(matrix, px, py) for px in (x, x + width) for py in (y, y + height)]
+    xs, ys = [c[0] for c in corners], [c[1] for c in corners]
+    frame = _intersect(clip, (min(xs), min(ys), max(xs), max(ys)))
+    if frame is _EMPTY:
+        return
+    _collect(root, placed, boxes, styles_from_svg(inner), unfilled_classes(inner),
+             _clip_shapes(root), frame, truncated)
 
 _SHAPES = ("rect", "circle", "ellipse", "line", "path", "polyline", "polygon")
 
@@ -496,6 +560,11 @@ def _collect(node, matrix, boxes, styles, unfilled, clips, clip, truncated) -> N
             active = _intersect(active, (min(xs), min(ys), max(xs), max(ys)))
         if active is _EMPTY:
             continue
+        if tag == "image":
+            inner = _embedded_document(child)
+            if inner is not None:
+                _collect_embedded(child, inner, here, boxes, active, truncated)
+            continue
 
         box = (_text_box(child, styles) if tag == "text"
                else _shape_box(child, unfilled) if tag in _SHAPES else None)
@@ -573,6 +642,16 @@ def _canvas(svg: str) -> tuple[float, float, float, float]:
     if width > 0 and height > 0:
         return (0.0, 0.0, width, height)
     return (0.0, 0.0, 0.0, 0.0)
+
+
+def figure_frame(svg: str) -> tuple[float, float, float, float]:
+    """The drawable frame of an emitted figure as (min_x, min_y, width, height).
+
+    What a template that places other figures needs to know about each of
+    them: how large the child is in its own units, so it can be given a card
+    it fits rather than one it is shrunk into.
+    """
+    return _canvas(svg)
 
 
 def _length(value: str | None) -> float:

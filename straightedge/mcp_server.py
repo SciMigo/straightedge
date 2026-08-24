@@ -292,16 +292,22 @@ def _draw_payload(diagram_type: str, params: dict | None) -> dict[str, Any]:
         # A construction that asserts something false is *refused*, and telling
         # its caller to check parameter shapes sends them to look at input that
         # is already correct. Where the template can say why, it says why.
-        from .diagrams.templates.construction import refusal_findings
+        from .diagrams.registry import refusal_findings, refusal_reason
 
-        refused = [asdict(f) for f in refusal_findings(name, params or {})]
+        refused = refusal_findings(name, params or {})
         if refused:
+            if name == "construction":
+                remedy = ("Fix the construction or drop the claim; call "
+                          "verify_construction with the same steps to see each "
+                          "finding. The parameters are not the problem.")
+            else:
+                remedy = ("Fix what each finding names; its `label` is the path "
+                          "of the value it is about. The parameters are not the "
+                          "problem.")
             raise BlankFigureError(
-                f"{name!r} was refused: it asserts something it does not satisfy",
-                remedy="Fix the construction or drop the claim; call "
-                       "verify_construction with the same steps to see each "
-                       "finding. The parameters are not the problem.",
-                details={"type": name, "findings": refused},
+                f"{name!r} was refused: {refusal_reason(refused)}",
+                remedy=remedy,
+                details={"type": name, "findings": [asdict(f) for f in refused]},
             )
         raise BlankFigureError(
             f"{name!r} drew no data marks",

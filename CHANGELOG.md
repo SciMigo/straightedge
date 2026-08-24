@@ -4,6 +4,42 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project aims to
 follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **`algorithm_trace`: a checked multi-step storyboard for the CS figures.**
+  One state is not an algorithm. The template composes the existing
+  `array_state`, `stack`, `queue`, tree, graph and table renderers into an
+  ordered grid of panels, and verifies the transition claimed between adjacent
+  panels — an array swap, a stack push/pop, a queue enqueue/dequeue — against
+  both the next panel's values and the `operation` the panel itself draws. A
+  trace that asserts something false is refused rather than illustrated, and
+  the refusal says why: `inspect_algorithm_trace` returns findings with a JSON
+  path, and the MCP `draw` tool and `straightedge draw --json` report the same
+  findings as a `blank_figure` refusal instead of "check your parameter shapes".
+  Documented in `docs/algorithm-trace.md`.
+
+- **A template can say why it refused to draw.** `refusal_findings` now lives in
+  `diagrams.registry` and asks the template: any template exposing
+  `refusal_findings(params)` has its findings carried by both `draw` transports.
+  `construction` moved onto the hook unchanged; `algorithm_trace` is the second
+  template on it.
+
+- **The legibility check opens embedded SVG images.** A `data:` URI `<image>`
+  used to be invisible to `check_figure`, so a storyboard's every child label
+  went unchecked; the check now walks the child in the space its image paints
+  it — scaled, offset and clipped as a viewer would — and reports a clipped or
+  overlapped child label on the storyboard.
+
+### Fixed
+
+- **An arrowhead is not a data mark.** `count_data_marks` stripped `<style>` but
+  not `<defs>`, so the `<marker>` polygon that twenty templates define counted as
+  one mark and an empty array, stack, queue or linked list passed as drawn —
+  through `render_diagram`'s warning, the MCP `draw` tool's `blank_figure`, and
+  every check built on them.
+
 ## [0.6.0] - 2026-08-21
 
 A minor release about telling the truth: about what a figure looks like, and
