@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import logging
 import re
-from typing import Any, Callable, Dict, Protocol
+from typing import Any, Callable, Dict, List, Protocol
+
+from ..qc import Finding
 
 logger = logging.getLogger(__name__)
 
@@ -19,6 +21,11 @@ _DRAWABLE_RE = re.compile(
 )
 _CLASS_RE = re.compile(r'class="([^"]*)"')
 _STYLE_BLOCK_RE = re.compile(r"<style\b.*?</style>", re.DOTALL)
+# Nothing inside <defs> is painted by being there: an arrowhead <marker> is a
+# <polygon> that only appears where a path references it. Twenty templates
+# define one, so an empty array, stack or queue used to score exactly one mark
+# and pass as drawn.
+_DEFS_BLOCK_RE = re.compile(r"<defs\b.*?</defs>", re.DOTALL)
 
 # A geometry attribute that came out non-finite. An expression that does not
 # reduce to a number yields NaN coordinates, and `height="nan"` is not markup a
@@ -39,7 +46,7 @@ def count_data_marks(svg: str) -> int:
     """
     if not svg:
         return 0
-    body = _STYLE_BLOCK_RE.sub("", svg)
+    body = _DEFS_BLOCK_RE.sub("", _STYLE_BLOCK_RE.sub("", svg))
     marks = 0
     for attrs in _DRAWABLE_RE.findall(body):
         class_match = _CLASS_RE.search(attrs)
@@ -86,6 +93,48 @@ def register(name: str) -> Callable:
     return decorator
 
 
+def hint_params(hint: Dict[str, Any]) -> Dict[str, Any]:
+    """The parameters of a structured hint, in either envelope it accepts.
+
+    ``{"type": t, "params": {...}}`` is the documented form; ``{"type": t,
+    ...}`` with the parameters beside the type is the flat form callers have
+    always been able to send. Anything else in the ``params`` slot is read as
+    nothing. Shared so a template that nests other templates — `algorithm_trace`
+    — accepts the same envelopes as :func:`render_diagram` rather than drawing
+    an empty child for the flat one.
+    """
+    params = hint.get("params")
+    if params is None:
+        return {k: v for k, v in hint.items() if k != "type"}
+    return params if isinstance(params, dict) else {}
+
+
+def refusal_findings(diagram_type: str, params: Dict[str, Any]) -> List[Finding]:
+    """Why a template refused to draw, when it can say — otherwise empty.
+
+    A blank figure is usually a parameter-shape mismatch, and the callers that
+    see one say so. But a template that *checks* its input — `construction`
+    against its claims, `algorithm_trace` against its transitions — blocks a
+    drawing deliberately, and telling that caller to check shapes that are
+    already correct sends them to look in the wrong place. A template that can
+    say why exposes ``refusal_findings(params)``; this is the one place the MCP
+    `draw` tool and the CLI `draw` command ask.
+    """
+    template = DIAGRAM_REGISTRY.get(diagram_type)
+    refuse = getattr(template, "refusal_findings", None)
+    if not callable(refuse):
+        return []
+    return list(refuse(params if isinstance(params, dict) else {}))
+
+
+def refusal_reason(findings: List[Finding]) -> str:
+    """The first finding's message, and how many stand behind it."""
+    reason = findings[0].message
+    if len(findings) > 1:
+        reason += f" (and {len(findings) - 1} more)"
+    return reason
+
+
 def render_diagram(hint: Dict[str, Any] | str | None) -> str:
     """Render a structured image_hint to SVG.
 
@@ -116,12 +165,7 @@ def render_diagram(hint: Dict[str, Any] | str | None) -> str:
         )
         return ""
 
-    params = hint.get("params")
-    if params is None:
-        # Flat format: everything except "type" is the params
-        params = {k: v for k, v in hint.items() if k != "type"}
-    if not isinstance(params, dict):
-        params = {}
+    params = hint_params(hint)
 
     try:
         template = DIAGRAM_REGISTRY[diagram_type]

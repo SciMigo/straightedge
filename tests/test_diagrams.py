@@ -402,6 +402,14 @@ class TestBlankDiagramDetection:
         styled = '<svg><style>.coord-grid { stroke: #eee; }</style><circle/></svg>'
         assert count_data_marks(styled) == 1
 
+    def test_a_marker_definition_is_not_content(self):
+        # An arrowhead is a <polygon> inside <defs>; it is painted only where a
+        # path references it, so an empty array with a marker drew "one mark".
+        defined = ('<svg><defs><marker id="a"><polygon points="0 0,9 3.5,0 7"/>'
+                   '</marker></defs></svg>')
+        assert count_data_marks(defined) == 0
+        assert count_data_marks(defined.replace("</svg>", '<path d="M0 0 L1 1"/></svg>')) == 1
+
     def test_empty_string_is_blank(self):
         assert is_blank_diagram("")
 

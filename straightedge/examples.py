@@ -61,6 +61,24 @@ EXAMPLES = {'3d/cube_section': {'params': {'section_points': ['A', 'B1', 'D1'],
                                    {'duration': 2, 'id': 'n3', 'name': 'Test'}],
                          'title': 'Node'},
               'type': 'aon_node'},
+ 'algorithm_trace': {'params': {
+                         'title': 'One bubble-sort pass',
+                         'steps': [
+                             {'label': 'Compare 4 and 2',
+                              'visual': {'type': 'array_state', 'params': {
+                                  'values': [4, 2, 3], 'indices': True,
+                                  'highlights': {'0-1': 'comparison'}}},
+                              'transition': {'type': 'swap', 'indices': [0, 1]}},
+                             {'label': 'Compare 4 and 3',
+                              'visual': {'type': 'array_state', 'params': {
+                                  'values': [2, 4, 3], 'indices': True,
+                                  'highlights': {'1-2': 'comparison'}}},
+                              'transition': {'type': 'swap', 'indices': [1, 2]}},
+                             {'label': 'Largest value settled',
+                              'visual': {'type': 'array_state', 'params': {
+                                  'values': [2, 3, 4], 'indices': True,
+                                  'highlights': {'2': 'found'}}}}]},
+                     'type': 'algorithm_trace'},
  'architecture_diagram': {'params': {'annotations': [{'near': 'svc',
                                                       'text': 'Stateless tier scales '
                                                               'horizontally'}],
