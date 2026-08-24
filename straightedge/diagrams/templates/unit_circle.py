@@ -21,7 +21,17 @@ from ..renderer import (
     text,
     text_width,
 )
-from ..themes import MATH_THEMES, DiagramTheme, resolve_theme
+from ..themes import DIAGRAM_THEMES, DiagramTheme, family, resolve_theme
+
+#: The pre-theme palette stated as roles: transparent paper, Material-style
+#: sin/cos/tan and point colours. The renderer reads the theme unconditionally,
+#: so `professional` is the old output by construction.
+PROFESSIONAL = DIAGRAM_THEMES["professional"].variant(
+    background="", text="#333", muted="#666", rule="#999",
+    success="#4CAF50", primary="#2E7D32", warning="#FF9800",
+    danger="#f44336", secondary="#2196F3", accent="#9C27B0",
+)
+THEMES = family(PROFESSIONAL, "classroom", "dark", "high-contrast", "print-friendly")
 
 
 # Common angles in radians with their labels
@@ -48,6 +58,8 @@ COMMON_ANGLES = {
 
 @register("unit_circle")
 class UnitCircleTemplate:
+    themes = THEMES
+
     """Render a unit circle with trigonometric annotations."""
 
     def render(self, params: Dict[str, Any]) -> str:
@@ -82,10 +94,8 @@ class UnitCircleTemplate:
         svg_width = int(params.get("width", 400))
         svg_height = int(params.get("height", 400))
         title = params.get("title")
-        theme = resolve_theme(params.get("theme", "professional"), MATH_THEMES)
-        sin_colour = "#f44336" if theme.name == "professional" else theme.danger
-        cos_colour = "#2196F3" if theme.name == "professional" else theme.secondary
-        tan_colour = "#9C27B0" if theme.name == "professional" else theme.accent
+        theme = resolve_theme(params.get("theme", "professional"), THEMES)
+        sin_colour, cos_colour, tan_colour = theme.danger, theme.secondary, theme.accent
 
         # Convert to radians
         angle_rad = math.radians(angle_deg)
@@ -103,7 +113,7 @@ class UnitCircleTemplate:
 
         elements: List[str] = []
         elements.append(style(self._styles(theme)))
-        if theme.name != "professional":
+        if theme.background:
             elements.append(rect(0, 0, svg_width, svg_height, fill=theme.background,
                                  **{"class": "uc-background"}))
 
@@ -275,12 +285,8 @@ class UnitCircleTemplate:
         return svg_document("\n".join(elements), svg_width, svg_height)
 
     def _styles(self, theme: DiagramTheme) -> str:
-        if theme.name == "professional":
-            axis, muted, rule = "#333", "#666", "#999"
-            point, point_rule, angle = "#4CAF50", "#2E7D32", "#FF9800"
-        else:
-            axis, muted, rule = theme.text, theme.muted, theme.rule
-            point, point_rule, angle = theme.success, theme.primary, theme.warning
+        axis, muted, rule = theme.text, theme.muted, theme.rule
+        point, point_rule, angle = theme.success, theme.primary, theme.warning
         return f"""
 .uc-axis {{ stroke: {axis}; stroke-width: 2; }}
 .uc-axis-label {{ font-size: 14px; font-family: sans-serif; fill: {axis}; font-style: italic; }}

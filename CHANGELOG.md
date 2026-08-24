@@ -32,15 +32,20 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   it — scaled, offset and clipped as a viewer would — and reports a clipped or
   overlapped child label on the storyboard.
 
-- Selected pure-SVG families now accept a discoverable `theme` parameter:
-  project roadmaps, organisation charts, unit circles, and linked lists. Each
-  template publishes only its supported values through the catalog rather than
-  making agents guess from one global list. `professional` remains the
-  byte-identical default; presentation, friendly, classroom, playful, pastel,
-  dark, high-contrast, and print-friendly variants are available where they
-  fit the visual family.
-- `straightedge.diagrams.themes` supplies dependency-free semantic colour roles
-  shared by those renderers, plus family-specific theme-name constants.
+- **Four pure-SVG templates accept a discoverable `theme` parameter:**
+  `roadmap`, `org_chart`, `unit_circle` and `linked_list`. Each template owns
+  its family of themes and publishes exactly those names through the catalog,
+  so an agent reads the enum rather than guessing from one global list.
+  `professional` is the byte-identical default — each template declares its
+  professional palette from the constants it always drew with and reads the
+  theme unconditionally, and a test holds the default to those literals.
+  Presentation, friendly, classroom, playful, pastel, dark, high-contrast and
+  print-friendly variants are offered where they fit the visual family; every
+  palette keeps the roles a reader tells categories apart by measurably apart,
+  and a name a family does not offer draws the default and is logged.
+- `straightedge.diagrams.themes` supplies the dependency-free semantic colour
+  roles those renderers share, `family()` for a template to declare its
+  themes, and `readable_on()` for text drawn over a saturated role colour.
 
 ### Fixed
 

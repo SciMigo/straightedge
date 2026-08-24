@@ -89,9 +89,9 @@ svg = render_diagram(
 Path("unit-circle.svg").write_text(svg, encoding="utf-8")
 ```
 
-Selected SVG families also accept a discoverable `theme`: roadmaps can use
-`presentation` or `print-friendly`, org charts `friendly` or `pastel`, math
-figures `classroom` or `dark`, and data structures `playful` or `dark`.
+Four templates also accept a discoverable `theme`: `roadmap` can use
+`presentation` or `print-friendly`, `org_chart` `friendly` or `pastel`,
+`unit_circle` `classroom` or `dark`, and `linked_list` `playful` or `dark`.
 `professional` remains the byte-identical default. The exact choices for each
 template are published by `list_templates()`; see
 [`docs/diagram-themes.md`](docs/diagram-themes.md).

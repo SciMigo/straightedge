@@ -35,7 +35,7 @@ from typing import Any, Dict, List, Tuple
 from ..registry import register
 from ..renderer import path, rect, style, svg_document, text
 from ..renderer import text_width as _measure
-from ..themes import ROADMAP_THEMES, DiagramTheme, resolve_theme
+from ..themes import DIAGRAM_THEMES, DiagramTheme, family, resolve_theme
 
 WIDTH = 1160
 MARGIN = 28
@@ -57,14 +57,25 @@ STATUS_COLORS = {
 }
 STATUS_ORDER = ("planned", "active", "at-risk", "complete", "tentative")
 MILESTONE = "#d97706"
+DEPENDENCY = "#9aa4ad"
+LANE = "#f4f2ec"
+PAPER = "#fbfaf7"
+
+#: The pre-theme palette stated as roles. The renderer reads the theme
+#: unconditionally, so `professional` is the old output by construction.
+PROFESSIONAL = DIAGRAM_THEMES["professional"].variant(
+    background=PAPER, surface_alt=LANE, rule=DEPENDENCY, warning=MILESTONE,
+    secondary=STATUS_COLORS["planned"], primary=STATUS_COLORS["active"],
+    danger=STATUS_COLORS["at-risk"], success=STATUS_COLORS["complete"],
+    accent=STATUS_COLORS["tentative"], radius=8,
+)
+THEMES = family(PROFESSIONAL, "presentation", "pastel", "high-contrast", "print-friendly")
 
 # Longhand, with a conservative family list. The `font:` shorthand combined with
 # CSS4 generics (`ui-sans-serif`, `system-ui`) is mis-parsed by some SVG
 # rasterisers — cairosvg reads the *weight* as the size and renders 700px text —
 # and this output is meant to survive conversion outside a browser.
 def _status_colors(theme: DiagramTheme) -> Dict[str, str]:
-    if theme.name == "professional":
-        return dict(STATUS_COLORS)
     return {
         "planned": theme.secondary,
         "active": theme.primary,
@@ -75,7 +86,6 @@ def _status_colors(theme: DiagramTheme) -> Dict[str, str]:
 
 
 def _css(theme: DiagramTheme) -> str:
-    dependency = "#9aa4ad" if theme.name == "professional" else theme.rule
     return f"""
 .r-t{{font-size:23px;font-weight:700;fill:{theme.text}}}
 .r-sub{{font-size:12px;fill:{theme.muted}}}
@@ -84,7 +94,7 @@ def _css(theme: DiagramTheme) -> str:
 .r-bar-text{{font-size:11.5px;font-weight:600;fill:{theme.text}}}
 .r-bar-text-in{{font-size:11.5px;font-weight:600;fill:{theme.on_primary}}}
 .r-ms{{font-size:11px;font-weight:600;fill:{theme.warning}}}
-.r-dep{{stroke:{dependency};stroke-width:1.2;fill:none;opacity:0.75}}
+.r-dep{{stroke:{theme.rule};stroke-width:1.2;fill:none;opacity:0.75}}
 text{{font-family:Inter,Helvetica,Arial,sans-serif}}
 """
 
@@ -131,13 +141,12 @@ def _ticks(start: date, end: date) -> List[date]:
 
 @register("roadmap")
 class RoadmapTemplate:
+    themes = THEMES
+
     def render(self, params: Dict[str, Any]) -> str:
         params = params or {}
-        theme = resolve_theme(params.get("theme", "professional"), ROADMAP_THEMES)
+        theme = resolve_theme(params.get("theme", "professional"), THEMES)
         status_colors = _status_colors(theme)
-        dependency = "#9aa4ad" if theme.name == "professional" else theme.rule
-        lane_fill = "#f4f2ec" if theme.name == "professional" else theme.surface_alt
-        lane_radius = 8 if theme.name == "professional" else theme.radius
         start = _date(params.get("start_date"))
         end = _date(params.get("end_date"))
         tracks = [t for t in params.get("tracks") or [] if isinstance(t, dict)]
@@ -238,13 +247,13 @@ class RoadmapTemplate:
                     d = (f"M {sx:.1f} {sy:.1f} H {sx + 10:.1f} V {vy:.1f} "
                          f"H {tx2 - 12:.1f} V {ty:.1f} H {tx2 - 4:.1f}")
                 p.append(path(d, **{"class": "r-dep"}))
-                p.append(path(f"M {tx2:.1f} {ty:.1f} l -5 -3.4 v 6.8 Z", fill=dependency,
+                p.append(path(f"M {tx2:.1f} {ty:.1f} l -5 -3.4 v 6.8 Z", fill=theme.rule,
                               **{"class": "r-dep-head"}))
 
         for index, (track, rows, top, height) in enumerate(layout):
             if index % 2 == 0:
-                p.append(rect(MARGIN, top, WIDTH - 2 * MARGIN, height, rx=lane_radius,
-                              fill=lane_fill, **{"class": "grid-lane"}))
+                p.append(rect(MARGIN, top, WIDTH - 2 * MARGIN, height, rx=theme.radius,
+                              fill=theme.surface_alt, **{"class": "grid-lane"}))
             p.append(text(MARGIN + 12, top + height / 2 + 4,
                           str(track.get("label") or track.get("id") or ""),
                           **{"class": "r-trk"}))
@@ -253,7 +262,7 @@ class RoadmapTemplate:
                     bx = x_for(item["start"])
                     bw = max(MIN_BAR_W, x_for(item["end"], edge=True) - bx)
                     colour = status_colors.get(item["status"], status_colors["planned"])
-                    p.append(rect(bx, item["y"], bw, BAR_H, rx=max(1, theme.radius - 1), fill=colour,
+                    p.append(rect(bx, item["y"], bw, BAR_H, rx=max(1, theme.radius - 2), fill=colour,
                                   **{"class": "r-bar"}))
                     caption, ty = item["title"], item["y"] + BAR_H / 2 + 4
                     if text_width(caption, 11.5, bold=True) + 16 <= bw:
