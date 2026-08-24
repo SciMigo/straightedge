@@ -100,8 +100,9 @@ The registry currently contains 39 templates across several domains:
   straightedge constructions with exactly placed points.
 - Computer science: binary trees, linked lists, stacks, queues, hash tables, call
   stacks, dynamic-programming tables, architecture diagrams, and graphs. An
-  `algorithm_trace` composes these into a checked multi-step storyboard; a state
-  machine is `graph` with `directed` edges, not a template of its own.
+  [`algorithm_trace`](https://github.com/SciMigo/straightedge/blob/main/docs/algorithm-trace.md)
+  composes these into a checked multi-step storyboard; a state machine is
+  `graph` with `directed` edges, not a template of its own.
 - Projects and business: Gantt charts, calendar roadmaps, org charts,
   work-breakdown structures, project networks, timelines, flow diagrams, and
   T-accounts.
