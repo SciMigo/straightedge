@@ -48,7 +48,9 @@ def test_kruskal_computes_a_minimum_spanning_forest_storyboard():
                                  {"from": "A", "to": "C", "weight": 1},
                                  {"from": "B", "to": "C", "weight": 2},
                                  {"from": "C", "to": "D", "weight": 3}]})
-    assert frames[-1]["visual"]["params"]["caption"] == "forest weight = 6"
+    assert "forest weight = 6" in frames[-1]["visual"]["params"]["caption"]
+    # The edge that would close a cycle is drawn as rejected, not omitted.
+    assert any(f["visual"]["params"]["highlights"]["rejected_edges"] for f in frames)
 
 
 def test_greedy_coloring_assigns_visible_valid_colors():
@@ -79,7 +81,7 @@ def test_matching_computes_augmenting_states():
                         "edges": [{"from": "u1", "to": "v1"}, {"from": "u1", "to": "v2"},
                                   {"from": "u2", "to": "v1"}],
                         "partitions": {"left": ["u1", "u2"], "right": ["v1", "v2"]}})
-    assert frames[-1]["visual"]["params"]["caption"] == "matching size = 2"
+    assert "matching size = 2" in frames[-1]["visual"]["params"]["caption"]
     assert "Augment from u2" in svg
 
 
@@ -106,3 +108,22 @@ def test_every_color_the_greedy_algorithm_can_assign_has_a_style():
             for state in frames[-1]["visual"]["params"]["highlights"]["nodes"].values()}
     assert used == set(range(1, MAX_VERTICES + 1))
     assert used <= styled
+
+
+def test_refusals_carry_the_witness_in_the_right_shape():
+    cyclic = {"algorithm": "topological_sort", "directed": True,
+              "nodes": [{"id": v} for v in "ABC"],
+              "edges": [{"from": a, "to": b} for a, b in [("A", "B"), ("B", "C"), ("C", "A")]]}
+    finding = refusal_findings("graph_algorithm", cyclic)[0]
+    assert finding.check == "graph_algorithm_cycle" and finding.label == "A → B → C"
+    k4 = {"algorithm": "euler", "nodes": [{"id": v} for v in "ABCD"],
+          "edges": [{"from": a, "to": b} for a, b in
+                    [("A", "B"), ("B", "C"), ("C", "D"), ("D", "A"), ("A", "C"), ("B", "D")]]}
+    finding = refusal_findings("graph_algorithm", k4)[0]
+    assert finding.check == "graph_algorithm_parity" and finding.label == "A, B, C, D"
+    negative = {"algorithm": "bellman_ford", "directed": True, "start": "A",
+                "nodes": [{"id": v} for v in "ABC"],
+                "edges": [{"from": "A", "to": "B", "weight": 1}, {"from": "B", "to": "C", "weight": -3},
+                          {"from": "C", "to": "B", "weight": 1}]}
+    finding = refusal_findings("graph_algorithm", negative)[0]
+    assert finding.check == "graph_algorithm_negative_cycle" and "→" in finding.label

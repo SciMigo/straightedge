@@ -19,6 +19,7 @@ from pathlib import Path
 
 import pytest
 
+from straightedge.graphs import ConceptGraph
 from straightedge.linalg import VIEWS, ConceptLinAlg
 from straightedge.models import AnimationPlan, Topic
 from straightedge.planner import build_plan
@@ -212,3 +213,15 @@ def test_smoke_matmul_views_non_square(tmp_path):
     _render(_stock(Topic.LINEAR_ALGEBRA, ConceptLinAlg.MATMUL_VIEWS,
                    {"a": [[1, 2, 0], [0, 1, 3]], "b": [[1, 1], [0, 2], [1, 0]],
                     "view": "outer"}), tmp_path)
+
+
+@pytest.mark.parametrize("concept,algorithm", [
+    (ConceptGraph.TRAVERSAL, "bfs"), (ConceptGraph.TRAVERSAL, "dfs"),
+    (ConceptGraph.SHORTEST_PATH, "dijkstra"), (ConceptGraph.SHORTEST_PATH, "bellman_ford"),
+    (ConceptGraph.SPANNING_TREE, "kruskal"), (ConceptGraph.SPANNING_TREE, "prim"),
+    (ConceptGraph.MAX_FLOW, "edmonds_karp"),
+])
+def test_smoke_graph_scenes(tmp_path, concept, algorithm):
+    """Every graph concept, on its stock graph: the Transform/animate chains
+    the builder emits are what only a live render exercises."""
+    _render(_stock(Topic.GRAPH, concept, {"algorithm": algorithm}), tmp_path)

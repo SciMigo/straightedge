@@ -1,0 +1,270 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#090d14">
+    <meta name="description" content="Eleven graph algorithms — BFS, DFS, Dijkstra, Bellman–Ford, Kruskal, Prim, topological sort, strongly connected components, max flow with its min cut, greedy colouring, bipartite matching with König's cover, Euler circuits — computed once and drawn twice, as Manim video and as SVG storyboard. A graph that makes the claim false is refused with the witness.">
+    <meta property="og:title" content="Graph theory, computed: the picture cannot show a state the algorithm did not reach">
+    <meta property="og:description" content="Hand the algorithm a student's graph; every intermediate state on screen came from running it. Ask for a topological order of a cyclic graph and you get the cycle, not a picture.">
+    <meta property="og:image" content="https://pub-ae0e951cb13d4628913ced2bc423d839.r2.dev/straightedge/assets/posters/graph-max-flow.jpg">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://scimigo.github.io/straightedge/posts/graph-theory-computed.html">
+    <link rel="canonical" href="https://scimigo.github.io/straightedge/posts/graph-theory-computed.html">
+    <meta name="twitter:card" content="player">
+    <meta name="twitter:title" content="Graph theory, computed">
+    <meta name="twitter:description" content="Max flow, min cut, Dijkstra, Kruskal and eight more, each state computed from the graph you pass in — and refused, with the witness, when the graph makes the claim false.">
+    <meta name="twitter:image" content="https://pub-ae0e951cb13d4628913ced2bc423d839.r2.dev/straightedge/assets/posters/graph-max-flow.jpg">
+    <title>Graph theory, computed: every state on screen came from the algorithm</title>
+    <link rel="stylesheet" href="../styles.css">
+    <link rel="stylesheet" href="post.css">
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "TechArticle",
+      "headline": "Graph theory, computed: the picture cannot show a state the algorithm did not reach",
+      "description": "Eleven graph algorithms computed once and drawn twice — Manim video and SVG storyboard — from the graph a student passes in. A graph that makes the claim false is refused with the witness: the cycle, the negative cycle, the odd-degree vertices.",
+      "url": "https://scimigo.github.io/straightedge/posts/graph-theory-computed.html",
+      "image": "https://pub-ae0e951cb13d4628913ced2bc423d839.r2.dev/straightedge/assets/posters/graph-max-flow.jpg",
+      "datePublished": "2026-08-25",
+      "author": { "@type": "Organization", "name": "SciMigo" },
+      "publisher": { "@type": "Organization", "name": "Straightedge" },
+      "about": ["Graph theory", "Max-flow min-cut", "Dijkstra's algorithm", "Kruskal's algorithm", "Topological sort", "Bipartite matching", "Algorithm visualization"],
+      "isPartOf": { "@type": "WebSite", "name": "Straightedge", "url": "https://scimigo.github.io/straightedge/" }
+    }
+    </script>
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="wordmark" href="../index.html" aria-label="Straightedge, back to the gallery">
+        <span class="wordmark-mark" aria-hidden="true"></span>
+        <span>Straightedge</span>
+      </a>
+      <a class="repo-link" href="index.html">All posts <span aria-hidden="true">↗</span></a>
+    </header>
+
+    <main class="post">
+      <div class="post-head">
+        <p class="post-kicker">Graph theory, computed · 01</p>
+        <h1>The picture cannot show a state the algorithm did not reach</h1>
+        <p class="post-dateline">
+          <time datetime="2026-08-25">25 Aug 2026</time>
+          <span class="dot" aria-hidden="true">·</span>
+          <span class="tag">Graph algorithms</span>
+        </p>
+        <p class="standfirst">
+          Every graph-algorithm video you have watched was drawn by hand: someone
+          decided that vertex C turns green on beat four. That is fine for one
+          textbook example and useless for a lab, where the graph is the
+          student's and the question is whether <em>their</em> answer is right.
+          So the algorithm runs first, on the graph you pass in, and the frames
+          are read off its trace.
+        </p>
+        <p class="byline">
+          <span>6 vertices · 9 arcs · 4 augmenting paths · the cut checked against the flow</span>
+          <span>Re-renders from
+            <code>straightedge render --template graph/max_flow</code></span>
+        </p>
+      </div>
+
+      <figure class="post-figure">
+        <video controls playsinline preload="metadata"
+               poster="https://pub-ae0e951cb13d4628913ced2bc423d839.r2.dev/straightedge/assets/posters/graph-max-flow.jpg"
+               aria-label="A six-vertex flow network drawn left to right from s to t; each augmenting path lights up in red with its bottleneck, the flow/capacity labels update, and the final frame shades the source side of the minimum cut">
+          <source src="https://pub-ae0e951cb13d4628913ced2bc423d839.r2.dev/straightedge/assets/mp4/graph-max-flow.mp4" type="video/mp4">
+          Your browser does not support embedded video.
+        </video>
+        <figcaption>
+          <span>Edmonds–Karp on the stock network. Each beat is one augmenting
+            path — the shortest in the residual graph — with its bottleneck; the
+            <strong>flow / capacity</strong> label on every arc is rewritten from
+            the run. The last beat is the certificate: the vertices the residual
+            graph still reaches from <em>s</em>, and the saturated arcs leaving
+            them, whose capacities sum to the flow.</span>
+        </figcaption>
+      </figure>
+
+      <div class="post-body">
+        <div class="claim">
+          <p>
+            <strong>Eleven graph algorithms, computed once and drawn twice.</strong>
+            BFS and DFS, Dijkstra and Bellman–Ford, Kruskal and Prim, Kahn's
+            topological order, Kosaraju's components, Edmonds–Karp with its
+            min cut, greedy colouring, Kuhn's matching with König's cover, and
+            Hierholzer's Euler circuit live in one module,
+            <code>straightedge/graphs.py</code>. The Manim scene and the SVG
+            storyboard both read its step trace, so a video and a handout of
+            the same request cannot disagree about which vertex was settled
+            third — and neither can show a state the algorithm did not reach.
+          </p>
+        </div>
+
+        <p>
+          The trace is a list of <em>roles</em>, not colours: this vertex is
+          <code>current</code>, these are the <code>frontier</code>, that edge is
+          in the <code>tree</code>, this one was <code>rejected</code>. Each lane
+          maps roles onto its own palette. What a step also carries is the thing
+          a lecture writes on the board beside the graph — the queue, the
+          distance table, the running forest weight — and a caption, which is
+          the sentence the narration should say over it. One step, one
+          narration beat: the video's whole structure is the algorithm's.
+        </p>
+
+        <h2>Computed once, drawn twice</h2>
+        <figure class="post-figure">
+          <img src="../assets/svg/graph-max-flow-storyboard.svg"
+               alt="Five panels of Edmonds–Karp on a four-vertex network: three augmenting paths highlighted in turn with flow/capacity labels updating, then the min cut with the source side shaded and the caption stating that the cut capacity equals the flow value, 5."
+               loading="lazy">
+          <figcaption>
+            <span>The same algorithm as a printable storyboard — <code>graph_algorithm</code>
+              with <code>animate: false</code>. Video and storyboard read one step
+              trace, so the fourth panel here <em>is</em> the fourth beat of a
+              video of this network; nothing is re-derived on the way to the
+              page.</span>
+          </figcaption>
+        </figure>
+
+        <h2>Refused, with the witness</h2>
+        <p>
+          The half of this that matters for a lab is what happens when the
+          graph makes the request false. Ask for a topological order of a graph
+          with a cycle and no drawing tool will stop you; most will happily
+          number the vertices. Here the algorithm raises, and what it raises
+          carries the structure that proves it:
+        </p>
+<pre><code>$ straightedge draw graph_algorithm --params '{"algorithm": "topological_sort",
+    "directed": true, "nodes": [{"id":"A"},{"id":"B"},{"id":"C"},{"id":"D"}],
+    "edges": [{"from":"A","to":"B"},{"from":"B","to":"C"},{"from":"C","to":"A"},{"from":"C","to":"D"}]}'
+'graph_algorithm' was refused: the graph has a cycle, so it has no topological order: A → B → C → A</code></pre>
+        <p>
+          The same gate runs before a video. Dijkstra is handed a negative
+          weight and the precondition says so, in the algorithm's own terms,
+          before Manim is asked for a single frame:
+        </p>
+<pre><code>$ straightedge scaffold --template graph/shortest_path \
+    --params '{"algorithm": "dijkstra", "nodes": [{"id":"A"},{"id":"B"}],
+               "edges": [{"from":"A","to":"B","weight":-2}]}'
+[error] graph/shortest_path: edge 'A'–'B' has negative weight -2; Dijkstra requires
+        nonnegative weights; nothing would be drawn
+1 precondition(s) say this plan will not show what was requested.</code></pre>
+        <p>
+          Bellman–Ford accepts that weight and refuses a negative
+          <em>cycle</em> instead — <code>B → C → B</code>, vertex by vertex. An
+          Euler circuit on <em>K</em><sub>4</sub> is refused with the four
+          odd-degree vertices. A matching is refused if an edge sits inside one
+          side of the declared partition. Each of these is the exercise's actual
+          content: the reason there is no answer is the answer, and it arrives
+          as a named structure a student can check by hand, not as a blank
+          canvas or a plausible picture of something that is not so.
+        </p>
+
+        <h2>The edges Kruskal refuses</h2>
+        <figure class="post-figure">
+          <img src="../assets/svg/graph-kruskal-storyboard.svg"
+               alt="Eight panels of Kruskal's algorithm on a six-vertex weighted graph. Accepted edges thicken in purple; the two edges that would close a cycle, B–C and B–D, are drawn as dashed red lines with the caption saying why."
+               loading="lazy">
+          <figcaption>
+            <span>The same graph as an SVG storyboard, no Manim involved. The two
+              edges Kruskal <strong>rejects</strong> are drawn dashed rather than
+              left out — the rejection is the lesson, and a storyboard that
+              silently skipped B–C would be teaching the wrong algorithm.</span>
+          </figcaption>
+        </figure>
+        <p>
+          Prim, run on the same graph, ends on the same tree and the same
+          weight, 24 — which the test suite asserts rather than trusts. Every
+          algorithm here is checked against a property a textbook states: Prim
+          and Kruskal agree; the max flow equals the cut it ends on; König's
+          cover has exactly the matching's size; DFS agrees with the recursive
+          reference on graphs with cross edges, which is precisely where the
+          usual iterative-stack shortcut draws a "DFS tree" no depth-first
+          search produces.
+        </p>
+
+        <h2>Without Manim, without JavaScript</h2>
+        <figure class="post-figure">
+          <img src="../assets/svg/graph-coloring-animated.svg"
+               alt="A wheel graph on six vertices being greedily coloured, one vertex per frame, each frame cross-fading into the next; the hub takes a fourth colour."
+               loading="lazy">
+          <figcaption>
+            <span>Greedy colouring of a wheel as a native animated SVG: the frames
+              are the computed states, cross-faded with SVG's own timing. It
+              plays in any browser, in a slide, in a wiki — and a client that
+              asks for reduced motion sees the first frame, still.</span>
+          </figcaption>
+        </figure>
+
+        <h2>What each one needs, and what it refuses</h2>
+        <div class="results">
+          <table>
+            <thead>
+              <tr><th>Algorithm</th><th>Needs</th><th>Refused with</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>BFS · DFS</td><td>a start vertex</td><td>—</td></tr>
+              <tr><td>Dijkstra</td><td>weights ≥ 0</td><td class="diff">the negative edge</td></tr>
+              <tr><td>Bellman–Ford</td><td>weights</td><td class="diff">the negative cycle</td></tr>
+              <tr><td>Kruskal · Prim</td><td>undirected, weights</td><td>—</td></tr>
+              <tr><td>Topological sort</td><td>directed</td><td class="diff">the cycle</td></tr>
+              <tr><td>Strongly connected components</td><td>directed</td><td>—</td></tr>
+              <tr><td>Max flow · min cut</td><td>directed, capacities, s ≠ t</td><td class="diff">s = t, an uncapacitated arc</td></tr>
+              <tr><td>Greedy colouring</td><td>—</td><td>—</td></tr>
+              <tr><td>Bipartite matching · König cover</td><td>a declared partition</td><td class="diff">an edge inside one side</td></tr>
+              <tr><td>Euler circuit / trail</td><td>connected edges</td><td class="diff">the odd-degree vertices</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>
+          All eleven are in the SVG lane as <code>graph_algorithm</code>. Four
+          concepts — traversal, shortest path, spanning tree, max flow — are
+          also Manim videos under the <code>graph</code> topic, reachable by
+          prompt on a stock graph or by template with your own.
+        </p>
+
+        <h2>Run it on your graph</h2>
+<pre><code>git clone https://github.com/SciMigo/straightedge
+cd straightedge &amp;&amp; python3 -m pip install -e '.[render]'
+
+# a video of Dijkstra on your graph — one narration beat per computed step
+straightedge render --template graph/shortest_path --params '{
+  "algorithm": "dijkstra", "start": "A",
+  "nodes": [{"id":"A"},{"id":"B"},{"id":"C"},{"id":"D"}],
+  "edges": [{"from":"A","to":"B","weight":2},{"from":"A","to":"C","weight":5},
+            {"from":"B","to":"C","weight":1},{"from":"B","to":"D","weight":4},
+            {"from":"C","to":"D","weight":1}]}'
+
+# the same states as a printable storyboard, no Manim needed
+straightedge draw graph_algorithm --params '{"algorithm": "dijkstra", "animate": false, ...}'</code></pre>
+        <p>
+          A frame is at most eight vertices and seventeen beats; past that a
+          video stops being one lesson and becomes a log, and the precondition
+          says so instead of rendering it small. The SVG storyboard holds twelve
+          panels and the animated SVG twenty-four frames, on the same principle.
+        </p>
+
+        <h2>What this is for</h2>
+        <p>
+          A lab. The student brings the graph — an edge list, a homework
+          figure — and the question is not "what does Dijkstra look like" but
+          "is my table right, and if not, where does it first go wrong". Because
+          every state is computed, the answer is a step number and a caption.
+          Because a false claim is refused with its witness, "there is no
+          topological order" comes back as the cycle, and "this is not
+          bipartite" as the odd cycle. The picture is the last thing produced,
+          and it is produced from the run.
+        </p>
+      </div>
+
+      <nav class="series-nav" aria-label="Series navigation">
+        <span>
+          <span class="muted">Previous</span>
+          <a href="the-picture-is-not-the-proof.html">The picture is not the proof</a>
+        </span>
+        <span class="next">
+          <span class="muted">Next</span>
+          Matching and cover: why König's theorem is a certificate
+        </span>
+      </nav>
+    </main>
+  </body>
+</html>

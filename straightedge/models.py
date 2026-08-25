@@ -25,6 +25,7 @@ class Topic:
     FUNCTION = "function"
     CALCULUS = "calculus"
     LINEAR_ALGEBRA = "linear_algebra"
+    GRAPH = "graph"
 
 
 @dataclass(frozen=True)

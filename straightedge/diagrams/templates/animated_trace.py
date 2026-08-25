@@ -143,16 +143,18 @@ class AnimatedTraceTemplate:
         height = max(frame[3] for frame in frames) + 68
         total = duration_per_frame * len(rendered)
         parts = [style("""
-.animated-trace-bg{fill:var(--animated-bg,#fff)}
 .animated-trace-label{font:600 14px Inter,Helvetica,Arial,sans-serif;fill:#27313b}
 @media (prefers-reduced-motion:reduce){
   .animated-trace-frame{opacity:0!important}
   .animated-trace-first{opacity:1!important}
 }
 """)]
+        # The background is a plain fill, not a CSS custom property: an SVG
+        # embedded through <img> gets no page styles, and a renderer without
+        # var() support would paint the fallback or nothing.
         parts.append(
             f'<rect class="animated-trace-bg" x="0" y="0" width="{width:.1f}" '
-            f'height="{height:.1f}" style="--animated-bg:{escape(background)}"/>'
+            f'height="{height:.1f}" fill="{escape(background)}"/>'
         )
         if title_value is not None:
             parts.append(text(
