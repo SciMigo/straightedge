@@ -6,6 +6,23 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-08-25
+
+A minor release about graph theory, and about every state on screen being
+computed. One module now runs eleven graph algorithms for both lanes: the
+Manim `graph` topic and the `graph_algorithm` / `graph_traversal` figures read
+the same step trace, and a graph that makes the request false is refused with
+the witness — the negative cycle, the DAG's cycle, the odd-degree vertices —
+rather than drawn. Around it: checked search trees, planar embeddings and flow
+networks, a dependency-free animated-SVG lane, refusal findings with reasons,
+and a storyboard template that composes checked figures into steps.
+
+One behaviour change worth knowing: `graph_traversal`'s DFS now follows the
+textbook recursion (visit on reach, the stack is the recursion path). The
+earlier discovery-on-push variant visited in a different order and could draw a
+"DFS tree" with cross edges, which no depth-first search of an undirected graph
+produces.
+
 ### Added
 
 - **A `graph` topic in the animation lane.** `graph/traversal` (BFS, DFS),
