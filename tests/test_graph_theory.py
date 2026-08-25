@@ -127,3 +127,14 @@ def test_partition_headings_clear_the_degree_labels():
     problems = [f for f in check_figure(svg)
                 if f.check in {"text_overlap", "text_clipped"}]
     assert problems == []
+
+
+def test_a_caption_wider_than_the_drawing_is_kept_inside_the_frame():
+    from straightedge.diagrams.legibility import check_figure
+    svg = render_diagram({"type": "graph", "params": {
+        "nodes": [{"id": "s"}, {"id": "t"}],
+        "edges": [{"from": "s", "to": "t"}],
+        "layout": "hierarchical",
+        "caption": "flow value = 4 · cut capacity = 4 · augmenting path: none",
+    }})
+    assert not [f for f in check_figure(svg) if f.check == "text_clipped"]

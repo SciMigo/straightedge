@@ -17,6 +17,7 @@ from ..renderer import (
     style,
     svg_document,
     text,
+    text_width,
 )
 
 
@@ -670,6 +671,14 @@ class GraphTemplate:
 
         caption_gap = 30.0 if caption else 0.0
         if caption:
+            # A caption can be wider than the drawing it sits under — a
+            # four-vertex flow network with "flow value = 4 · cut capacity = 4"
+            # — and the crop below is taken from the vertices alone. Widen it
+            # symmetrically so the caption stays inside the frame.
+            caption_width = text_width(str(caption), 13, safe=True) + 16.0
+            if caption_width > max_x - min_x:
+                centre = (min_x + max_x) / 2
+                min_x, max_x = centre - caption_width / 2, centre + caption_width / 2
             # Sit the caption just under the drawing rather than at the foot of
             # a box that no longer exists.
             elements.append(
