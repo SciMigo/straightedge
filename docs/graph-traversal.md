@@ -44,14 +44,17 @@ different incoming edges. Each panel's queue is written front to back.
 
 ## Depth-first search
 
-Use the same graph with `"algorithm": "dfs"`. DFS removes from the top of a
-stack and pushes neighbors in reverse order, so the first neighbor in
-`neighbor_order` is visited first. The displayed stack is written bottom to
-top; its rightmost item is next.
+Use the same graph with `"algorithm": "dfs"`. DFS is the textbook recursive
+procedure: from the current vertex it visits the first not-yet-visited
+neighbor in `neighbor_order`, recurses, and only then considers the next
+neighbor. The displayed stack is the recursion path, written bottom to top; its
+rightmost item is the current vertex, and every vertex on the stack is drawn as
+active.
 
-This is the iterative, discovery-on-push form of DFS. Reversing the neighbor
-push order makes the first declared neighbor the next one visited, while the
-storyboard makes the otherwise implicit stack visible.
+The simpler iterative variant — push every neighbor, mark it discovered on
+push — is deliberately not used. It visits vertices in a different order and
+can draw a "DFS tree" containing cross edges, which no depth-first search of an
+undirected graph produces.
 
 ## Determinism and correctness
 

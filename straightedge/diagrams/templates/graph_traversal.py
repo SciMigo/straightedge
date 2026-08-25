@@ -57,33 +57,64 @@ def _traverse(
     directed: bool,
     neighbor_order: Any,
 ) -> List[Dict[str, Any]]:
-    """Compute snapshots. Vertices are discovered when added to the frontier."""
+    """Compute one snapshot per visit.
+
+    BFS discovers a vertex when it enters the queue, so the queue is the
+    frontier.  DFS is the textbook recursive procedure: a vertex is visited
+    when the recursion reaches it, and the displayed stack is the recursion
+    path from ``start`` to the current vertex.  A discovery-on-push stack
+    would be simpler, but it visits vertices in a different order and can draw
+    a "DFS tree" with cross edges, which no depth-first search produces.
+    """
     adjacency = _adjacency(node_ids, edges, directed, neighbor_order)
-    frontier = [start]
-    discovered = {start}
     visited: List[str] = []
     tree_edges: List[Tuple[str, str]] = []
     snapshots: List[Dict[str, Any]] = [{
-        "current": None, "frontier": list(frontier), "visited": [], "tree_edges": []
+        "current": None, "frontier": [start], "visited": [], "tree_edges": []
     }]
 
-    while frontier:
-        current = frontier.pop(0 if algorithm == "bfs" else -1)
-        visited.append(current)
-        neighbors = adjacency[current]
-        candidates = neighbors if algorithm == "bfs" else reversed(neighbors)
-        for neighbor in candidates:
-            if neighbor in discovered:
-                continue
-            discovered.add(neighbor)
-            tree_edges.append((current, neighbor))
-            frontier.append(neighbor)
+    def record(current: str, frontier: List[str]) -> None:
         snapshots.append({
             "current": current,
             "frontier": list(frontier),
             "visited": list(visited),
             "tree_edges": list(tree_edges),
         })
+
+    if algorithm == "bfs":
+        queue = [start]
+        discovered = {start}
+        while queue:
+            current = queue.pop(0)
+            visited.append(current)
+            for neighbor in adjacency[current]:
+                if neighbor in discovered:
+                    continue
+                discovered.add(neighbor)
+                tree_edges.append((current, neighbor))
+                queue.append(neighbor)
+            record(current, queue)
+        return snapshots
+
+    # Each stack entry is (vertex, index of the next neighbor to examine); the
+    # vertices alone are the recursion path shown on the panel.
+    visited.append(start)
+    stack: List[Tuple[str, int]] = [(start, 0)]
+    record(start, [start])
+    while stack:
+        vertex, index = stack[-1]
+        neighbors = adjacency[vertex]
+        while index < len(neighbors) and neighbors[index] in visited:
+            index += 1
+        if index == len(neighbors):
+            stack.pop()
+            continue
+        neighbor = neighbors[index]
+        stack[-1] = (vertex, index + 1)
+        visited.append(neighbor)
+        tree_edges.append((vertex, neighbor))
+        stack.append((neighbor, 0))
+        record(neighbor, [entry[0] for entry in stack])
     return snapshots
 
 

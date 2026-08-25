@@ -172,10 +172,18 @@ class AnimatedTraceTemplate:
                     **{"class": "animated-trace-label", "text_anchor": "middle"},
                 )
             frame_class = "animated-trace-frame animated-trace-first" if index == 0 else "animated-trace-frame"
+            # Each child keeps its own size and is centred on the card. Fitting
+            # every frame to the card instead would give each its own scale, so
+            # a figure that grows between states (a tree gaining nodes) would
+            # shrink from frame to frame and its nodes would jump.
+            _, _, child_w, child_h = frame
+            child_x = 16 + (width - 32 - child_w) / 2
+            child_y = top + (content_h - child_h) / 2
             parts.append(
                 f'<g class="{frame_class}" opacity="{initial}">'
-                f'<image href="data:image/svg+xml;base64,{encoded}" x="16" y="{top}" '
-                f'width="{width - 32:.1f}" height="{content_h:.1f}" '
+                f'<image href="data:image/svg+xml;base64,{encoded}" '
+                f'x="{child_x:.1f}" y="{child_y:.1f}" '
+                f'width="{child_w:.1f}" height="{child_h:.1f}" '
                 f'preserveAspectRatio="xMidYMid meet"/>{label_svg}{animation}</g>'
             )
         return svg_document(

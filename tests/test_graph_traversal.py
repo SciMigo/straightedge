@@ -42,7 +42,49 @@ def test_bfs_uses_a_queue_and_visits_by_level():
 def test_dfs_uses_a_stack_and_follows_first_neighbor_deeply():
     snapshots = _traverse(list("ABCDE"), EDGES, "A", "dfs", False, list("ABCDE"))
     assert snapshots[-1]["visited"] == ["A", "B", "D", "C", "E"]
-    assert snapshots[1]["frontier"] == ["C", "B"]
+    # The stack is the recursion path: A, then A/B, then A/B/D, back to A/C.
+    assert [s["frontier"] for s in snapshots[1:]] == [
+        ["A"], ["A", "B"], ["A", "B", "D"], ["A", "C"], ["A", "C", "E"]]
+
+
+def _recursive_dfs(adjacency, start):
+    """The reference every textbook gives; the template must agree with it."""
+    order, tree = [], []
+
+    def visit(vertex):
+        order.append(vertex)
+        for neighbor in adjacency[vertex]:
+            if neighbor not in order:
+                tree.append((vertex, neighbor))
+                visit(neighbor)
+    visit(start)
+    return order, tree
+
+
+def test_dfs_matches_recursive_dfs_when_a_cross_edge_is_present():
+    # Discovery-on-push DFS visits A, B, D, C here and makes A–C a tree edge,
+    # leaving B–C as a cross edge — something no depth-first search produces.
+    edges = [{"from": a, "to": b} for a, b in
+             [("A", "B"), ("A", "C"), ("B", "C"), ("B", "D")]]
+    snapshots = _traverse(list("ABCD"), edges, "A", "dfs", False, None)
+    assert snapshots[-1]["visited"] == ["A", "B", "C", "D"]
+    assert snapshots[-1]["tree_edges"] == [("A", "B"), ("B", "C"), ("B", "D")]
+    assert snapshots[3]["frontier"] == ["A", "B", "C"]
+
+
+def test_dfs_agrees_with_the_recursive_reference_on_dense_graphs():
+    ids = list("ABCDEF")
+    edges = [{"from": a, "to": b} for a, b in
+             [("A", "B"), ("A", "D"), ("B", "C"), ("B", "E"), ("C", "D"),
+              ("C", "F"), ("D", "E"), ("E", "F"), ("A", "F")]]
+    from straightedge.diagrams.templates.graph_traversal import _adjacency
+    for order in (None, list("FEDCBA")):
+        adjacency = _adjacency(ids, edges, False, order)
+        for start in ids:
+            expected_order, expected_tree = _recursive_dfs(adjacency, start)
+            last = _traverse(ids, edges, start, "dfs", False, order)[-1]
+            assert last["visited"] == expected_order
+            assert last["tree_edges"] == expected_tree
 
 
 def test_neighbor_order_makes_the_tie_break_explicit():

@@ -68,3 +68,15 @@ def test_duration_must_be_positive_and_finite():
 def test_trace_cannot_contain_itself():
     params = {"frames": [{"visual": {"type": "animated_trace", "params": {}}}]}
     assert refusal_findings("animated_trace", params)[0].check == "animation_frame"
+
+
+def test_frames_keep_their_own_scale_on_a_shared_card():
+    small = {"visual": {"type": "array_state", "params": {"values": [1]}}}
+    large = {"visual": {"type": "array_state", "params": {"values": list(range(8))}}}
+    svg = render_diagram({"type": "animated_trace", "params": {"frames": [small, large]}})
+    widths = [float(w) for w in re.findall(r'<image [^>]*width="([\d.]+)"', svg)]
+    assert len(widths) == 2 and widths[0] < widths[1]
+    # The small frame is not stretched to the card: it is narrower than the
+    # card's content width, which the large frame defines.
+    card_width = float(re.search(r'<svg[^>]*width="([\d.]+)"', svg).group(1))
+    assert widths[1] <= card_width - 32 + 1 and widths[0] < card_width - 32 - 40

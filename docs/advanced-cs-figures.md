@@ -74,6 +74,9 @@ Every child must be a registered, nonblank figure and must pass its own refusal
 checks. A false planar claim or invalid red-black tree therefore cannot be
 smuggled into an animation. `loop: false` plays once and freezes on the final
 frame. Reduced-motion clients see the first frame without cross-fading.
+Frames are drawn at their own size and centred on a card large enough for
+the largest of them, so a figure that grows between states keeps one scale
+rather than shrinking from frame to frame.
 
 ## BST, AVL, and red-black trees
 
