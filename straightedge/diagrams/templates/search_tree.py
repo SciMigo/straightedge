@@ -252,6 +252,39 @@ def _prepare(params: Dict[str, Any]) -> Tuple[List[Finding], _Node | None, List[
 KIND_NAMES = {"bst": "BST", "avl": "AVL", "red_black": "Red-black"}
 
 
+def _canonical_kind(params: Dict[str, Any]) -> str:
+    raw = str(params.get("kind", "bst")).strip().lower().replace("-", "_")
+    return "avl" if raw in {"balanced", "balanced_bst"} else raw
+
+
+def _animation(params: Dict[str, Any], kind: str, states: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """The animated_trace request for an insertion sequence.
+
+    Built in one place so the refusal check sees exactly the frames the
+    renderer will draw: a frame the animation refuses (its caption clipped a
+    one-node canvas, once) must be reported, not silently rendered as "".
+    """
+    values = params.get("values")
+    source_values = values if isinstance(values, list) else []
+    frames = [{
+        "label": f"insert {source_values[index]}",
+        "visual": {"type": "search_tree", "params": {
+            "kind": kind,
+            "root": state,
+            "show_balance": bool(params.get("show_balance", kind == "avl")),
+            "node_radius": int(params.get("node_radius", 18)),
+            "node_spacing_x": int(params.get("node_spacing_x", 70)),
+            "node_spacing_y": int(params.get("node_spacing_y", 80)),
+        }},
+    } for index, state in enumerate(states)]
+    return {
+        "title": params.get("caption") or f"{KIND_NAMES[kind]} insertion",
+        "frames": frames,
+        "duration_s": float(params.get("duration_s", 1.2)),
+        "loop": bool(params.get("loop", False)),
+    }
+
+
 @register("search_tree")
 class SearchTreeTemplate:
     """Construct or verify BST, AVL, and red-black trees, optionally animated."""
@@ -271,8 +304,12 @@ class SearchTreeTemplate:
             return [Finding(
                 "search_tree_animation", "error", "duration_s must be a positive number"
             )]
-        findings, _, _ = _prepare(params)
-        return findings
+        findings, _, states = _prepare(params)
+        if findings or not animate:
+            return findings
+        return DIAGRAM_REGISTRY["animated_trace"].refusal_findings(
+            _animation(params, _canonical_kind(params), states)
+        )
 
     def render(self, params: Dict[str, Any]) -> str:
         kind = str(params.get("kind", "bst")).strip().lower().replace("-", "_")
@@ -285,32 +322,17 @@ class SearchTreeTemplate:
         node_radius = int(params.get("node_radius", 18))
         spacing_x = int(params.get("node_spacing_x", 70))
         spacing_y = int(params.get("node_spacing_y", 80))
-        findings, root, states = _prepare(params)
-        if findings or root is None:
+        if self.refusal_findings(params):
+            return ""
+        _, root, states = _prepare(params)
+        if root is None:
             return ""
 
-        canonical_kind = "avl" if kind in {"balanced", "balanced_bst"} else kind
+        canonical_kind = _canonical_kind(params)
         if animate:
-            frames = []
-            source_values = values if isinstance(values, list) else []
-            for index, state in enumerate(states):
-                frames.append({
-                    "label": f"insert {source_values[index]}",
-                    "visual": {"type": "search_tree", "params": {
-                        "kind": canonical_kind,
-                        "root": state,
-                        "show_balance": show_balance,
-                        "node_radius": node_radius,
-                        "node_spacing_x": spacing_x,
-                        "node_spacing_y": spacing_y,
-                    }},
-                })
-            return DIAGRAM_REGISTRY["animated_trace"].render({
-                "title": caption or f"{KIND_NAMES[canonical_kind]} insertion",
-                "frames": frames,
-                "duration_s": duration,
-                "loop": loop,
-            })
+            return DIAGRAM_REGISTRY["animated_trace"].render(
+                _animation(params, canonical_kind, states)
+            )
 
         tree_params: Dict[str, Any] = {
             "root": _as_dict(root, include_color=canonical_kind == "red_black"),

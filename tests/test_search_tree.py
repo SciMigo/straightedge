@@ -109,3 +109,26 @@ def test_a_red_black_caption_is_a_title_not_an_identifier():
     svg = render_diagram({"type": "search_tree",
                           "params": {"kind": "red_black", "values": [2, 1, 3]}})
     assert "Red-black tree" in svg and "RED_BLACK" not in svg
+
+
+def test_a_red_black_insertion_animates_from_its_one_node_first_frame():
+    from straightedge.diagrams.legibility import check_figure
+    params = {"kind": "red-black", "values": [2, 1, 3], "animate": True}
+    # The first frame is a single node under a caption wider than the node;
+    # the canvas must grow to the caption rather than clip it.
+    assert refusal_findings("search_tree", params) == []
+    svg = render_diagram({"type": "search_tree", "params": params})
+    assert "Red-black insertion" in svg
+    assert svg.count("data:image/svg+xml;base64,") == 3
+    single = render_diagram({"type": "search_tree",
+                             "params": {"kind": "red_black", "values": [2]}})
+    assert not [f for f in check_figure(single) if f.check == "text_clipped"]
+
+
+def test_an_animation_the_frames_refuse_is_reported_not_blank():
+    # A frame the animation lane rejects must surface through refusal_findings
+    # instead of render() quietly returning "".
+    params = {"kind": "avl", "values": [1, 2, 3], "animate": True, "duration_s": -1}
+    findings = refusal_findings("search_tree", params)
+    assert findings and findings[0].check == "search_tree_animation"
+    assert render_diagram({"type": "search_tree", "params": params}) == ""

@@ -144,6 +144,15 @@ class BinaryTreeTemplate:
         max_y = max(node.y for node in nodes)
         svg_width = max_x + padding + node_radius
         svg_height = max_y + padding + node_radius + (20 if caption else 0)
+        if caption:
+            # A one-node tree is 78px wide; "Red-black tree" beneath it is not.
+            # Widen the canvas to the caption and keep the tree centred in it.
+            caption_width = text_width(str(caption), 13, safe=True) + 16.0
+            if caption_width > svg_width:
+                shift = (caption_width - svg_width) / 2
+                for node in nodes:
+                    node.x += shift
+                svg_width = caption_width
 
         elements: List[str] = []
         elements.append(style(DEFAULT_STYLES + self._extra_styles()))
