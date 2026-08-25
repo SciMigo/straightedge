@@ -170,6 +170,10 @@ Measured against the current tree — 9 of 14 concepts:
 | `trig/graph_transform` | 7 (`b01`–`b07`) |
 | `trig/unit_circle_to_sine` | 7 (`b01`–`b08`) |
 
+The four `graph/*` concepts are converted too, with `1 + steps` beats — the
+count depends on the graph, which is why they are not in the table; read the
+keys off the scaffolded scene as above.
+
 Not yet converted: `conic/parabola_focus_directrix`, `3d/solid_overview`,
 `3d/sphere_section`, `3d/cube_section`, `3d/three_views`. They render normally
 and ignore a beat map.

@@ -116,6 +116,10 @@ The registry currently contains 45 templates across several domains:
   computes complete, checked BFS or DFS storyboards with their queue or stack.
   [`animated_trace`](docs/advanced-cs-figures.md) turns any checked figure
   sequence into a standalone animated SVG without Manim or ffmpeg.
+  [`graph_algorithm`](docs/graph-animations.md) computes Dijkstra, Bellman–Ford,
+  Kruskal, Prim, topological order, strongly connected components, max flow
+  with its min cut, greedy colouring, bipartite matching, König's vertex cover
+  and Euler circuits — and refuses, with the witness, what the graph makes false.
 - Projects and business: Gantt charts, calendar roadmaps, org charts,
   work-breakdown structures, project networks, timelines, flow diagrams, and
   T-accounts.
@@ -182,7 +186,14 @@ straightedge render --template calculus/derivative_tangent    # the hero animati
 straightedge render --template conic/ellipse_foci --qc        # and check the frame
 straightedge render --template calculus/riemann_integral \
   --params '{"expression": "x**2 + 1"}'                        # refine with parameters
+straightedge render --template graph/max_flow                 # a computed graph lesson;
+                                                              # pass nodes/edges for your own graph
 ```
+
+The [`graph` topic](docs/graph-animations.md) — traversal, shortest path,
+spanning tree, max flow — runs the algorithm at generation time on the graph
+you pass and animates only the states it computed, one narration beat per
+step; a graph that makes the claim false is refused before the render.
 
 `--template` takes any id from `list-templates` and skips the keyword router
 entirely — it is how the animations in the gallery above are drawn.

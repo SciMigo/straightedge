@@ -7,9 +7,13 @@ SVGs; Manim and ffmpeg are not involved.
 
 ## Computed graph algorithms
 
-`graph_algorithm` accepts `dijkstra`, `kruskal`, `greedy_coloring`, or
-`bipartite_matching`. It computes the states from the graph, so a lecture agent
-does not author plausible-looking intermediate answers. Set `animate: true` for
+`graph_algorithm` accepts `dijkstra`, `bellman_ford`, `kruskal`, `prim`,
+`topological_sort`, `scc`, `max_flow`, `greedy_coloring`, `bipartite_matching`,
+`vertex_cover` (König) and `euler`. Every state is computed by
+`straightedge/graphs.py` — the module the Manim graph topic also draws from —
+so a lecture agent does not author plausible-looking intermediate answers, and
+the video and the handout of one request agree. The full table, with what each
+algorithm needs and what it refuses, is in [graph-animations.md](graph-animations.md). Set `animate: true` for
 native animated SVG or `false` for an `algorithm_trace` storyboard.
 
 ```python
@@ -31,10 +35,14 @@ svg = render_diagram({
 })
 ```
 
-Dijkstra refuses negative or nonnumeric weights. Kruskal requires an
-undirected weighted graph. Greedy colouring records its deterministic vertex
-order and exposes the selected colours. Bipartite matching validates the
-partition and computes augmenting states.
+Dijkstra refuses negative weights; Bellman–Ford accepts them and refuses a
+negative cycle, naming it. Kruskal draws the edges it *rejects* dashed — the
+cycle-closing edge is the lesson — and Prim shows the candidate edges leaving
+the tree. Topological sort refuses a cyclic graph with the cycle; `euler`
+refuses a graph whose odd-degree vertices are not 0 or 2, naming them. Greedy
+colouring records its vertex order; bipartite matching validates the partition
+and computes augmenting states, and `vertex_cover` adds König's minimum cover,
+whose size equals the matching's.
 
 ## Animate any figure sequence
 

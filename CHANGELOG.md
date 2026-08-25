@@ -8,6 +8,23 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **A `graph` topic in the animation lane.** `graph/traversal` (BFS, DFS),
+  `graph/shortest_path` (Dijkstra, Bellman–Ford), `graph/spanning_tree`
+  (Kruskal, Prim) and `graph/max_flow` (Edmonds–Karp with its min cut) render
+  as Manim videos from a graph passed in parameters, or from a stock graph
+  by prompt. The algorithm runs at generation time in the new
+  `straightedge/graphs.py`, one beat per computed step, and
+  `preconditions.validate` refuses — with the witness — a negative weight
+  under Dijkstra, a negative cycle, a source equal to the sink, or a graph
+  too large for one frame. Documented in `docs/graph-animations.md`.
+
+- **`graph_algorithm` covers most of a first graph-theory course.** Added
+  `bellman_ford`, `prim`, `topological_sort`, `scc`, `max_flow`,
+  `vertex_cover` (König) and `euler` to the existing four, all computed by the
+  same module the video lane uses. Kruskal now draws the edges it rejects,
+  dashed, and refusals name the negative cycle, the DAG's cycle or the
+  odd-degree vertices that make the request false.
+
 - **`graph_algorithm` computes checked teaching traces.** Dijkstra shortest
   paths, Kruskal minimum spanning forests, greedy vertex colouring, and
   augmenting-path bipartite matching now render as either printable
