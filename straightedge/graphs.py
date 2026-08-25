@@ -1,0 +1,917 @@
+"""Graph theory: one graph, many algorithms, every state computed.
+
+This is the topic module for ``Topic.GRAPH`` in the animation lane, and the
+one home for the graph algorithms both lanes draw. The SVG templates
+(``graph_traversal``, ``graph_algorithm``) and the Manim scene builders read the
+same :class:`Step` sequences, so a storyboard and a video of the same request
+cannot disagree about which vertex was settled third.
+
+The rule the figure lane already follows applies here too: **a state is
+computed from the supplied graph, never authored**. A builder that wants to
+show Dijkstra settling ``C`` gets that from :func:`dijkstra_steps`, and when the
+input makes the claim false — a negative weight, a cycle in a DAG, a source
+that is also the sink — the algorithm raises :class:`GraphError` and the
+caller refuses with the witness, instead of drawing a confident picture of
+something that is not so.
+
+Steps carry *roles*, not colours: ``current``, ``frontier``, ``visited`` on
+vertices; ``tree``, ``path``, ``rejected``, ``cut`` on edges. Each lane maps
+the roles onto its own palette.
+"""
+
+from __future__ import annotations
+
+import math
+from dataclasses import dataclass, field
+from typing import Any, Callable, Iterable
+
+from .models import Topic
+from .topics import topic
+
+
+class ConceptGraph:
+    """Sub-topic identifiers under ``Topic.GRAPH``."""
+
+    TRAVERSAL = "graph/traversal"
+    SHORTEST_PATH = "graph/shortest_path"
+    SPANNING_TREE = "graph/spanning_tree"
+    MAX_FLOW = "graph/max_flow"
+
+
+class GraphError(ValueError):
+    """The supplied graph cannot honestly produce the requested picture.
+
+    ``witness`` is the structure that proves it — an odd cycle, a negative
+    cycle, the vertices of odd degree — so a refusal can say *why* in terms a
+    student can check, not merely that a check failed.
+    """
+
+    def __init__(self, message: str, witness: Any = None) -> None:
+        super().__init__(message)
+        self.witness = witness
+
+
+EdgeKey = tuple[str, str]
+
+
+@dataclass(frozen=True)
+class Edge:
+    source: str
+    target: str
+    weight: float | None = None
+    capacity: float | None = None
+    flow: float = 0.0
+
+
+@dataclass(frozen=True)
+class Graph:
+    ids: tuple[str, ...]
+    labels: dict[str, str]
+    edges: tuple[Edge, ...]
+    directed: bool = False
+    #: Optional author-supplied positions as fractions of the canvas.
+    positions: dict[str, tuple[float, float]] = field(default_factory=dict)
+
+    def key(self, u: str, v: str) -> EdgeKey:
+        """The identity of an edge: ordered when directed, sorted otherwise."""
+        return (u, v) if self.directed else (min(u, v), max(u, v))
+
+    def has_edge(self, u: str, v: str) -> bool:
+        return self.key(u, v) in {self.key(e.source, e.target) for e in self.edges}
+
+    def neighbors(self, vertex: str, order: list[str] | None = None) -> list[str]:
+        """Adjacent vertices in first-appearance order, or in ``order``.
+
+        Direction is honoured: on a directed graph only out-neighbours count.
+        ``order`` is a global tie-break — the list a lecture writes on the board
+        so a traversal is reproducible — and vertices it omits keep their input
+        order after the ones it names.
+        """
+        seen: list[str] = []
+        for edge in self.edges:
+            if edge.source == vertex and edge.target not in seen:
+                seen.append(edge.target)
+            elif not self.directed and edge.target == vertex and edge.source not in seen:
+                seen.append(edge.source)
+        if order:
+            rank = {v: i for i, v in enumerate(order)}
+            fallback = len(rank)
+            input_rank = {v: i for i, v in enumerate(self.ids)}
+            seen.sort(key=lambda v: (rank.get(v, fallback), input_rank[v]))
+        return seen
+
+    def weight(self, u: str, v: str) -> float:
+        for edge in self.edges:
+            if (edge.source, edge.target) == (u, v) or (
+                    not self.directed and (edge.source, edge.target) == (v, u)):
+                return 0.0 if edge.weight is None else edge.weight
+        raise KeyError((u, v))
+
+    def degree(self, vertex: str) -> int:
+        total = 0
+        for edge in self.edges:
+            if edge.source == vertex:
+                total += 1
+            if edge.target == vertex:
+                total += 1
+        return total
+
+
+@dataclass(frozen=True)
+class Step:
+    """One state of an algorithm, described by roles rather than colours."""
+
+    label: str
+    caption: str
+    node_states: dict[str, str] = field(default_factory=dict)
+    edge_states: dict[EdgeKey, str] = field(default_factory=dict)
+    badges: dict[str, str] = field(default_factory=dict)
+    edge_labels: dict[EdgeKey, str] = field(default_factory=dict)
+    panel: tuple[str, ...] = ()
+    #: Algorithm-specific state a lane may want verbatim (a traversal's
+    #: frontier list, say) rather than parsed back out of the caption.
+    extras: dict[str, Any] = field(default_factory=dict)
+
+
+# ------------------------------------------------------------------ coercion
+
+
+def _is_number(value: Any) -> bool:
+    return (isinstance(value, (int, float)) and not isinstance(value, bool)
+            and math.isfinite(value))
+
+
+def coerce_graph(params: dict[str, Any]) -> Graph:
+    """Read the ``nodes`` / ``edges`` / ``directed`` shape every graph template
+    uses, or raise :class:`GraphError` saying which part cannot be read."""
+    nodes = params.get("nodes")
+    edges = params.get("edges", [])
+    if not isinstance(nodes, list) or not nodes:
+        raise GraphError("nodes must be a non-empty array")
+    if not isinstance(edges, list):
+        raise GraphError("edges must be an array")
+    ids: list[str] = []
+    labels: dict[str, str] = {}
+    positions: dict[str, tuple[float, float]] = {}
+    for node in nodes:
+        if not isinstance(node, dict) or node.get("id") is None:
+            raise GraphError("every node must be an object with an id")
+        node_id = str(node["id"])
+        if node_id in labels:
+            raise GraphError(f"vertex id {node_id!r} is repeated")
+        ids.append(node_id)
+        labels[node_id] = str(node.get("label", node_id))
+        x, y = node.get("x"), node.get("y")
+        if _is_number(x) and _is_number(y):
+            positions[node_id] = (float(x), float(y))
+    directed = bool(params.get("directed", False))
+    known = set(ids)
+    out: list[Edge] = []
+    seen: set[EdgeKey] = set()
+    for edge in edges:
+        if not isinstance(edge, dict) or edge.get("from") is None or edge.get("to") is None:
+            raise GraphError("every edge needs from and to endpoints")
+        u, v = str(edge["from"]), str(edge["to"])
+        if u not in known or v not in known:
+            raise GraphError(f"edge {u!r}–{v!r} names an unknown vertex", witness=(u, v))
+        if u == v:
+            raise GraphError(f"edge {u!r}–{v!r} is a loop", witness=(u, v))
+        key = (u, v) if directed else (min(u, v), max(u, v))
+        if key in seen:
+            raise GraphError(f"edge {u!r}–{v!r} is repeated", witness=(u, v))
+        seen.add(key)
+        weight, capacity = edge.get("weight"), edge.get("capacity")
+        if weight is not None and not _is_number(weight):
+            raise GraphError(f"edge {u!r}–{v!r} has a non-numeric weight", witness=(u, v))
+        if capacity is not None and (not _is_number(capacity) or capacity < 0):
+            raise GraphError(f"edge {u!r}–{v!r} needs a non-negative capacity", witness=(u, v))
+        flow = edge.get("flow", 0)
+        if not _is_number(flow) or flow < 0:
+            raise GraphError(f"edge {u!r}–{v!r} has an invalid flow", witness=(u, v))
+        out.append(Edge(u, v, None if weight is None else float(weight),
+                        None if capacity is None else float(capacity), float(flow)))
+    return Graph(tuple(ids), labels, tuple(out), directed, positions)
+
+
+def require_weights(graph: Graph, *, nonnegative: bool = False) -> None:
+    for edge in graph.edges:
+        if edge.weight is None:
+            raise GraphError(f"edge {edge.source!r}–{edge.target!r} has no weight",
+                             witness=(edge.source, edge.target))
+        if nonnegative and edge.weight < 0:
+            raise GraphError(
+                f"edge {edge.source!r}–{edge.target!r} has negative weight "
+                f"{edge.weight:g}; Dijkstra requires nonnegative weights",
+                witness=(edge.source, edge.target))
+
+
+def require_vertex(graph: Graph, vertex: Any, role: str) -> str:
+    name = str(vertex)
+    if name not in graph.labels:
+        raise GraphError(f"{role} {name!r} is not a vertex", witness=name)
+    return name
+
+
+def _fmt(value: float) -> str:
+    return "∞" if not math.isfinite(value) else f"{value:g}"
+
+
+def _edge_text(u: str, v: str, directed: bool) -> str:
+    return f"{u}→{v}" if directed else f"{u}–{v}"
+
+
+# ---------------------------------------------------------------- traversal
+
+
+def traversal_steps(graph: Graph, start: str, algorithm: str = "bfs",
+                    order: list[str] | None = None) -> list[Step]:
+    """BFS with its queue, or textbook recursive DFS with its call stack.
+
+    BFS discovers a vertex when it joins the queue, so the queue is the
+    frontier. DFS follows the recursion: a vertex is visited when the recursion
+    reaches it, and the stack shown is the path from ``start`` to the current
+    vertex. The discovery-on-push stack variant is deliberately not used — it
+    visits in a different order and draws "DFS trees" with cross edges, which
+    no depth-first search of an undirected graph produces.
+    """
+    start = require_vertex(graph, start, "start")
+    if algorithm not in {"bfs", "dfs"}:
+        raise GraphError("algorithm must be bfs or dfs")
+    visited: list[str] = []
+    tree: list[EdgeKey] = []
+    steps: list[Step] = []
+    frontier_name = "queue" if algorithm == "bfs" else "stack"
+
+    def state(current: str | None, frontier: list[str]) -> Step:
+        nodes = {v: "visited" for v in visited}
+        nodes.update({v: "frontier" for v in frontier})
+        if current is not None:
+            nodes[current] = "current"
+        edges = {graph.key(u, v): "tree" for u, v in tree}
+        badges = {v: f"#{i + 1}" for i, v in enumerate(visited)}
+        frontier_text = ", ".join(frontier) if frontier else "∅"
+        order_text = ", ".join(visited) if visited else "∅"
+        label = "Initial frontier" if current is None else f"Visit {current}"
+        caption = (f"{frontier_name}: [{frontier_text}] · order: [{order_text}]")
+        return Step(label, caption, nodes, edges, badges,
+                    panel=(f"{frontier_name}: [{frontier_text}]", f"order: [{order_text}]"),
+                    extras={"current": current, "frontier": list(frontier),
+                            "visited": list(visited), "tree_edges": list(tree)})
+
+    steps.append(state(None, [start]))
+    if algorithm == "bfs":
+        queue, discovered = [start], {start}
+        while queue:
+            current = queue.pop(0)
+            visited.append(current)
+            for neighbor in graph.neighbors(current, order):
+                if neighbor in discovered:
+                    continue
+                discovered.add(neighbor)
+                tree.append((current, neighbor))
+                queue.append(neighbor)
+            steps.append(state(current, queue))
+        return steps
+
+    visited.append(start)
+    stack: list[tuple[str, int]] = [(start, 0)]
+    steps.append(state(start, [start]))
+    while stack:
+        vertex, index = stack[-1]
+        neighbors = graph.neighbors(vertex, order)
+        while index < len(neighbors) and neighbors[index] in visited:
+            index += 1
+        if index == len(neighbors):
+            stack.pop()
+            continue
+        neighbor = neighbors[index]
+        stack[-1] = (vertex, index + 1)
+        visited.append(neighbor)
+        tree.append((vertex, neighbor))
+        stack.append((neighbor, 0))
+        steps.append(state(neighbor, [entry[0] for entry in stack]))
+    return steps
+
+
+# ------------------------------------------------------------ shortest paths
+
+
+def _distance_panel(graph: Graph, dist: dict[str, float]) -> tuple[str, ...]:
+    return tuple(f"{v}: {_fmt(dist[v])}" for v in sorted(graph.ids))
+
+
+def dijkstra_steps(graph: Graph, start: str) -> list[Step]:
+    """Settle the closest tentative vertex, relax its edges, repeat."""
+    require_weights(graph, nonnegative=True)
+    start = require_vertex(graph, start, "start")
+    dist = {v: math.inf for v in graph.ids}
+    dist[start] = 0.0
+    previous: dict[str, str] = {}
+    settled: list[str] = []
+    steps = [Step("Initialize", f"Set d({start}) = 0 and every other distance to ∞",
+                  {start: "frontier"}, {}, {v: _fmt(d) for v, d in dist.items()},
+                  panel=_distance_panel(graph, dist))]
+    while True:
+        choices = [v for v in graph.ids if v not in settled and math.isfinite(dist[v])]
+        if not choices:
+            break
+        current = min(choices, key=lambda v: (dist[v], graph.ids.index(v)))
+        settled.append(current)
+        relaxed: list[str] = []
+        for neighbor in graph.neighbors(current):
+            candidate = dist[current] + graph.weight(current, neighbor)
+            if candidate < dist[neighbor]:
+                dist[neighbor], previous[neighbor] = candidate, current
+                relaxed.append(f"d({neighbor}) = {_fmt(candidate)}")
+        nodes = {v: "visited" for v in settled}
+        nodes.update({v: "frontier" for v in graph.ids
+                      if v not in settled and math.isfinite(dist[v])})
+        nodes[current] = "current"
+        edges = {graph.key(u, v): "tree" for v, u in previous.items()}
+        caption = f"Settle {current} (d = {_fmt(dist[current])})"
+        caption += "; relax: " + ", ".join(relaxed) if relaxed else "; nothing improves"
+        steps.append(Step(f"Settle {current}", caption, nodes, edges,
+                          {v: _fmt(d) for v, d in dist.items()},
+                          panel=_distance_panel(graph, dist)))
+    return steps
+
+
+def bellman_ford_steps(graph: Graph, start: str) -> list[Step]:
+    """Relax every edge, |V|−1 rounds; a further improvement is a negative cycle.
+
+    Raises :class:`GraphError` carrying the cycle when one exists, because a
+    "shortest path" through a negative cycle is not a quantity to draw.
+    """
+    require_weights(graph)
+    start = require_vertex(graph, start, "start")
+    dist = {v: math.inf for v in graph.ids}
+    dist[start] = 0.0
+    previous: dict[str, str] = {}
+    arcs = [(e.source, e.target, e.weight or 0.0) for e in graph.edges]
+    if not graph.directed:
+        arcs += [(e.target, e.source, e.weight or 0.0) for e in graph.edges]
+    steps = [Step("Initialize", f"Set d({start}) = 0 and every other distance to ∞",
+                  {start: "frontier"}, {}, {v: _fmt(d) for v, d in dist.items()},
+                  panel=_distance_panel(graph, dist))]
+
+    def relax_all() -> list[str]:
+        changed = []
+        for u, v, w in arcs:
+            if math.isfinite(dist[u]) and dist[u] + w < dist[v] - 1e-12:
+                dist[v], previous[v] = dist[u] + w, u
+                changed.append(f"d({v}) = {_fmt(dist[v])}")
+        return changed
+
+    for round_no in range(1, len(graph.ids)):
+        changed = relax_all()
+        nodes = {v: "visited" for v in graph.ids if math.isfinite(dist[v])}
+        nodes[start] = "current"
+        edges = {graph.key(u, v): "tree" for v, u in previous.items()}
+        caption = f"Round {round_no}: " + (", ".join(changed) if changed else "no change")
+        steps.append(Step(f"Round {round_no}", caption, nodes, edges,
+                          {v: _fmt(d) for v, d in dist.items()},
+                          panel=_distance_panel(graph, dist)))
+        if not changed:
+            break
+    if relax_all():
+        # Walk back |V| predecessors from an improved vertex to land on the
+        # cycle, then read it off.
+        improved = next(v for v in graph.ids if v in previous)
+        vertex = improved
+        for _ in graph.ids:
+            vertex = previous.get(vertex, vertex)
+        cycle, current = [vertex], previous[vertex]
+        while current != vertex:
+            cycle.append(current)
+            current = previous[current]
+        cycle.reverse()
+        raise GraphError("the graph has a negative cycle: " + " → ".join(cycle + [cycle[0]]),
+                         witness=cycle)
+    return steps
+
+
+# ------------------------------------------------------------- spanning trees
+
+
+def kruskal_steps(graph: Graph) -> list[Step]:
+    """Take edges by weight; accept one that joins two components, reject one
+    that would close a cycle. The rejections are shown — they are the lesson."""
+    require_weights(graph)
+    if graph.directed:
+        raise GraphError("Kruskal requires an undirected graph")
+    parent = {v: v for v in graph.ids}
+
+    def root(v: str) -> str:
+        while parent[v] != v:
+            parent[v] = parent[parent[v]]
+            v = parent[v]
+        return v
+
+    chosen: dict[EdgeKey, str] = {}
+    total = 0.0
+    steps = [Step("Start", "Sort the edges by weight; the forest is empty",
+                  panel=("forest weight = 0",))]
+    ordered = sorted(enumerate(graph.edges), key=lambda p: (p[1].weight or 0.0, p[0]))
+    for _, edge in ordered:
+        u, v = edge.source, edge.target
+        key = graph.key(u, v)
+        in_tree = {x for k in chosen if chosen[k] == "tree" for x in k}
+        if root(u) == root(v):
+            chosen[key] = "rejected"
+            caption = f"Reject {u}–{v} ({edge.weight:g}): it would close a cycle"
+            label = f"Reject {u}–{v}"
+        else:
+            parent[root(u)] = root(v)
+            chosen[key] = "tree"
+            total += edge.weight or 0.0
+            in_tree |= {u, v}
+            caption = f"Accept {u}–{v} ({edge.weight:g}): it joins two components"
+            label = f"Accept {u}–{v}"
+        nodes = {x: "visited" for x in in_tree}
+        steps.append(Step(label, caption, nodes, dict(chosen),
+                          panel=(f"forest weight = {total:g}",)))
+    return steps
+
+
+def prim_steps(graph: Graph, start: str) -> list[Step]:
+    """Grow one tree from ``start`` by the cheapest edge leaving it."""
+    require_weights(graph)
+    if graph.directed:
+        raise GraphError("Prim requires an undirected graph")
+    start = require_vertex(graph, start, "start")
+    in_tree = [start]
+    chosen: dict[EdgeKey, str] = {}
+    total = 0.0
+    steps = [Step("Start", f"Begin the tree at {start}", {start: "current"},
+                  panel=("tree weight = 0",))]
+    while True:
+        candidates = []
+        for edge in graph.edges:
+            u, v = edge.source, edge.target
+            if (u in in_tree) != (v in in_tree):
+                inside, outside = (u, v) if u in in_tree else (v, u)
+                candidates.append((edge.weight or 0.0, graph.ids.index(outside), inside, outside))
+        if not candidates:
+            break
+        weight, _, inside, outside = min(candidates)
+        in_tree.append(outside)
+        chosen[graph.key(inside, outside)] = "tree"
+        total += weight
+        nodes = {v: "visited" for v in in_tree}
+        nodes[outside] = "current"
+        frontier = {graph.key(u, v): "frontier" for _, _, u, v in candidates
+                    if graph.key(u, v) not in chosen}
+        steps.append(Step(f"Add {outside}",
+                          f"Cheapest edge leaving the tree: {inside}–{outside} ({weight:g})",
+                          nodes, {**frontier, **chosen}, panel=(f"tree weight = {total:g}",)))
+    return steps
+
+
+# --------------------------------------------------------------- DAG / SCC
+
+
+def _find_cycle(graph: Graph, among: Iterable[str]) -> list[str]:
+    """A directed cycle inside ``among``, by DFS colouring."""
+    allowed = set(among)
+    colour: dict[str, int] = {}
+    stack: list[str] = []
+
+    def visit(v: str) -> list[str] | None:
+        colour[v] = 1
+        stack.append(v)
+        for w in graph.neighbors(v):
+            if w not in allowed:
+                continue
+            if colour.get(w) == 1:
+                return stack[stack.index(w):]
+            if w not in colour:
+                found = visit(w)
+                if found:
+                    return found
+        stack.pop()
+        colour[v] = 2
+        return None
+
+    for v in graph.ids:
+        if v in allowed and v not in colour:
+            found = visit(v)
+            if found:
+                return found
+    return []
+
+
+def topological_sort_steps(graph: Graph) -> list[Step]:
+    """Kahn's algorithm: repeatedly remove a vertex with no incoming edge."""
+    if not graph.directed:
+        raise GraphError("topological order needs a directed graph")
+    indegree = {v: 0 for v in graph.ids}
+    for edge in graph.edges:
+        indegree[edge.target] += 1
+    order: list[str] = []
+    removed: set[EdgeKey] = set()
+    steps = [Step("Start", "Count incoming edges; vertices with none can go first",
+                  {v: "frontier" for v in graph.ids if indegree[v] == 0}, {},
+                  {v: f"in {d}" for v, d in indegree.items()},
+                  panel=("order: ∅",))]
+    while True:
+        ready = [v for v in graph.ids if v not in order and indegree[v] == 0]
+        if not ready:
+            break
+        current = ready[0]
+        order.append(current)
+        for w in graph.neighbors(current):
+            indegree[w] -= 1
+            removed.add((current, w))
+        nodes = {v: "visited" for v in order}
+        nodes.update({v: "frontier" for v in graph.ids
+                      if v not in order and indegree[v] == 0})
+        nodes[current] = "current"
+        steps.append(Step(f"Remove {current}",
+                          f"Take {current} (no incoming edges left); position {len(order)}",
+                          nodes, {k: "tree" for k in removed},
+                          {v: f"in {d}" for v, d in indegree.items()},
+                          panel=("order: " + ", ".join(order),)))
+    if len(order) != len(graph.ids):
+        cycle = _find_cycle(graph, [v for v in graph.ids if v not in order])
+        raise GraphError("the graph has a cycle, so it has no topological order: "
+                         + " → ".join(cycle + cycle[:1]), witness=cycle)
+    return steps
+
+
+def scc_steps(graph: Graph) -> list[Step]:
+    """Kosaraju: finish order on G, then components peeled off the reverse."""
+    if not graph.directed:
+        raise GraphError("strongly connected components need a directed graph")
+    finished: list[str] = []
+    seen: set[str] = set()
+
+    def visit(v: str) -> None:
+        seen.add(v)
+        for w in graph.neighbors(v):
+            if w not in seen:
+                visit(w)
+        finished.append(v)
+
+    for v in graph.ids:
+        if v not in seen:
+            visit(v)
+    steps = [Step("Finish order", "Depth-first search finishes vertices in this order",
+                  {}, {}, {v: f"f={i + 1}" for i, v in enumerate(finished)},
+                  panel=("finish order: " + ", ".join(finished),))]
+    reverse = {v: [] for v in graph.ids}
+    for edge in graph.edges:
+        reverse[edge.target].append(edge.source)
+    assigned: dict[str, int] = {}
+    components: list[list[str]] = []
+    for v in reversed(finished):
+        if v in assigned:
+            continue
+        component, stack = [], [v]
+        assigned[v] = len(components) + 1
+        while stack:
+            x = stack.pop()
+            component.append(x)
+            for w in reverse[x]:
+                if w not in assigned:
+                    assigned[w] = len(components) + 1
+                    stack.append(w)
+        components.append(component)
+        nodes = {x: f"color-{c}" for x, c in assigned.items()}
+        edges = {graph.key(e.source, e.target): "tree" for e in graph.edges
+                 if assigned.get(e.source) == assigned.get(e.target)}
+        steps.append(Step(f"Component {len(components)}",
+                          f"From {v} on the reversed graph: {{{', '.join(component)}}}",
+                          nodes, edges, {x: f"f={i + 1}" for i, x in enumerate(finished)},
+                          panel=tuple(f"C{i + 1} = {{{', '.join(c)}}}"
+                                      for i, c in enumerate(components))))
+    return steps
+
+
+# ------------------------------------------------------------------ flows
+
+
+def max_flow_steps(graph: Graph, source: str, sink: str) -> list[Step]:
+    """Edmonds–Karp: augment along shortest residual paths; end with the cut.
+
+    The final step is the certificate — the vertices the residual graph still
+    reaches from the source, and the saturated edges leaving that set, whose
+    capacities sum to the flow value.
+    """
+    if not graph.directed:
+        raise GraphError("a flow network is directed")
+    source = require_vertex(graph, source, "source")
+    sink = require_vertex(graph, sink, "sink")
+    if source == sink:
+        raise GraphError("source and sink must differ")
+    capacity: dict[EdgeKey, float] = {}
+    for edge in graph.edges:
+        if edge.capacity is None:
+            raise GraphError(f"edge {edge.source!r}→{edge.target!r} has no capacity",
+                             witness=(edge.source, edge.target))
+        capacity[(edge.source, edge.target)] = edge.capacity
+    flow: dict[EdgeKey, float] = {k: 0.0 for k in capacity}
+
+    def residual(u: str, v: str) -> float:
+        return capacity.get((u, v), 0.0) - flow.get((u, v), 0.0) + flow.get((v, u), 0.0)
+
+    def labels() -> dict[EdgeKey, str]:
+        return {k: f"{flow[k]:g}/{capacity[k]:g}" for k in capacity}
+
+    value = 0.0
+    steps = [Step("Zero flow", "Every edge carries 0 of its capacity",
+                  {source: "source", sink: "sink"}, {}, {}, labels(),
+                  panel=("flow value = 0",))]
+    while True:
+        parent: dict[str, str] = {}
+        queue = [source]
+        while queue and sink not in parent:
+            u = queue.pop(0)
+            for v in graph.ids:
+                if v != source and v not in parent and residual(u, v) > 1e-9:
+                    parent[v] = u
+                    queue.append(v)
+        if sink not in parent:
+            break
+        path = [sink]
+        while path[-1] != source:
+            path.append(parent[path[-1]])
+        path.reverse()
+        bottleneck = min(residual(u, v) for u, v in zip(path, path[1:]))
+        for u, v in zip(path, path[1:]):
+            if (u, v) in flow:
+                pushed = min(bottleneck, capacity[(u, v)] - flow[(u, v)])
+                flow[(u, v)] += pushed
+                remainder = bottleneck - pushed
+                if remainder > 1e-9:
+                    flow[(v, u)] -= remainder
+            else:
+                flow[(v, u)] -= bottleneck
+        value += bottleneck
+        edges = {(u, v) if (u, v) in flow else (v, u): "path" for u, v in zip(path, path[1:])}
+        steps.append(Step(f"Augment {bottleneck:g}",
+                          f"Augmenting path {' → '.join(path)} with bottleneck {bottleneck:g}",
+                          {source: "source", sink: "sink", **{v: "current" for v in path[1:-1]}},
+                          edges, {}, labels(), panel=(f"flow value = {value:g}",)))
+    reach = {source}
+    queue = [source]
+    while queue:
+        u = queue.pop(0)
+        for v in graph.ids:
+            if v not in reach and residual(u, v) > 1e-9:
+                reach.add(v)
+                queue.append(v)
+    cut = {k: "cut" for k in capacity if k[0] in reach and k[1] not in reach}
+    cut_capacity = sum(capacity[k] for k in cut)
+    nodes = {v: "visited" for v in reach}
+    nodes.update({source: "source", sink: "sink"})
+    steps.append(Step("Min cut", f"No augmenting path remains; the cut {{{', '.join(sorted(reach))}}} "
+                      f"has capacity {cut_capacity:g} = flow value {value:g}",
+                      nodes, cut, {}, labels(),
+                      panel=(f"flow value = {value:g}", f"cut capacity = {cut_capacity:g}")))
+    return steps
+
+
+# ---------------------------------------------------- colouring and matching
+
+
+def bipartition(graph: Graph) -> tuple[dict[str, int], list[str]]:
+    """A two-colouring, or the odd cycle that prevents one.
+
+    Returns ``(colours, [])`` when bipartite and ``(partial, cycle)`` otherwise,
+    where ``cycle`` lists the vertices of an odd cycle in order.
+    """
+    colours: dict[str, int] = {}
+    parent: dict[str, str | None] = {}
+    for root in graph.ids:
+        if root in colours:
+            continue
+        colours[root], parent[root] = 0, None
+        queue = [root]
+        while queue:
+            u = queue.pop(0)
+            for v in graph.neighbors(u):
+                if v not in colours:
+                    colours[v], parent[v] = 1 - colours[u], u
+                    queue.append(v)
+                elif colours[v] == colours[u]:
+                    return colours, _odd_cycle(parent, u, v)
+    return colours, []
+
+
+def _odd_cycle(parent: dict[str, str | None], u: str, v: str) -> list[str]:
+    def path_to_root(x: str) -> list[str]:
+        out = [x]
+        while parent.get(out[-1]) is not None:
+            out.append(parent[out[-1]])  # type: ignore[arg-type]
+        return out
+
+    pu, pv = path_to_root(u), path_to_root(v)
+    common = next(x for x in pu if x in pv)
+    return pu[:pu.index(common) + 1] + list(reversed(pv[:pv.index(common)]))
+
+
+def greedy_coloring_steps(graph: Graph, order: list[str] | None = None) -> list[Step]:
+    sequence = [require_vertex(graph, v, "vertex_order entry") for v in (order or [])]
+    sequence += [v for v in graph.ids if v not in sequence]
+    colours: dict[str, int] = {}
+    steps = [Step("Initialize", "No vertices coloured")]
+    for vertex in sequence:
+        used = {colours[n] for n in graph.neighbors(vertex) if n in colours}
+        if not graph.directed:
+            used |= {colours[e.source] for e in graph.edges
+                     if e.target == vertex and e.source in colours}
+        colours[vertex] = next(c for c in range(1, len(graph.ids) + 1) if c not in used)
+        steps.append(Step(f"Color {vertex}",
+                          f"Assign {vertex} the smallest available color: {colours[vertex]}",
+                          {v: f"color-{c}" for v, c in colours.items()},
+                          panel=(f"colours used: {max(colours.values())}",)))
+    return steps
+
+
+def matching_steps(graph: Graph, left: list[str]) -> tuple[list[Step], dict[str, str]]:
+    """Kuhn's augmenting paths; returns the steps and the final matching
+    keyed by the right-hand vertex."""
+    left = [require_vertex(graph, v, "left vertex") for v in left]
+    match_r: dict[str, str] = {}
+    steps = [Step("Empty matching", "No edges matched", panel=("matching size = 0",))]
+
+    def augment(u: str, seen: set[str]) -> bool:
+        for v in graph.neighbors(u):
+            if v in seen:
+                continue
+            seen.add(v)
+            if v not in match_r or augment(match_r[v], seen):
+                match_r[v] = u
+                return True
+        return False
+
+    for u in left:
+        if augment(u, set()):
+            edges = {graph.key(l, r): "tree" for r, l in match_r.items()}
+            nodes = {x: "visited" for pair in edges for x in pair}
+            steps.append(Step(f"Augment from {u}", f"Augmenting path from {u} grows the matching",
+                              nodes, edges, panel=(f"matching size = {len(match_r)}",)))
+    return steps, match_r
+
+
+def konig_cover(graph: Graph, left: list[str], match_r: dict[str, str]) -> list[str]:
+    """A minimum vertex cover from a maximum matching (König's theorem).
+
+    Alternating paths from the unmatched left vertices reach a set ``Z``; the
+    cover is ``(L − Z) ∪ (R ∩ Z)``, and it has exactly the matching's size.
+    """
+    matched_left = set(match_r.values())
+    z = {u for u in left if u not in matched_left}
+    queue = list(z)
+    while queue:
+        u = queue.pop(0)
+        for v in graph.neighbors(u):
+            if v in z or match_r.get(v) == u:
+                continue
+            z.add(v)
+            partner = match_r.get(v)
+            if partner is not None and partner not in z:
+                z.add(partner)
+                queue.append(partner)
+    cover = [u for u in left if u not in z] + [v for v in graph.ids if v not in left and v in z]
+    return cover
+
+
+def vertex_cover_steps(graph: Graph, left: list[str]) -> list[Step]:
+    steps, match_r = matching_steps(graph, left)
+    cover = konig_cover(graph, left, match_r)
+    nodes = {v: "current" for v in cover}
+    edges = {graph.key(l, r): "tree" for r, l in match_r.items()}
+    steps.append(Step("Vertex cover",
+                      f"König: cover {{{', '.join(cover)}}} of size {len(cover)} "
+                      f"= matching size {len(match_r)}",
+                      nodes, edges, panel=(f"matching size = {len(match_r)}",
+                                           f"cover size = {len(cover)}")))
+    return steps
+
+
+# ---------------------------------------------------------------- Euler
+
+
+def euler_steps(graph: Graph) -> list[Step]:
+    """An Euler circuit (all degrees even) or trail (exactly two odd), by
+    Hierholzer's algorithm; anything else is refused with the odd vertices."""
+    if graph.directed:
+        raise GraphError("Euler circuits here are for undirected graphs")
+    odd = [v for v in graph.ids if graph.degree(v) % 2 == 1]
+    if odd and len(odd) != 2:
+        raise GraphError(f"{len(odd)} vertices have odd degree ({', '.join(odd)}); "
+                         "an Euler trail needs 0 or 2", witness=odd)
+    with_edges = [v for v in graph.ids if graph.degree(v) > 0]
+    if not with_edges:
+        raise GraphError("the graph has no edges")
+    reach, stack = {with_edges[0]}, [with_edges[0]]
+    while stack:
+        u = stack.pop()
+        for v in graph.neighbors(u):
+            if v not in reach:
+                reach.add(v)
+                stack.append(v)
+    if set(with_edges) - reach:
+        raise GraphError("the edges do not lie in one connected component",
+                         witness=sorted(set(with_edges) - reach))
+    remaining = {graph.key(e.source, e.target) for e in graph.edges}
+    start = odd[0] if odd else with_edges[0]
+    stack, circuit = [start], []
+    while stack:
+        u = stack[-1]
+        nxt = next((v for v in graph.neighbors(u) if graph.key(u, v) in remaining), None)
+        if nxt is None:
+            circuit.append(stack.pop())
+        else:
+            remaining.discard(graph.key(u, nxt))
+            stack.append(nxt)
+    circuit.reverse()
+    kind = "trail" if odd else "circuit"
+    steps = [Step("Start", f"Every vertex has even degree; start the circuit at {start}"
+                  if not odd else f"{odd[0]} and {odd[1]} have odd degree; the trail runs "
+                  f"from {odd[0]} to {odd[1]}", {start: "current"},
+                  badges={v: f"deg {graph.degree(v)}" for v in graph.ids})]
+    used: dict[EdgeKey, str] = {}
+    for i, (u, v) in enumerate(zip(circuit, circuit[1:])):
+        used[graph.key(u, v)] = "path"
+        steps.append(Step(f"Edge {i + 1}", f"Traverse {u}–{v} (edge {i + 1} of {len(graph.edges)})",
+                          {**{x: "visited" for x in circuit[:i + 2]}, v: "current"},
+                          dict(used), {v: f"deg {graph.degree(v)}" for v in graph.ids},
+                          panel=(f"{kind}: " + " → ".join(circuit[:i + 2]),)))
+    return steps
+
+
+# ---------------------------------------------------------------- topic
+
+
+#: The stock graph the animation lane draws when a request names none.
+STOCK_GRAPH: dict[str, Any] = {
+    # Listed in the order they sit on the circle: this order draws the stock
+    # graph without a crossing, which A–F would not.
+    "nodes": [{"id": v} for v in "ACEDFB"],
+    "edges": [
+        {"from": "A", "to": "B", "weight": 4}, {"from": "A", "to": "C", "weight": 2},
+        {"from": "B", "to": "C", "weight": 5}, {"from": "B", "to": "D", "weight": 10},
+        {"from": "C", "to": "E", "weight": 3}, {"from": "E", "to": "D", "weight": 4},
+        {"from": "D", "to": "F", "weight": 11},
+    ],
+}
+
+#: The stock flow network: directed, with capacities, source ``s``, sink ``t``.
+STOCK_NETWORK: dict[str, Any] = {
+    "directed": True,
+    "nodes": [{"id": v} for v in ("s", "a", "b", "c", "d", "t")],
+    "edges": [
+        {"from": "s", "to": "a", "capacity": 10}, {"from": "s", "to": "c", "capacity": 10},
+        {"from": "a", "to": "b", "capacity": 4}, {"from": "a", "to": "c", "capacity": 2},
+        {"from": "a", "to": "d", "capacity": 8}, {"from": "b", "to": "t", "capacity": 10},
+        {"from": "c", "to": "d", "capacity": 9}, {"from": "d", "to": "b", "capacity": 6},
+        {"from": "d", "to": "t", "capacity": 10},
+    ],
+}
+
+#: The algorithm each concept runs by default, and the ones it accepts.
+CONCEPT_ALGORITHMS: dict[str, tuple[str, ...]] = {
+    ConceptGraph.TRAVERSAL: ("bfs", "dfs"),
+    ConceptGraph.SHORTEST_PATH: ("dijkstra", "bellman_ford"),
+    ConceptGraph.SPANNING_TREE: ("kruskal", "prim"),
+    ConceptGraph.MAX_FLOW: ("edmonds_karp",),
+}
+
+
+def steps_for(concept: str, params: dict[str, Any]) -> list[Step]:
+    """The computed states for a concept's parameters, or :class:`GraphError`.
+
+    One entry point for the scene builder, the precondition check and the
+    catalog, so they cannot disagree about what a request produces.
+    """
+    algorithms = CONCEPT_ALGORITHMS[concept]
+    algorithm = str(params.get("algorithm", algorithms[0])).strip().lower()
+    if algorithm not in algorithms:
+        raise GraphError(f"{concept} runs {' or '.join(algorithms)}, not {algorithm!r}")
+    stock = STOCK_NETWORK if concept == ConceptGraph.MAX_FLOW else STOCK_GRAPH
+    graph = coerce_graph(params if params.get("nodes") is not None else {**stock, **params})
+    start = params.get("start", graph.ids[0])
+    if concept == ConceptGraph.TRAVERSAL:
+        order = params.get("neighbor_order")
+        return traversal_steps(graph, start, algorithm,
+                               [str(v) for v in order] if isinstance(order, list) else None)
+    if concept == ConceptGraph.SHORTEST_PATH:
+        return (dijkstra_steps if algorithm == "dijkstra" else bellman_ford_steps)(graph, start)
+    if concept == ConceptGraph.SPANNING_TREE:
+        return kruskal_steps(graph) if algorithm == "kruskal" else prim_steps(graph, start)
+    return max_flow_steps(graph, params.get("source", graph.ids[0]),
+                          params.get("sink", graph.ids[-1]))
+
+
+@topic(Topic.GRAPH, priority=20,
+       keywords=("图论", "最短路", "生成树", "网络流", "最大流", "最小割",
+                 "广度优先", "深度优先", "拓扑排序", "二分图",
+                 "bfs", "dfs", "dijkstra", "kruskal", "prim's", "bellman",
+                 "graph theory", "spanning tree", "shortest path", "max flow",
+                 "min cut", "adjacency"))
+class GraphTheory:
+    """A traversal, a shortest path, a spanning tree or a flow, every state computed."""
+
+    concepts = ConceptGraph

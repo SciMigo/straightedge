@@ -100,16 +100,26 @@ template are published by `list_templates()`; see
 diagram type returns an empty string so a missing optional figure does not abort
 an entire document build.
 
-The registry currently contains 39 templates across several domains:
+The registry currently contains 45 templates across several domains:
 
 - Math and data: function graphs, coordinate planes, Riemann sums, unit circles,
   polar graphs, matrices, step functions, heatmaps, tables, and compass-and-
   straightedge constructions with exactly placed points.
 - Computer science: binary trees, linked lists, stacks, queues, hash tables, call
-  stacks, dynamic-programming tables, architecture diagrams, and graphs. An
+  stacks, dynamic-programming tables, architecture diagrams, checked search
+  trees (BST, AVL, and left-leaning red-black), planar embeddings, network flows, and graphs. An
   [`algorithm_trace`](https://github.com/SciMigo/straightedge/blob/main/docs/algorithm-trace.md)
   composes these into a checked multi-step storyboard; a state machine is
-  `graph` with `directed` edges, not a template of its own.
+  `graph` with `directed` edges, not a template of its own. The same
+  [`graph`](docs/graph-theory.md) template supports checked bipartite layouts,
+  computed degrees and paths for graph-theory lessons; [`graph_traversal`](docs/graph-traversal.md)
+  computes complete, checked BFS or DFS storyboards with their queue or stack.
+  [`animated_trace`](docs/advanced-cs-figures.md) turns any checked figure
+  sequence into a standalone animated SVG without Manim or ffmpeg.
+  [`graph_algorithm`](docs/graph-animations.md) computes Dijkstra, Bellman–Ford,
+  Kruskal, Prim, topological order, strongly connected components, max flow
+  with its min cut, greedy colouring, bipartite matching, König's vertex cover
+  and Euler circuits — and refuses, with the witness, what the graph makes false.
 - Projects and business: Gantt charts, calendar roadmaps, org charts,
   work-breakdown structures, project networks, timelines, flow diagrams, and
   T-accounts.
@@ -176,7 +186,14 @@ straightedge render --template calculus/derivative_tangent    # the hero animati
 straightedge render --template conic/ellipse_foci --qc        # and check the frame
 straightedge render --template calculus/riemann_integral \
   --params '{"expression": "x**2 + 1"}'                        # refine with parameters
+straightedge render --template graph/max_flow                 # a computed graph lesson;
+                                                              # pass nodes/edges for your own graph
 ```
+
+The [`graph` topic](docs/graph-animations.md) — traversal, shortest path,
+spanning tree, max flow — runs the algorithm at generation time on the graph
+you pass and animates only the states it computed, one narration beat per
+step; a graph that makes the claim false is refused before the render.
 
 `--template` takes any id from `list-templates` and skips the keyword router
 entirely — it is how the animations in the gallery above are drawn.

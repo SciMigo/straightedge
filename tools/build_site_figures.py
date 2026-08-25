@@ -83,6 +83,48 @@ FIGURES: tuple[Figure, ...] = (
         "The first four steps of the vesica: two given points and two circles, "
         "with the two intersection points they produce",
     ),
+    # --- graph theory, computed (posts/graph-theory-computed.html) ----------
+    # The same stock graph the animation lane draws by prompt, listed in the
+    # order that keeps the circular layout crossing-free.
+    Figure(
+        "graph-kruskal-storyboard",
+        {"type": "graph_algorithm",
+         "params": {"algorithm": "kruskal", "animate": False, "columns": 4,
+                    "title": "Kruskal's algorithm: accept or reject, edge by edge",
+                    "nodes": [{"id": v} for v in "ACEDFB"],
+                    "edges": [{"from": a, "to": b, "weight": w} for a, b, w in
+                              [("A", "B", 4), ("A", "C", 2), ("B", "C", 5), ("B", "D", 10),
+                               ("C", "E", 3), ("E", "D", 4), ("D", "F", 11)]]}},
+        "Eight panels of Kruskal's algorithm on a six-vertex weighted graph; "
+        "accepted edges thicken, the two cycle-closing edges are drawn dashed",
+    ),
+    Figure(
+        "graph-coloring-animated",
+        {"type": "graph_algorithm",
+         "params": {"algorithm": "greedy_coloring", "animate": True,
+                    "duration_s": 1.2, "loop": True,
+                    "title": "Greedy colouring, computed frame by frame",
+                    "nodes": [{"id": v} for v in "ABCDEF"],
+                    "edges": [{"from": a, "to": b} for a, b in
+                              [("A", "B"), ("B", "C"), ("C", "D"), ("D", "E"), ("E", "A"),
+                               ("F", "A"), ("F", "B"), ("F", "C"), ("F", "D"), ("F", "E")]]}},
+        "A wheel on six vertices greedily coloured one vertex per frame, "
+        "cross-fading; the hub takes a fourth colour",
+    ),
+    Figure(
+        "graph-max-flow-storyboard",
+        {"type": "graph_algorithm",
+         "params": {"algorithm": "max_flow", "animate": False, "columns": 3,
+                    "directed": True, "graph_layout": "hierarchical",
+                    "source": "s", "sink": "t",
+                    "title": "Edmonds–Karp on a four-vertex network",
+                    "nodes": [{"id": v} for v in "sabt"],
+                    "edges": [{"from": a, "to": b, "capacity": c} for a, b, c in
+                              [("s", "a", 3), ("s", "b", 2), ("a", "b", 1),
+                               ("a", "t", 2), ("b", "t", 3)]]}},
+        "Five panels: three augmenting paths with their bottlenecks, then the "
+        "min cut whose capacity equals the flow value of 5",
+    ),
 )
 
 

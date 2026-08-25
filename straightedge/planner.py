@@ -11,6 +11,7 @@ from .calculus import (
 )
 from .conics import ConceptConic
 from .expr import parse_function, pretty_expr
+from .graphs import ConceptGraph
 from .linalg import VIEWS, ConceptLinAlg
 from .models import AnimationPlan, Topic
 from .topics import detect, plan_builder, plan_for
@@ -650,3 +651,60 @@ def _linear_algebra_plan(request: str) -> AnimationPlan:
     )
 
 
+
+
+# ----------------------------------------------------------------- graphs
+
+_GRAPH_CONCEPT_WORDS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
+    # (concept, algorithm, words) — first match wins, so the specific
+    # algorithm names sit above the family words that would also claim them.
+    (ConceptGraph.MAX_FLOW, "edmonds_karp",
+     ("最大流", "最小割", "网络流", "max flow", "min cut", "flow network", "augmenting")),
+    (ConceptGraph.SHORTEST_PATH, "bellman_ford", ("bellman", "负权", "negative weight")),
+    (ConceptGraph.SHORTEST_PATH, "dijkstra", ("dijkstra", "最短路", "shortest path")),
+    (ConceptGraph.SPANNING_TREE, "prim", ("prim's", "prim 算法", "普里姆")),
+    (ConceptGraph.SPANNING_TREE, "kruskal", ("kruskal", "生成树", "spanning tree", "克鲁斯卡尔")),
+    (ConceptGraph.TRAVERSAL, "dfs", ("dfs", "深度优先", "depth-first", "depth first")),
+    (ConceptGraph.TRAVERSAL, "bfs", ("bfs", "广度优先", "breadth-first", "breadth first")),
+)
+
+_GRAPH_TITLES_ZH = {
+    ConceptGraph.TRAVERSAL: ("图的遍历", "逐步展示队列或栈如何决定访问顺序"),
+    ConceptGraph.SHORTEST_PATH: ("单源最短路径", "逐步松弛边，直到每个距离都确定"),
+    ConceptGraph.SPANNING_TREE: ("最小生成树", "按权重选边，展示接受与拒绝的理由"),
+    ConceptGraph.MAX_FLOW: ("最大流与最小割", "沿增广路径推流，最后给出割的证明"),
+}
+
+
+@plan_for(Topic.GRAPH)
+def _graph_plan(request: str) -> AnimationPlan:
+    """One of four computed lessons on a stock graph.
+
+    A text request carries no graph, so the plan names the concept and the
+    algorithm and the scene draws :data:`straightedge.graphs.STOCK_GRAPH`;
+    callers with a graph of their own pass it through ``parameters`` via
+    :func:`plan_from_template`, which is how a lab hands a student's graph in.
+    A request naming no algorithm gets breadth-first search — the traversal
+    every other graph algorithm is a variation on.
+    """
+    lowered = request.lower()
+    concept, algorithm = ConceptGraph.TRAVERSAL, "bfs"
+    for candidate, name, words in _GRAPH_CONCEPT_WORDS:
+        if any(word in lowered for word in words):
+            concept, algorithm = candidate, name
+            break
+    title, objective = _GRAPH_TITLES_ZH[concept]
+    return AnimationPlan(
+        topic=Topic.GRAPH,
+        concept=concept,
+        title_zh=title,
+        objective_zh=objective,
+        english_prompt=request,
+        parameters={"algorithm": algorithm},
+        elements=["graph", "vertex states", "edge states", "state panel", "caption"],
+        narration_zh=[
+            "先画出图，标出顶点和边。",
+            "按算法一步一步更新状态，每一步都由计算得到。",
+            "最后把结论固定在画面上。",
+        ],
+    )

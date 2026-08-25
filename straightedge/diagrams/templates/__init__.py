@@ -13,12 +13,18 @@ from . import dirichlet_function  # noqa: F401
 from . import step_function  # noqa: F401
 from . import array_state  # noqa: F401
 from . import algorithm_trace  # noqa: F401
+from . import animated_trace  # noqa: F401
+from . import graph_traversal  # noqa: F401
+from . import graph_algorithm  # noqa: F401
 from . import matrix_state  # noqa: F401
 from . import linked_list  # noqa: F401
 from . import binary_tree  # noqa: F401
+from . import search_tree  # noqa: F401
 from . import stack  # noqa: F401
 from . import queue  # noqa: F401
 from . import graph  # noqa: F401
+from . import planar_graph  # noqa: F401
+from . import network_flow  # noqa: F401
 from . import hash_table  # noqa: F401
 from . import call_stack  # noqa: F401
 from . import dp_table  # noqa: F401
@@ -54,12 +60,18 @@ __all__ = [
     "step_function",
     "array_state",
     "algorithm_trace",
+    "animated_trace",
+    "graph_traversal",
+    "graph_algorithm",
     "matrix_state",
     "linked_list",
     "binary_tree",
+    "search_tree",
     "stack",
     "queue",
     "graph",
+    "planar_graph",
+    "network_flow",
     "hash_table",
     "call_stack",
     "dp_table",

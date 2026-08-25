@@ -60,9 +60,10 @@ class TestTheFiguresAreOnThePagesThatClaimThem:
         page = (OUT.parent.parent / "index.html").read_text(encoding="utf-8")
         assert "assets/svg/construction-vesica.svg" in page
 
-    def test_the_post_references_both(self):
-        post = (OUT.parent.parent / "posts"
-                / "the-picture-is-not-the-proof.html").read_text(encoding="utf-8")
+    def test_every_declared_figure_is_on_some_page(self):
+        site = OUT.parent.parent
+        pages = "\n".join(p.read_text(encoding="utf-8")
+                          for p in [site / "index.html", *sorted((site / "posts").glob("*.html"))])
         for figure in FIGURES:
-            assert f"assets/svg/{figure.name}.svg" in post, (
+            assert f"assets/svg/{figure.name}.svg" in pages, (
                 f"{figure.name} is declared and built but appears on no page")
