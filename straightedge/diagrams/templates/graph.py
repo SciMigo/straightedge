@@ -722,6 +722,9 @@ class GraphTemplate:
 .graph-node-color-6 { fill: #CFFAFE; stroke: #0891B2; stroke-width: 2.5; }
 .graph-node-color-7 { fill: #FCE7F3; stroke: #DB2777; stroke-width: 2.5; }
 .graph-node-color-8 { fill: #E2E8F0; stroke: #475569; stroke-width: 2.5; }
+.graph-node-color-9 { fill: #FFEDD5; stroke: #EA580C; stroke-width: 2.5; }
+.graph-node-color-10 { fill: #ECFCCB; stroke: #65A30D; stroke-width: 2.5; }
+.graph-node-color-11 { fill: #E0E7FF; stroke: #4F46E5; stroke-width: 2.5; }
 .graph-node-label { font-size: 13px; font-family: sans-serif; fill: #212529; }
 .graph-edge { stroke: #868e96; stroke-width: 2; }
 .graph-edge-highlight { stroke: #9C27B0; stroke-width: 2.5; }

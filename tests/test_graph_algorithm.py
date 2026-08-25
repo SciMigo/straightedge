@@ -90,3 +90,19 @@ def test_matching_refuses_an_edge_inside_one_partition():
         "partitions": {"left": ["A", "B"], "right": ["C", "D"]},
     })
     assert any(f.check == "graph_algorithm_bipartite" for f in findings)
+
+
+def test_every_color_the_greedy_algorithm_can_assign_has_a_style():
+    import re
+    from straightedge.diagrams.templates.graph import GraphTemplate
+    from straightedge.diagrams.templates.graph_algorithm import MAX_VERTICES
+    styled = {int(n) for n in re.findall(r"\.graph-node-color-(\d+)", GraphTemplate._extra_styles())}
+    # A complete graph on the largest allowed vertex set needs one colour per
+    # vertex; K9 used to render its last three vertices in the plain fill.
+    ids = [str(index) for index in range(MAX_VERTICES)]
+    frames = _coloring({"algorithm": "greedy_coloring", "nodes": [{"id": x} for x in ids],
+                        "edges": [{"from": a, "to": b} for a in ids for b in ids if a < b]})
+    used = {int(state.split("-")[1])
+            for state in frames[-1]["visual"]["params"]["highlights"]["nodes"].values()}
+    assert used == set(range(1, MAX_VERTICES + 1))
+    assert used <= styled
