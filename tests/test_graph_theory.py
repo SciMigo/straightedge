@@ -111,3 +111,19 @@ def test_directed_degree_reports_in_and_out_separately():
     })
     labels = re.findall(r'class="graph-degree-label"[^>]*>([^<]+)<', svg)
     assert sorted(labels) == ["in 1 · out 0", "in 1 · out 2"]
+
+
+def test_partition_headings_clear_the_degree_labels():
+    from straightedge.diagrams.legibility import check_figure
+    svg = render_diagram({"type": "graph", "params": {
+        "nodes": [{"id": x} for x in "ABCDEF"],
+        "edges": [{"from": a, "to": b} for a, b in
+                  [("A", "D"), ("A", "E"), ("B", "E"), ("C", "F"), ("B", "F")]],
+        "layout": "bipartite",
+        "show_degrees": True,
+        "partition_labels": {"left": "L", "right": "R"},
+    }})
+    assert "deg 2" in svg and ">L<" in svg
+    problems = [f for f in check_figure(svg)
+                if f.check in {"text_overlap", "text_clipped"}]
+    assert problems == []

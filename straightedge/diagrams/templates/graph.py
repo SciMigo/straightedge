@@ -437,14 +437,19 @@ class GraphTemplate:
         if directed:
             elements.append(defs(self._arrow_marker(marker_id)))
 
+        # A partition heading sits above the column's top node — and above that
+        # node's degree label when there is one, which occupies the line the
+        # heading would otherwise use. The crop below is widened to include it.
+        heading_y: float | None = None
         if layout == "bipartite" and partition_labels:
+            heading_y = padding - node_radius - 12 - (16 if show_degrees else 0)
             for side, key in ((0, "left"), (1, "right")):
                 label = partition_labels.get(key)
                 if label is None:
                     continue
                 x = padding if side == 0 else svg_width - padding
                 elements.append(text(
-                    x, padding - node_radius - 12, str(label),
+                    x, heading_y, str(label),
                     **{"class": "graph-partition-label", "text_anchor": "middle"},
                 ))
 
@@ -660,6 +665,8 @@ class GraphTemplate:
             max_y = max(y for _, y in positions.values()) + radii
         else:
             min_x, min_y, max_x, max_y = 0.0, 0.0, float(svg_width), float(svg_height)
+        if heading_y is not None:
+            min_y = min(min_y, heading_y - 13.0)  # the heading's 13px ascent
 
         caption_gap = 30.0 if caption else 0.0
         if caption:
