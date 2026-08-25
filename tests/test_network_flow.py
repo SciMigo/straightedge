@@ -1,5 +1,7 @@
 """Network-flow figures enforce capacities, conservation, and cut claims."""
 
+import re
+
 from straightedge.diagrams import DIAGRAM_REGISTRY, render_diagram
 from straightedge.diagrams.registry import refusal_findings
 
@@ -86,3 +88,18 @@ def test_residual_view_contains_reverse_edges_for_positive_flow():
     # s→b is saturated, so only its reverse residual edge remains with r=2.
     assert "r=2" in svg
     assert "graph-edge-weight" in svg
+
+
+def _node_centres(svg):
+    return sorted(re.findall(r'<circle[^>]*cx="([\d.]+)"[^>]*cy="([\d.]+)"', svg))
+
+
+def test_residual_view_keeps_the_flow_networks_vertex_positions():
+    from straightedge.diagrams.legibility import check_figure
+    flow = render_diagram({"type": "network_flow", "params": _params(cut=["s", "a", "b"])})
+    residual = render_diagram({"type": "network_flow",
+                               "params": _params(cut=["s", "a", "b"], show_residual=True)})
+    # Laid out by the residual arcs alone, the vertices collapsed into a
+    # 112-unit-wide column; they must sit where the flow view puts them.
+    assert _node_centres(residual) == _node_centres(flow)
+    assert not [f for f in check_figure(residual) if f.check == "text_clipped"]

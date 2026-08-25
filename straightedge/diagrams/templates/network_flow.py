@@ -7,6 +7,7 @@ from typing import Any, Dict, List, Tuple
 
 from ...qc import Finding
 from ..registry import DIAGRAM_REGISTRY, register
+from .graph import _hierarchical_layout
 
 
 def _number(value: Any) -> bool:
@@ -199,8 +200,22 @@ class NetworkFlowTemplate:
         if isinstance(cut, list):
             node_highlights.update({str(node_id): "visited" for node_id in cut
                                     if str(node_id) not in {source, sink}})
+        drawn_nodes = nodes
+        if show_residual and layout == "hierarchical":
+            # The residual graph carries a reverse arc for every positive flow,
+            # so a hierarchy read off its own arcs finds nothing reachable
+            # beyond the first back-edge and stacks the vertices in a column.
+            # Place the vertices by the network's capacity arcs instead and
+            # draw the residual arcs over that fixed picture, as a lecture does.
+            placed = _hierarchical_layout(
+                [str(node["id"]) for node in nodes], edges, width, height,
+                int(params.get("padding", 50)), True,
+            )
+            drawn_nodes = [{**node, "x": placed[str(node["id"])][0], "y": placed[str(node["id"])][1]}
+                           for node in nodes]
+            layout = "custom"
         return DIAGRAM_REGISTRY["graph"].render({
-            "nodes": nodes,
+            "nodes": drawn_nodes,
             "edges": drawn_edges,
             "directed": True,
             "weighted": True,
