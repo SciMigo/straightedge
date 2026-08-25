@@ -15,7 +15,8 @@ logger = logging.getLogger(__name__)
 # still renders all of it, so *size* cannot tell a full plot from an empty one —
 # a bare coordinate plane is several kilobytes of grid lines. Count the marks
 # that carry data instead, and treat "chrome only" as blank.
-_CHROME_CLASS_HINTS = ("grid", "axis", "axes", "tick", "label", "title", "legend")
+_CHROME_CLASS_HINTS = ("grid", "axis", "axes", "tick", "label", "title", "legend",
+                       "background")
 _DRAWABLE_RE = re.compile(
     r"<(?:path|circle|rect|polygon|polyline|ellipse|image|use|line)\b([^>]*)>"
 )

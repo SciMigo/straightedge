@@ -89,6 +89,13 @@ svg = render_diagram(
 Path("unit-circle.svg").write_text(svg, encoding="utf-8")
 ```
 
+Four templates also accept a discoverable `theme`: `roadmap` can use
+`presentation` or `print-friendly`, `org_chart` `friendly` or `pastel`,
+`unit_circle` `classroom` or `dark`, and `linked_list` `playful` or `dark`.
+`professional` remains the byte-identical default. The exact choices for each
+template are published by `list_templates()`; see
+[`docs/diagram-themes.md`](docs/diagram-themes.md).
+
 `render_diagram()` needs no browser, network, or headless renderer. An unknown
 diagram type returns an empty string so a missing optional figure does not abort
 an entire document build.

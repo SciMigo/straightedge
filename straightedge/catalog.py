@@ -303,13 +303,23 @@ def _figure_templates() -> list[Template]:
     templates = []
     for name in sorted(DIAGRAM_REGISTRY):
         template = DIAGRAM_REGISTRY[name]
+        parameters = _dict_get_parameters(template.render, receiver="params")
+        # A template that accepts a theme owns its family (`themes`, name to
+        # palette); the keys are published as the enum, so what the template
+        # accepts and what it advertises cannot drift apart.
+        supported_themes = getattr(template, "themes", None)
+        if supported_themes:
+            for parameter in parameters:
+                if parameter["name"] == "theme":
+                    parameter["enum"] = list(supported_themes)
+                    break
         templates.append(Template(
             id=name,
             lane="figure",
             output="svg",
             invocation="name",
             params=sorted(_dict_get_keys(template.render, receiver="params")),
-            parameters=_dict_get_parameters(template.render, receiver="params"),
+            parameters=parameters,
             example=EXAMPLES.get(name, {}),
             summary=_first_docline(type(template)),
         ))

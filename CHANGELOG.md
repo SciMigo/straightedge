@@ -32,6 +32,21 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   it — scaled, offset and clipped as a viewer would — and reports a clipped or
   overlapped child label on the storyboard.
 
+- **Four pure-SVG templates accept a discoverable `theme` parameter:**
+  `roadmap`, `org_chart`, `unit_circle` and `linked_list`. Each template owns
+  its family of themes and publishes exactly those names through the catalog,
+  so an agent reads the enum rather than guessing from one global list.
+  `professional` is the byte-identical default — each template declares its
+  professional palette from the constants it always drew with and reads the
+  theme unconditionally, and a test holds the default to those literals.
+  Presentation, friendly, classroom, playful, pastel, dark, high-contrast and
+  print-friendly variants are offered where they fit the visual family; every
+  palette keeps the roles a reader tells categories apart by measurably apart,
+  and a name a family does not offer draws the default and is logged.
+- `straightedge.diagrams.themes` supplies the dependency-free semantic colour
+  roles those renderers share, `family()` for a template to declare its
+  themes, and `readable_on()` for text drawn over a saturated role colour.
+
 ### Fixed
 
 - **An arrowhead is not a data mark.** `count_data_marks` stripped `<style>` but
@@ -39,6 +54,11 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   one mark and an empty array, stack, queue or linked list passed as drawn —
   through `render_diagram`'s warning, the MCP `draw` tool's `blank_figure`, and
   every check built on them.
+
+### Documentation
+
+- Added `docs/diagram-themes.md`, including the distinction between SVG diagram
+  themes and the existing Manim animation styles.
 
 ## [0.6.0] - 2026-08-21
 

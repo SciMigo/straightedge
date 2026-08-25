@@ -15,11 +15,23 @@ from ..renderer import (
     group,
     line,
     path,
+    rect,
     style,
     svg_document,
     text,
     text_width,
 )
+from ..themes import DIAGRAM_THEMES, DiagramTheme, family, resolve_theme
+
+#: The pre-theme palette stated as roles: transparent paper, Material-style
+#: sin/cos/tan and point colours. The renderer reads the theme unconditionally,
+#: so `professional` is the old output by construction.
+PROFESSIONAL = DIAGRAM_THEMES["professional"].variant(
+    background="", text="#333", muted="#666", rule="#999",
+    success="#4CAF50", primary="#2E7D32", warning="#FF9800",
+    danger="#f44336", secondary="#2196F3", accent="#9C27B0",
+)
+THEMES = family(PROFESSIONAL, "classroom", "dark", "high-contrast", "print-friendly")
 
 
 # Common angles in radians with their labels
@@ -46,6 +58,8 @@ COMMON_ANGLES = {
 
 @register("unit_circle")
 class UnitCircleTemplate:
+    themes = THEMES
+
     """Render a unit circle with trigonometric annotations."""
 
     def render(self, params: Dict[str, Any]) -> str:
@@ -64,6 +78,7 @@ class UnitCircleTemplate:
             radius_scale: Visual radius multiplier (default: 1)
             width, height: SVG dimensions (default: 400x400)
             title: Optional title
+            theme: professional, classroom, dark, high-contrast, or print-friendly
         """
         # Extract parameters
         angle_deg = float(params.get("angle", 45))
@@ -79,6 +94,8 @@ class UnitCircleTemplate:
         svg_width = int(params.get("width", 400))
         svg_height = int(params.get("height", 400))
         title = params.get("title")
+        theme = resolve_theme(params.get("theme", "professional"), THEMES)
+        sin_colour, cos_colour, tan_colour = theme.danger, theme.secondary, theme.accent
 
         # Convert to radians
         angle_rad = math.radians(angle_deg)
@@ -95,7 +112,10 @@ class UnitCircleTemplate:
             return center_x + x * radius, center_y - y * radius
 
         elements: List[str] = []
-        elements.append(style(self._styles()))
+        elements.append(style(self._styles(theme)))
+        if theme.background:
+            elements.append(rect(0, 0, svg_width, svg_height, fill=theme.background,
+                                 **{"class": "uc-background"}))
 
         # Draw axes
         axes_elements = [
@@ -177,24 +197,24 @@ class UnitCircleTemplate:
         if show_sin and sin_val != 0:
             px, py = to_svg(cos_val, sin_val)
             sin_elements = [
-                line(px, center_y, px, py, stroke="#f44336", stroke_width="3"),
+                line(px, center_y, px, py, stroke=sin_colour, stroke_width="3"),
             ]
             # Label
             label_x = px + 10
             label_y = center_y + (py - center_y) / 2
-            sin_elements.append(text(label_x, label_y, f"sin={sin_val:.2f}", **{"class": "uc-value-label", "fill": "#f44336"}))
+            sin_elements.append(text(label_x, label_y, f"sin={sin_val:.2f}", **{"class": "uc-value-label", "fill": sin_colour}))
             elements.append(group("\n".join(sin_elements)))
 
         # Highlight cos (horizontal)
         if show_cos and cos_val != 0:
             px, _ = to_svg(cos_val, 0)
             cos_elements = [
-                line(center_x, center_y + 3, px, center_y + 3, stroke="#2196F3", stroke_width="3"),
+                line(center_x, center_y + 3, px, center_y + 3, stroke=cos_colour, stroke_width="3"),
             ]
             # Label
             label_x = center_x + (px - center_x) / 2
             label_y = center_y + 20
-            cos_elements.append(text(label_x, label_y, f"cos={cos_val:.2f}", **{"class": "uc-value-label", "fill": "#2196F3", "text_anchor": "middle"}))
+            cos_elements.append(text(label_x, label_y, f"cos={cos_val:.2f}", **{"class": "uc-value-label", "fill": cos_colour, "text_anchor": "middle"}))
             elements.append(group("\n".join(cos_elements)))
 
         # Tangent line (if enabled)
@@ -205,9 +225,9 @@ class UnitCircleTemplate:
             _, tan_py = to_svg(0, tan_val)
             tan_elements = [
                 # Line from (1,0) to (1, tan)
-                line(tan_px, center_y, tan_px, center_y - tan_val * radius, stroke="#9C27B0", stroke_width="2"),
+                line(tan_px, center_y, tan_px, center_y - tan_val * radius, stroke=tan_colour, stroke_width="2"),
                 # Line from origin to tangent point
-                line(center_x, center_y, tan_px, center_y - tan_val * radius, stroke="#9C27B0", stroke_width="1", stroke_dasharray="5,3"),
+                line(center_x, center_y, tan_px, center_y - tan_val * radius, stroke=tan_colour, stroke_width="1", stroke_dasharray="5,3"),
             ]
             elements.append(group("\n".join(tan_elements)))
 
@@ -264,20 +284,22 @@ class UnitCircleTemplate:
 
         return svg_document("\n".join(elements), svg_width, svg_height)
 
-    def _styles(self) -> str:
-        return """
-.uc-axis { stroke: #333; stroke-width: 2; }
-.uc-axis-label { font-size: 14px; font-family: sans-serif; fill: #333; font-style: italic; }
-.uc-circle { fill: none; stroke: #666; stroke-width: 2; }
-.uc-radius { stroke: #333; stroke-width: 2; }
-.uc-triangle { stroke: #999; stroke-width: 1; stroke-dasharray: 4,2; }
-.uc-point { fill: #4CAF50; stroke: #2E7D32; stroke-width: 2; }
-.uc-arc { fill: none; stroke: #FF9800; stroke-width: 2; }
-.uc-angle-text { font-size: 12px; font-family: sans-serif; fill: #FF9800; }
-.uc-label { font-size: 11px; font-family: sans-serif; fill: #666; }
-.uc-value-label { font-size: 11px; font-family: sans-serif; font-weight: bold; }
-.uc-coord-label { font-size: 11px; font-family: sans-serif; fill: #333; }
-.uc-angle-point { fill: #999; }
-.uc-angle-label { font-size: 9px; font-family: sans-serif; fill: #666; }
-.uc-title { font-size: 14px; font-family: sans-serif; fill: #333; font-weight: bold; }
+    def _styles(self, theme: DiagramTheme) -> str:
+        axis, muted, rule = theme.text, theme.muted, theme.rule
+        point, point_rule, angle = theme.success, theme.primary, theme.warning
+        return f"""
+.uc-axis {{ stroke: {axis}; stroke-width: 2; }}
+.uc-axis-label {{ font-size: 14px; font-family: sans-serif; fill: {axis}; font-style: italic; }}
+.uc-circle {{ fill: none; stroke: {muted}; stroke-width: 2; }}
+.uc-radius {{ stroke: {axis}; stroke-width: 2; }}
+.uc-triangle {{ stroke: {rule}; stroke-width: 1; stroke-dasharray: 4,2; }}
+.uc-point {{ fill: {point}; stroke: {point_rule}; stroke-width: 2; }}
+.uc-arc {{ fill: none; stroke: {angle}; stroke-width: 2; }}
+.uc-angle-text {{ font-size: 12px; font-family: sans-serif; fill: {angle}; }}
+.uc-label {{ font-size: 11px; font-family: sans-serif; fill: {muted}; }}
+.uc-value-label {{ font-size: 11px; font-family: sans-serif; font-weight: bold; }}
+.uc-coord-label {{ font-size: 11px; font-family: sans-serif; fill: {axis}; }}
+.uc-angle-point {{ fill: {rule}; }}
+.uc-angle-label {{ font-size: 9px; font-family: sans-serif; fill: {muted}; }}
+.uc-title {{ font-size: 14px; font-family: sans-serif; fill: {axis}; font-weight: bold; }}
 """
