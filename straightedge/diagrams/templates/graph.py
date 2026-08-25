@@ -6,6 +6,7 @@ import hashlib
 import math
 from typing import Any, Dict, List, Tuple
 
+from ...qc import Finding
 from ..registry import register
 from ..renderer import (
     DEFAULT_STYLES,
@@ -161,9 +162,175 @@ def _hierarchical_layout(
     return positions
 
 
+def _bipartition(
+    node_ids: List[str],
+    edges: List[Dict[str, Any]],
+    declared: Any,
+) -> Tuple[Dict[str, int], List[Finding]]:
+    """Return a checked two-colouring, inferred when none is declared.
+
+    Direction and weights are deliberately ignored: bipartiteness belongs to
+    the underlying graph.  The colouring is deterministic across disconnected
+    components because both the node and neighbour orders come from the input.
+    """
+    known = set(node_ids)
+    findings: List[Finding] = []
+    adjacency: Dict[str, List[str]] = {node_id: [] for node_id in node_ids}
+    valid_edges: List[Tuple[str, str]] = []
+    for edge in edges:
+        if not isinstance(edge, dict):
+            continue
+        source, target = str(edge.get("from")), str(edge.get("to"))
+        missing = [endpoint for endpoint in (source, target) if endpoint not in known]
+        if missing:
+            findings.append(Finding(
+                "graph_endpoints", "error",
+                f"edge {source!r}–{target!r} refers to unknown vertex {missing[0]!r}",
+                label=f"{source}–{target}",
+            ))
+            continue
+        adjacency[source].append(target)
+        adjacency[target].append(source)
+        valid_edges.append((source, target))
+
+    colours: Dict[str, int] = {}
+    if declared is not None:
+        if not isinstance(declared, dict):
+            return {}, findings + [Finding(
+                "bipartition", "error",
+                "partitions must be an object with left and right vertex arrays",
+            )]
+        for side, key in enumerate(("left", "right")):
+            members = declared.get(key, [])
+            if not isinstance(members, list):
+                findings.append(Finding(
+                    "bipartition", "error", f"partitions.{key} must be an array"
+                ))
+                continue
+            for raw in members:
+                node_id = str(raw)
+                if node_id not in known:
+                    findings.append(Finding(
+                        "bipartition", "error",
+                        f"partitions.{key} contains unknown vertex {node_id!r}",
+                        label=node_id,
+                    ))
+                elif node_id in colours:
+                    findings.append(Finding(
+                        "bipartition", "error",
+                        f"vertex {node_id!r} occurs in both partitions",
+                        label=node_id,
+                    ))
+                else:
+                    colours[node_id] = side
+        omitted = [node_id for node_id in node_ids if node_id not in colours]
+        if omitted:
+            findings.append(Finding(
+                "bipartition", "error",
+                "declared partitions omit vertex/vertices " + ", ".join(omitted),
+            ))
+    else:
+        for root in node_ids:
+            if root in colours:
+                continue
+            colours[root] = 0
+            queue = [root]
+            while queue:
+                current = queue.pop(0)
+                for neighbor in adjacency[current]:
+                    expected = 1 - colours[current]
+                    if neighbor not in colours:
+                        colours[neighbor] = expected
+                        queue.append(neighbor)
+                    elif colours[neighbor] != expected:
+                        findings.append(Finding(
+                            "bipartition", "error",
+                            f"edge {current!r}–{neighbor!r} closes an odd cycle; "
+                            "the graph is not bipartite",
+                            label=f"{current}–{neighbor}",
+                        ))
+                        return colours, findings
+
+    for source, target in valid_edges:
+        if source in colours and target in colours and colours[source] == colours[target]:
+            findings.append(Finding(
+                "bipartition", "error",
+                f"edge {source!r}–{target!r} lies within one partition",
+                label=f"{source}–{target}",
+            ))
+    return colours, findings
+
+
+def _bipartite_layout(
+    node_ids: List[str],
+    colours: Dict[str, int],
+    width: int,
+    height: int,
+    padding: int,
+) -> Dict[str, Tuple[float, float]]:
+    positions: Dict[str, Tuple[float, float]] = {}
+    for side in (0, 1):
+        members = [node_id for node_id in node_ids if colours.get(node_id) == side]
+        x = padding if side == 0 else width - padding
+        if len(members) == 1:
+            positions[members[0]] = (x, height / 2)
+            continue
+        step = (height - 2 * padding) / max(len(members) - 1, 1)
+        for index, node_id in enumerate(members):
+            positions[node_id] = (x, padding + index * step)
+    return positions
+
+
+def _degree_labels(
+    node_ids: List[str], edges: List[Dict[str, Any]], directed: bool
+) -> Dict[str, str]:
+    """Compute graph-theoretic degrees; an undirected loop contributes two."""
+    known = set(node_ids)
+    incoming = {node_id: 0 for node_id in node_ids}
+    outgoing = {node_id: 0 for node_id in node_ids}
+    degree = {node_id: 0 for node_id in node_ids}
+    for edge in edges:
+        if not isinstance(edge, dict):
+            continue
+        source, target = str(edge.get("from")), str(edge.get("to"))
+        if source not in known or target not in known:
+            continue
+        if directed:
+            outgoing[source] += 1
+            incoming[target] += 1
+        elif source == target:
+            degree[source] += 2
+        else:
+            degree[source] += 1
+            degree[target] += 1
+    if directed:
+        return {
+            node_id: f"in {incoming[node_id]} · out {outgoing[node_id]}"
+            for node_id in node_ids
+        }
+    return {node_id: f"deg {degree[node_id]}" for node_id in node_ids}
+
+
 @register("graph")
 class GraphTemplate:
     """Render a graph diagram with nodes, edges, and highlights."""
+
+    def refusal_findings(self, params: Dict[str, Any]) -> List[Finding]:
+        """Explain why a requested bipartite drawing is mathematically false."""
+        if str(params.get("layout", "force")) != "bipartite":
+            return []
+        nodes = params.get("nodes", [])
+        edges = params.get("edges", [])
+        nodes = nodes if isinstance(nodes, list) else []
+        edges = edges if isinstance(edges, list) else []
+        node_ids = [str(node.get("id")) for node in nodes if isinstance(node, dict)]
+        if len(node_ids) != len(set(node_ids)):
+            return [Finding(
+                "graph_vertices", "error",
+                "a bipartite graph requires unique vertex ids",
+            )]
+        _, findings = _bipartition(node_ids, edges, params.get("partitions"))
+        return findings
 
     def render(self, params: Dict[str, Any]) -> str:
         nodes = params.get("nodes", [])
@@ -188,8 +355,15 @@ class GraphTemplate:
         svg_width = int(params.get("width", 600))
         svg_height = int(params.get("height", 360))
         padding = int(params.get("padding", 50))
+        show_degrees = bool(params.get("show_degrees", False))
+        partition_labels = params.get("partition_labels", {})
+        if not isinstance(partition_labels, dict):
+            partition_labels = {}
 
         node_ids = [str(node.get("id")) for node in nodes if isinstance(node, dict)]
+
+        if self.refusal_findings(params):
+            return ""
 
         positions: Dict[str, Tuple[float, float]] = {}
         if layout == "custom":
@@ -217,6 +391,11 @@ class GraphTemplate:
                     svg_height,
                     padding,
                     directed,
+                )
+            elif layout == "bipartite":
+                colours, _ = _bipartition(node_ids, edges, params.get("partitions"))
+                positions = _bipartite_layout(
+                    node_ids, colours, svg_width, svg_height, padding
                 )
             else:
                 positions = _circular_layout(node_ids, svg_width, svg_height, padding)
@@ -257,6 +436,17 @@ class GraphTemplate:
         elements.append(style(DEFAULT_STYLES + self._extra_styles()))
         if directed:
             elements.append(defs(self._arrow_marker(marker_id)))
+
+        if layout == "bipartite" and partition_labels:
+            for side, key in ((0, "left"), (1, "right")):
+                label = partition_labels.get(key)
+                if label is None:
+                    continue
+                x = padding if side == 0 else svg_width - padding
+                elements.append(text(
+                    x, padding - node_radius - 12, str(label),
+                    **{"class": "graph-partition-label", "text_anchor": "middle"},
+                ))
 
         # Draw edges first (behind nodes)
         for edge in edges:
@@ -408,6 +598,8 @@ class GraphTemplate:
                     )
                 )
 
+        computed_degrees = _degree_labels(node_ids, edges, directed) if show_degrees else {}
+
         # Draw nodes
         for node in nodes:
             if not isinstance(node, dict):
@@ -442,6 +634,15 @@ class GraphTemplate:
                         },
                     )
                 )
+
+            degree = computed_degrees.get(node_id)
+            if degree is not None:
+                elements.append(text(
+                    x,
+                    y - node_radius - 8,
+                    degree,
+                    **{"class": "graph-degree-label", "text_anchor": "middle"},
+                ))
 
         # Crop the canvas to what was actually drawn.
         #
@@ -497,12 +698,22 @@ class GraphTemplate:
 .graph-node-rejected { fill: #f8d7da; }
 .graph-node-comparison { fill: #FF9800; }
 .graph-node-path { fill: #9C27B0; }
+.graph-node-color-1 { fill: #DBEAFE; stroke: #2563EB; stroke-width: 2.5; }
+.graph-node-color-2 { fill: #FEE2E2; stroke: #DC2626; stroke-width: 2.5; }
+.graph-node-color-3 { fill: #DCFCE7; stroke: #16A34A; stroke-width: 2.5; }
+.graph-node-color-4 { fill: #FEF3C7; stroke: #D97706; stroke-width: 2.5; }
+.graph-node-color-5 { fill: #F3E8FF; stroke: #9333EA; stroke-width: 2.5; }
+.graph-node-color-6 { fill: #CFFAFE; stroke: #0891B2; stroke-width: 2.5; }
+.graph-node-color-7 { fill: #FCE7F3; stroke: #DB2777; stroke-width: 2.5; }
+.graph-node-color-8 { fill: #E2E8F0; stroke: #475569; stroke-width: 2.5; }
 .graph-node-label { font-size: 13px; font-family: sans-serif; fill: #212529; }
 .graph-edge { stroke: #868e96; stroke-width: 2; }
 .graph-edge-highlight { stroke: #9C27B0; stroke-width: 2.5; }
 .graph-edge-path { stroke: #9C27B0; stroke-width: 3; }
 .graph-edge-weight { font-size: 11px; font-family: sans-serif; fill: #495057; }
 .graph-distance-label { font-size: 11px; font-family: sans-serif; fill: #495057; }
+.graph-degree-label { font-size: 11px; font-family: sans-serif; fill: #495057; }
+.graph-partition-label { font-size: 13px; font-weight: 600; font-family: sans-serif; fill: #333; }
 .graph-caption { font-size: 13px; font-family: sans-serif; fill: #333; }
 """
 

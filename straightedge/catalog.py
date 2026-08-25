@@ -108,6 +108,8 @@ class Template:
     # them, so a caller who picks an animation template on a bare host finds out
     # by failing. Saying it here lets them choose instead.
     requires: list[str] = field(default_factory=list)
+    motion: str = "static"
+    checks: list[str] = field(default_factory=list)
 
     def __post_init__(self) -> None:
         """Take a copy of the example, so a template owns the one it publishes.
@@ -322,6 +324,8 @@ def _figure_templates() -> list[Template]:
             parameters=parameters,
             example=EXAMPLES.get(name, {}),
             summary=_first_docline(type(template)),
+            motion=str(getattr(template, "motion", "static")),
+            checks=list(getattr(template, "checks", []) or []),
         ))
     return templates
 

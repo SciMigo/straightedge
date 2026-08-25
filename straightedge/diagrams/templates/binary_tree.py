@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
 from ..registry import register
-from ..renderer import DEFAULT_STYLES, defs, line, style, svg_document, text, circle
+from ..renderer import (DEFAULT_STYLES, circle, defs, line, style, svg_document,
+                        text, text_width)
 
 
 STATE_COLORS = {
@@ -24,6 +26,7 @@ STATE_COLORS = {
 @dataclass
 class TreeNode:
     value: Any
+    color: Optional[str] = None
     left: Optional["TreeNode"] = None
     right: Optional["TreeNode"] = None
     index: Optional[int] = None
@@ -47,7 +50,12 @@ def _build_tree_from_dict(data: Any, depth: int = 0) -> Optional[TreeNode]:
     if not isinstance(data, dict):
         return None
     value = data.get("value")
-    node = TreeNode(value=value, depth=depth)
+    color = data.get("color")
+    node = TreeNode(
+        value=value,
+        color=str(color).lower() if color is not None else None,
+        depth=depth,
+    )
     node.left = _build_tree_from_dict(data.get("left"), depth + 1)
     node.right = _build_tree_from_dict(data.get("right"), depth + 1)
     return node
@@ -116,8 +124,16 @@ class BinaryTreeTemplate:
 
         spacing_x = int(params.get("node_spacing_x", 70))
         spacing_y = int(params.get("node_spacing_y", 80))
-        padding = 30
         node_radius = int(params.get("node_radius", 18))
+        note_half_width = 0.0
+        if isinstance(annotations, list):
+            note_half_width = max(
+                (text_width(str(note.get("text", "")), 12) / 2
+                 for note in annotations if isinstance(note, dict)),
+                default=0.0,
+            )
+        padding = max(30, node_radius + 44 if annotations else 30,
+                      int(math.ceil(note_half_width + 4)))
 
         nodes = _assign_positions(root, spacing_x, spacing_y, padding)
 
@@ -173,13 +189,18 @@ class BinaryTreeTemplate:
                 state = highlights.get(str(node.index), state)
             state = highlights.get(str(node.value), state)
             node_class = f"tree-node tree-node-{state}"
+            if node.color in {"red", "black"}:
+                node_class += f" tree-node-color-{node.color}"
             elements.append(circle(node.x, node.y, node_radius, **{"class": node_class}))
+            label_class = "tree-node-value"
+            if node.color in {"red", "black"}:
+                label_class += " tree-node-value-inverse"
             elements.append(
                 text(
                     node.x,
                     node.y + 5,
                     str(node.value),
-                    **{"class": "tree-node-value", "text_anchor": "middle"},
+                    **{"class": label_class, "text_anchor": "middle"},
                 )
             )
 
@@ -274,7 +295,10 @@ class BinaryTreeTemplate:
 .tree-node-invalid { fill: #f8d7da; }
 .tree-node-rejected { fill: #f8d7da; }
 .tree-node-comparison { fill: #FF9800; }
+.tree-node-color-red { fill: #c62828; stroke: #7f1d1d; }
+.tree-node-color-black { fill: #20242a; stroke: #050608; }
 .tree-node-value { font-size: 13px; font-family: sans-serif; fill: #212529; }
+.tree-node-value-inverse { fill: #fff; font-weight: 600; }
 .tree-edge { stroke: #555; }
 .tree-edge-path { stroke: #9C27B0; stroke-width: 2.5; }
 .tree-pointer-label { font-size: 12px; font-family: sans-serif; font-weight: 600; }

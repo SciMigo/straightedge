@@ -8,6 +8,39 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **`graph_algorithm` computes checked teaching traces.** Dijkstra shortest
+  paths, Kruskal minimum spanning forests, greedy vertex colouring, and
+  augmenting-path bipartite matching now render as either printable
+  storyboards or dependency-free animated SVG. The public catalogue also
+  publishes each figure's motion capability and stronger template checks for
+  hosted agents to discover.
+
+- **Checked advanced-CS figures plus a dependency-free animation lane.**
+  `animated_trace` cross-fades any sequence of registered SVG figures using
+  native SVG timing and preserves every child's refusal checks. `search_tree`
+  constructs or validates BST, AVL and red-black trees and can animate an
+  insertion sequence; `planar_graph` checks straight-line crossings and the
+  component-aware Euler formula; `network_flow` checks capacity bounds, flow
+  conservation, residual paths, cuts and max-flow/min-cut certificates.
+  Documented together in `docs/advanced-cs-figures.md`.
+
+- **The `graph` template is ready for graph-theory lessons.** A checked
+  `bipartite` layout either infers a deterministic two-colouring or verifies
+  declared left/right vertex sets; odd cycles, self-loops, unknown endpoints,
+  incomplete partitions and within-set edges are refused with structured
+  findings rather than drawn as a false bipartite graph. Optional partition
+  headings and computed degree labels cover both undirected degree (loops count
+  twice) and separate directed in/out degrees. Copyable examples and the full
+  parameter contract live in `docs/graph-theory.md`.
+
+- **`graph_traversal` computes BFS and DFS storyboards.** Given a graph, start
+  vertex and optional neighbor order, it derives every state instead of asking
+  an author to hand-write plausible highlights: the current vertex, discovered
+  frontier, visit order, traversal-tree edges, and queue or stack appear on
+  each panel. Directed reachability and BFS/DFS tie-breaking are explicit;
+  invalid endpoints, starts and orders are refused, as are traces too large to
+  keep readable. Documented in `docs/graph-traversal.md`.
+
 - **`algorithm_trace`: a checked multi-step storyboard for the CS figures.**
   One state is not an algorithm. The template composes the existing
   `array_state`, `stack`, `queue`, tree, graph and table renderers into an
@@ -48,6 +81,9 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   themes, and `readable_on()` for text drawn over a saturated role colour.
 
 ### Fixed
+
+- Binary-tree annotations now contribute to the canvas padding, so balance
+  factors, heights, and existing notes no longer run beyond the SVG frame.
 
 - **An arrowhead is not a data mark.** `count_data_marks` stripped `<style>` but
   not `<defs>`, so the `<marker>` polygon that twenty templates define counted as
