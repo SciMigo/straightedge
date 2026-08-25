@@ -48,7 +48,9 @@ def test_kruskal_computes_a_minimum_spanning_forest_storyboard():
                                  {"from": "A", "to": "C", "weight": 1},
                                  {"from": "B", "to": "C", "weight": 2},
                                  {"from": "C", "to": "D", "weight": 3}]})
-    assert frames[-1]["visual"]["params"]["caption"] == "forest weight = 6"
+    assert "forest weight = 6" in frames[-1]["visual"]["params"]["caption"]
+    # The edge that would close a cycle is drawn as rejected, not omitted.
+    assert any(f["visual"]["params"]["highlights"]["rejected_edges"] for f in frames)
 
 
 def test_greedy_coloring_assigns_visible_valid_colors():
@@ -79,7 +81,7 @@ def test_matching_computes_augmenting_states():
                         "edges": [{"from": "u1", "to": "v1"}, {"from": "u1", "to": "v2"},
                                   {"from": "u2", "to": "v1"}],
                         "partitions": {"left": ["u1", "u2"], "right": ["v1", "v2"]}})
-    assert frames[-1]["visual"]["params"]["caption"] == "matching size = 2"
+    assert "matching size = 2" in frames[-1]["visual"]["params"]["caption"]
     assert "Augment from u2" in svg
 
 

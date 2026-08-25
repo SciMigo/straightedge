@@ -43,6 +43,9 @@ from straightedge.conics import CONE_TAN_MAX as _CONE_TAN_MAX
 from straightedge.conics import CONE_TAN_MIN as _CONE_TAN_MIN
 from straightedge.conics import ConceptConic
 from straightedge.expr import validate_expression
+from straightedge.graph_scene import MAX_STEPS as _GRAPH_MAX_STEPS
+from straightedge.graph_scene import MAX_VERTICES as _GRAPH_MAX_VERTICES
+from straightedge.graphs import ConceptGraph, GraphError, coerce_graph, steps_for
 from straightedge.linalg import (
     MAX_DIM,
     VIEWS,
@@ -466,3 +469,52 @@ def _is_vertex_name(name: str) -> bool:
         and name[0].isascii() and name[0].isupper()
         and (len(name) == 1 or name[1].isdigit())
     )
+
+
+# ------------------------------------------------------------------ graphs
+
+@register(ConceptGraph.TRAVERSAL, ConceptGraph.SHORTEST_PATH,
+          ConceptGraph.SPANNING_TREE, ConceptGraph.MAX_FLOW)
+def _graph_states_are_computable(plan: AnimationPlan) -> list[Violation]:
+    """The algorithm must run on the supplied graph, and fit in one video.
+
+    Runs the same :func:`steps_for` the scene builder draws from, so what is
+    refused here is exactly what would not have been drawn. Anything the
+    algorithm cannot honestly do — a negative weight under Dijkstra, a source
+    equal to the sink, an edge to a vertex that does not exist — is an error
+    carrying the witness in its message.
+
+    The parameter reads below are literal so the catalog can publish them.
+    """
+    concept = plan.concept or ConceptGraph.TRAVERSAL
+    params = {
+        "nodes": plan.parameters.get("nodes"),
+        "edges": plan.parameters.get("edges"),
+        "directed": plan.parameters.get("directed"),
+        "algorithm": plan.parameters.get("algorithm"),
+        "start": plan.parameters.get("start"),
+        "source": plan.parameters.get("source"),
+        "sink": plan.parameters.get("sink"),
+        "neighbor_order": plan.parameters.get("neighbor_order"),
+        "layout": plan.parameters.get("layout"),
+        "title": plan.parameters.get("title"),
+    }
+    params = {key: value for key, value in params.items() if value is not None}
+    out: list[Violation] = []
+    try:
+        steps = steps_for(concept, params)
+    except GraphError as exc:
+        return [Violation(concept, None, f"{exc}; nothing would be drawn")]
+    if params.get("nodes") is not None:
+        vertices = len(coerce_graph(params).ids)
+        if vertices > _GRAPH_MAX_VERTICES:
+            out.append(Violation(
+                concept, "nodes",
+                f"{vertices} vertices; at most {_GRAPH_MAX_VERTICES} stay legible "
+                "beside the state panel in one frame"))
+    if len(steps) > _GRAPH_MAX_STEPS:
+        out.append(Violation(
+            concept, "nodes",
+            f"the algorithm takes {len(steps)} steps; at most {_GRAPH_MAX_STEPS} fit "
+            "one narrated video, and the scene would stop early"))
+    return out

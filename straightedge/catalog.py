@@ -217,6 +217,10 @@ CANONICAL_PROMPTS: dict[str, str] = {
     "3d/sphere_section": "球的截面是什么形状",
     "linear_algebra/linear_map": "画一个线性变换，展示特征向量",
     "linear_algebra/matmul_views": "画矩阵乘法，用外积的方式展示",
+    "graph/traversal": "画一个图的广度优先搜索 BFS",
+    "graph/shortest_path": "用 Dijkstra 算法求最短路",
+    "graph/spanning_tree": "用 Kruskal 算法求最小生成树",
+    "graph/max_flow": "画网络流的最大流和最小割",
 }
 
 
@@ -230,6 +234,9 @@ TOPIC_PROMPTS: dict[str, str] = {
     "conic": "画一个椭圆",
     "3d": "画一个正方体",
     "calculus": "画一个导数",
+    # ``graph`` always specialises to a concept, and the id ``graph`` is the
+    # figure template's; probing it here would list the topic under a name
+    # that draws an SVG when named. Its concepts are what the catalog lists.
 }
 
 

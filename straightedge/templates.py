@@ -8,6 +8,7 @@ from .calculus import ConceptCalculus
 from .conics import CONE_HALF_ANGLE_TAN, CONE_TAN_MAX, CONE_TAN_MIN, ConceptConic
 from .expr import to_latex_expr, to_numpy_expr, validate_expression
 from .fonts import DEFAULT_CJK_FONT
+from . import graph_scene  # noqa: F401  (registers Topic.GRAPH's scene)
 from .labels import DEFAULT_LANGUAGE, translate
 from .linalg import (
     IDENTITY,

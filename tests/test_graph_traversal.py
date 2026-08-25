@@ -77,9 +77,10 @@ def test_dfs_agrees_with_the_recursive_reference_on_dense_graphs():
     edges = [{"from": a, "to": b} for a, b in
              [("A", "B"), ("A", "D"), ("B", "C"), ("B", "E"), ("C", "D"),
               ("C", "F"), ("D", "E"), ("E", "F"), ("A", "F")]]
-    from straightedge.diagrams.templates.graph_traversal import _adjacency
+    from straightedge.graphs import coerce_graph
+    graph = coerce_graph({"nodes": [{"id": v} for v in ids], "edges": edges})
     for order in (None, list("FEDCBA")):
-        adjacency = _adjacency(ids, edges, False, order)
+        adjacency = {v: graph.neighbors(v, order) for v in ids}
         for start in ids:
             expected_order, expected_tree = _recursive_dfs(adjacency, start)
             last = _traverse(ids, edges, start, "dfs", False, order)[-1]

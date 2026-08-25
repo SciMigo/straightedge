@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any, Dict, List, Tuple
 
 from ...qc import Finding
+from ...graphs import coerce_graph, traversal_steps
 from ..registry import DIAGRAM_REGISTRY, register
 
 
@@ -20,35 +21,6 @@ def _graph_parts(params: Dict[str, Any]) -> Tuple[List[Dict[str, Any]], List[Dic
     )
 
 
-def _adjacency(
-    node_ids: List[str],
-    edges: List[Dict[str, Any]],
-    directed: bool,
-    neighbor_order: Any,
-) -> Dict[str, List[str]]:
-    adjacency: Dict[str, List[str]] = {node_id: [] for node_id in node_ids}
-    for edge in edges:
-        if not isinstance(edge, dict):
-            continue
-        source, target = str(edge.get("from")), str(edge.get("to"))
-        if source not in adjacency or target not in adjacency:
-            continue
-        if target not in adjacency[source]:
-            adjacency[source].append(target)
-        if not directed and source not in adjacency[target]:
-            adjacency[target].append(source)
-
-    if isinstance(neighbor_order, list):
-        rank = {str(node_id): index for index, node_id in enumerate(neighbor_order)}
-        fallback = len(rank)
-        input_rank = {node_id: index for index, node_id in enumerate(node_ids)}
-        for neighbors in adjacency.values():
-            neighbors.sort(key=lambda node_id: (
-                rank.get(node_id, fallback), input_rank.get(node_id, len(node_ids))
-            ))
-    return adjacency
-
-
 def _traverse(
     node_ids: List[str],
     edges: List[Dict[str, Any]],
@@ -57,65 +29,15 @@ def _traverse(
     directed: bool,
     neighbor_order: Any,
 ) -> List[Dict[str, Any]]:
-    """Compute one snapshot per visit.
+    """Snapshots of :func:`straightedge.graphs.traversal_steps`, one per visit.
 
-    BFS discovers a vertex when it enters the queue, so the queue is the
-    frontier.  DFS is the textbook recursive procedure: a vertex is visited
-    when the recursion reaches it, and the displayed stack is the recursion
-    path from ``start`` to the current vertex.  A discovery-on-push stack
-    would be simpler, but it visits vertices in a different order and can draw
-    a "DFS tree" with cross edges, which no depth-first search produces.
+    The algorithm itself lives in :mod:`straightedge.graphs`, shared with the
+    animation lane; this is the shape the storyboard reads.
     """
-    adjacency = _adjacency(node_ids, edges, directed, neighbor_order)
-    visited: List[str] = []
-    tree_edges: List[Tuple[str, str]] = []
-    snapshots: List[Dict[str, Any]] = [{
-        "current": None, "frontier": [start], "visited": [], "tree_edges": []
-    }]
-
-    def record(current: str, frontier: List[str]) -> None:
-        snapshots.append({
-            "current": current,
-            "frontier": list(frontier),
-            "visited": list(visited),
-            "tree_edges": list(tree_edges),
-        })
-
-    if algorithm == "bfs":
-        queue = [start]
-        discovered = {start}
-        while queue:
-            current = queue.pop(0)
-            visited.append(current)
-            for neighbor in adjacency[current]:
-                if neighbor in discovered:
-                    continue
-                discovered.add(neighbor)
-                tree_edges.append((current, neighbor))
-                queue.append(neighbor)
-            record(current, queue)
-        return snapshots
-
-    # Each stack entry is (vertex, index of the next neighbor to examine); the
-    # vertices alone are the recursion path shown on the panel.
-    visited.append(start)
-    stack: List[Tuple[str, int]] = [(start, 0)]
-    record(start, [start])
-    while stack:
-        vertex, index = stack[-1]
-        neighbors = adjacency[vertex]
-        while index < len(neighbors) and neighbors[index] in visited:
-            index += 1
-        if index == len(neighbors):
-            stack.pop()
-            continue
-        neighbor = neighbors[index]
-        stack[-1] = (vertex, index + 1)
-        visited.append(neighbor)
-        tree_edges.append((vertex, neighbor))
-        stack.append((neighbor, 0))
-        record(neighbor, [entry[0] for entry in stack])
-    return snapshots
+    graph = coerce_graph({"nodes": [{"id": v} for v in node_ids],
+                          "edges": edges, "directed": directed})
+    order = [str(v) for v in neighbor_order] if isinstance(neighbor_order, list) else None
+    return [dict(step.extras) for step in traversal_steps(graph, start, algorithm, order)]
 
 
 def _findings(params: Dict[str, Any]) -> List[Finding]:
