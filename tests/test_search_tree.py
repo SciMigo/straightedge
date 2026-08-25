@@ -103,3 +103,9 @@ def test_explicit_tree_cannot_claim_an_insertion_animation():
 def test_duplicate_insertions_are_refused():
     params = {"kind": "bst", "values": [2, 1, 2]}
     assert "duplicate key" in refusal_findings("search_tree", params)[0].message
+
+
+def test_a_red_black_caption_is_a_title_not_an_identifier():
+    svg = render_diagram({"type": "search_tree",
+                          "params": {"kind": "red_black", "values": [2, 1, 3]}})
+    assert "Red-black tree" in svg and "RED_BLACK" not in svg

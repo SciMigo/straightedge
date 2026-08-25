@@ -248,6 +248,10 @@ def _prepare(params: Dict[str, Any]) -> Tuple[List[Finding], _Node | None, List[
     return [], root, states
 
 
+#: How each kind is named in a caption; the identifier is not a title.
+KIND_NAMES = {"bst": "BST", "avl": "AVL", "red_black": "Red-black"}
+
+
 @register("search_tree")
 class SearchTreeTemplate:
     """Construct or verify BST, AVL, and red-black trees, optionally animated."""
@@ -302,7 +306,7 @@ class SearchTreeTemplate:
                     }},
                 })
             return DIAGRAM_REGISTRY["animated_trace"].render({
-                "title": caption or f"{canonical_kind.upper()} insertion",
+                "title": caption or f"{KIND_NAMES[canonical_kind]} insertion",
                 "frames": frames,
                 "duration_s": duration,
                 "loop": loop,
@@ -313,7 +317,7 @@ class SearchTreeTemplate:
             "node_radius": node_radius,
             "node_spacing_x": spacing_x,
             "node_spacing_y": spacing_y,
-            "caption": caption or f"{canonical_kind.upper()} tree",
+            "caption": caption or f"{KIND_NAMES[canonical_kind]} tree",
         }
         if show_balance:
             tree_params["annotations"] = _annotations(root)
