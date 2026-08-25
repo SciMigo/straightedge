@@ -73,3 +73,29 @@ def test_loops_and_parallel_edges_are_outside_the_checked_simple_graph_surface()
                                             {"from": "B", "to": "A"}]}
     assert refusal_findings("planar_graph", loop)[0].check == "planar_simple_graph"
     assert refusal_findings("planar_graph", parallel)[0].check == "planar_simple_graph"
+
+
+def test_collinear_edges_through_a_shared_endpoint_are_refused():
+    # A–C passes through B, so A–B and A–C overlap; both share A, which the
+    # crossing test skips.
+    params = {"nodes": [{"id": "A", "x": 0, "y": 0}, {"id": "B", "x": 1, "y": 0},
+                        {"id": "C", "x": 2, "y": 0}],
+              "edges": [{"from": "A", "to": "B"}, {"from": "A", "to": "C"}]}
+    findings = refusal_findings("planar_graph", params)
+    assert findings[0].check == "planar_vertex_on_edge"
+    assert "'B' lies on edge 'A'–'C'" in findings[0].message
+    assert render_diagram({"type": "planar_graph", "params": params}) == ""
+
+
+def test_an_isolated_vertex_on_an_edge_is_refused():
+    params = {"nodes": [{"id": "A", "x": 0, "y": 0}, {"id": "B", "x": 2, "y": 2},
+                        {"id": "C", "x": 1, "y": 1}],
+              "edges": [{"from": "A", "to": "B"}]}
+    assert refusal_findings("planar_graph", params)[0].check == "planar_vertex_on_edge"
+
+
+def test_a_genuine_fork_is_still_accepted():
+    params = {"nodes": [{"id": "A", "x": 0, "y": 0}, {"id": "B", "x": 1, "y": 0},
+                        {"id": "C", "x": 0, "y": 1}],
+              "edges": [{"from": "A", "to": "B"}, {"from": "A", "to": "C"}]}
+    assert refusal_findings("planar_graph", params) == []

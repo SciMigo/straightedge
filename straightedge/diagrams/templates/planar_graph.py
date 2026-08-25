@@ -105,6 +105,22 @@ def _checked(params: Dict[str, Any]) -> Tuple[List[Finding], List[Dict[str, Any]
                     label=f"{a}–{b} × {c}–{d}",
                 )], [], []
 
+    # Crossing tests skip pairs that share an endpoint, which is right for a
+    # genuine fork and wrong when the two are collinear: A–B and A–C with B
+    # between A and C overlap along A–B. Every such case, and an isolated
+    # vertex sitting on an edge, has some vertex on the interior of a segment
+    # it does not belong to — so that is what is checked.
+    for a, b in segments:
+        for node_id in node_ids:
+            if node_id in (a, b):
+                continue
+            if _on_segment(positions[a], positions[b], positions[node_id]):
+                return [Finding(
+                    "planar_vertex_on_edge", "error",
+                    f"vertex {node_id!r} lies on edge {a!r}–{b!r}",
+                    label=f"{node_id} ∈ {a}–{b}",
+                )], [], []
+
     faces = params.get("faces")
     if faces is not None:
         if not isinstance(faces, int) or isinstance(faces, bool) or faces < 1:
