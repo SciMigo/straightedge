@@ -105,7 +105,11 @@ red_black = render_diagram({
 ```
 
 Construction uses ordinary BST insertion, AVL rotations, or left-leaning
-red-black insertion. Duplicate or incomparable keys are refused. Explicit
+red-black insertion (Sedgewick's 2-3 tree variant: red links lean left and a
+node has at most one). A sequence inserted here can therefore produce a
+different shape from the CLRS procedure — both are valid red-black trees,
+and the invariants below are what is checked. Duplicate or incomparable
+keys are refused. Explicit
 trees are checked for strict BST order; AVL trees additionally require every
 balance factor to be in `[-1, 1]`; red-black trees require a black root, valid
 colors, no red parent with a red child, and equal black-height on every path.

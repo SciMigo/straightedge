@@ -18,8 +18,9 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Checked advanced-CS figures plus a dependency-free animation lane.**
   `animated_trace` cross-fades any sequence of registered SVG figures using
   native SVG timing and preserves every child's refusal checks. `search_tree`
-  constructs or validates BST, AVL and red-black trees and can animate an
-  insertion sequence; `planar_graph` checks straight-line crossings and the
+  constructs or validates BST, AVL and red-black trees (insertion is the
+  left-leaning variant, so a tree built here can differ in shape from one
+  built by CLRS's procedure) and can animate an insertion sequence; `planar_graph` checks straight-line crossings and the
   component-aware Euler formula; `network_flow` checks capacity bounds, flow
   conservation, residual paths, cuts and max-flow/min-cut certificates.
   Documented together in `docs/advanced-cs-figures.md`.

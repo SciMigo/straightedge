@@ -1,4 +1,4 @@
-"""Checked binary-search, AVL, and red-black trees with insertion animation."""
+"""Checked binary-search, AVL, and left-leaning red-black trees, with insertion animation."""
 
 from __future__ import annotations
 
@@ -104,6 +104,12 @@ def _flip_colors(node: _Node) -> None:
 
 
 def _insert_red_black(node: _Node | None, value: Any) -> _Node:
+    """Left-leaning red-black insertion (Sedgewick), not the CLRS case analysis.
+
+    The result is a valid red-black tree, but its shape can differ from what
+    CLRS's procedure builds from the same sequence; explicit trees are only
+    checked against the invariants, so either shape verifies.
+    """
     if node is None:
         return _Node(value, color="red")
     if value < node.value:
