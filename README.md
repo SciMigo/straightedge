@@ -100,16 +100,22 @@ template are published by `list_templates()`; see
 diagram type returns an empty string so a missing optional figure does not abort
 an entire document build.
 
-The registry currently contains 39 templates across several domains:
+The registry currently contains 45 templates across several domains:
 
 - Math and data: function graphs, coordinate planes, Riemann sums, unit circles,
   polar graphs, matrices, step functions, heatmaps, tables, and compass-and-
   straightedge constructions with exactly placed points.
 - Computer science: binary trees, linked lists, stacks, queues, hash tables, call
-  stacks, dynamic-programming tables, architecture diagrams, and graphs. An
+  stacks, dynamic-programming tables, architecture diagrams, checked search
+  trees (BST, AVL, and left-leaning red-black), planar embeddings, network flows, and graphs. An
   [`algorithm_trace`](https://github.com/SciMigo/straightedge/blob/main/docs/algorithm-trace.md)
   composes these into a checked multi-step storyboard; a state machine is
-  `graph` with `directed` edges, not a template of its own.
+  `graph` with `directed` edges, not a template of its own. The same
+  [`graph`](docs/graph-theory.md) template supports checked bipartite layouts,
+  computed degrees and paths for graph-theory lessons; [`graph_traversal`](docs/graph-traversal.md)
+  computes complete, checked BFS or DFS storyboards with their queue or stack.
+  [`animated_trace`](docs/advanced-cs-figures.md) turns any checked figure
+  sequence into a standalone animated SVG without Manim or ffmpeg.
 - Projects and business: Gantt charts, calendar roadmaps, org charts,
   work-breakdown structures, project networks, timelines, flow diagrams, and
   T-accounts.

@@ -539,6 +539,12 @@ def _collect(node, matrix, boxes, styles, unfilled, clips, clip, truncated) -> N
         tag = child.tag.replace(_SVG, "")
         if tag in _DEFINITIONS:
             continue
+        classes = set((child.get("class") or "").split())
+        # Animated frames occupy the same canvas at different times. Each child
+        # was checked before `animated_trace` accepted it; measuring all of them
+        # simultaneously invents collisions between states that never coexist.
+        if "animated-trace-frame" in classes and "animated-trace-first" not in classes:
+            continue
         here = _transform_of(child.get("transform"))
         if here is None:  # unsupported transform: omit rather than misplace
             continue
