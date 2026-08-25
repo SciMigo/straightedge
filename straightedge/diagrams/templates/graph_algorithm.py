@@ -126,13 +126,17 @@ def _findings(params: Dict[str, Any]) -> List[Finding]:
     try:
         steps = compute_steps(params)
     except GraphError as exc:
+        check = _check_name(str(exc))
         witness = exc.witness
         label = None
         if isinstance(witness, (list, tuple)):
-            label = " → ".join(str(x) for x in witness) if len(witness) > 2 else "–".join(str(x) for x in witness)
+            # A cycle reads as a walk; a pair as an edge; anything else — the
+            # odd-degree vertices, a stranded component — as a plain list.
+            joiner = " → " if "cycle" in check else ("–" if len(witness) == 2 else ", ")
+            label = joiner.join(str(x) for x in witness)
         elif witness is not None:
             label = str(witness)
-        return [Finding(_check_name(str(exc)), "error", str(exc), label=label)]
+        return [Finding(check, "error", str(exc), label=label)]
     limit = MAX_ANIMATED_STEPS if bool(params.get("animate", True)) else MAX_STORYBOARD_STEPS
     if len(steps) > limit:
         return [Finding("graph_algorithm_size", "error",

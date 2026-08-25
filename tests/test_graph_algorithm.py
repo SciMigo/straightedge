@@ -108,3 +108,22 @@ def test_every_color_the_greedy_algorithm_can_assign_has_a_style():
             for state in frames[-1]["visual"]["params"]["highlights"]["nodes"].values()}
     assert used == set(range(1, MAX_VERTICES + 1))
     assert used <= styled
+
+
+def test_refusals_carry_the_witness_in_the_right_shape():
+    cyclic = {"algorithm": "topological_sort", "directed": True,
+              "nodes": [{"id": v} for v in "ABC"],
+              "edges": [{"from": a, "to": b} for a, b in [("A", "B"), ("B", "C"), ("C", "A")]]}
+    finding = refusal_findings("graph_algorithm", cyclic)[0]
+    assert finding.check == "graph_algorithm_cycle" and finding.label == "A → B → C"
+    k4 = {"algorithm": "euler", "nodes": [{"id": v} for v in "ABCD"],
+          "edges": [{"from": a, "to": b} for a, b in
+                    [("A", "B"), ("B", "C"), ("C", "D"), ("D", "A"), ("A", "C"), ("B", "D")]]}
+    finding = refusal_findings("graph_algorithm", k4)[0]
+    assert finding.check == "graph_algorithm_parity" and finding.label == "A, B, C, D"
+    negative = {"algorithm": "bellman_ford", "directed": True, "start": "A",
+                "nodes": [{"id": v} for v in "ABC"],
+                "edges": [{"from": "A", "to": "B", "weight": 1}, {"from": "B", "to": "C", "weight": -3},
+                          {"from": "C", "to": "B", "weight": 1}]}
+    finding = refusal_findings("graph_algorithm", negative)[0]
+    assert finding.check == "graph_algorithm_negative_cycle" and "→" in finding.label
