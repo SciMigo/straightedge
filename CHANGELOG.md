@@ -8,6 +8,21 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **`environment_diagram` can lay its frames out in a row.** `layout: "row"`
+  places frames left to right with the parent arrows running back along the
+  row. Three stacked frames are a tall, narrow figure that a 16:9 slide shows
+  small; the same frames in a row fill the slide's width and keep their labels
+  legible. The column layout stays the default and renders unchanged.
+
+### Fixed
+
+- **`environment_diagram` no longer reserves a function-object column it does
+  not use.** The canvas always made room on the right for `functions`, so a
+  diagram of frames alone carried an empty right half, and a consumer fitting
+  the canvas to a box — a slide, an `algorithm_trace` panel — shrank the frames
+  to make room for nothing. The column is laid out only when functions are
+  given.
+
 - **`algorithm_trace`: a checked multi-step storyboard for the CS figures.**
   One state is not an algorithm. The template composes the existing
   `array_state`, `stack`, `queue`, tree, graph and table renderers into an

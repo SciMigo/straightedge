@@ -36,13 +36,28 @@ def _arrow_marker() -> str:
 
 @register("environment_diagram")
 class EnvironmentDiagramTemplate:
-    """Render an environment diagram for closures and scope."""
+    """Render an environment diagram for closures and scope.
+
+    ``layout`` is ``"column"`` (frames stacked, the default) or ``"row"``
+    (frames left to right, parent arrows running back along the row). A row is
+    the shape a 16:9 slide has room for: three stacked frames are a tall, narrow
+    figure that a wide slide shows small, while the same three frames in a row
+    fill its width and keep their labels legible.
+
+    The function-object column on the right is laid out only when ``functions``
+    is given. It used to be reserved unconditionally, so a diagram of frames
+    alone carried an empty right half — and any consumer that fits the canvas
+    to a box (a slide, a storyboard panel) shrank the frames to make room for
+    nothing.
+    """
 
     def render(self, params: Dict[str, Any]) -> str:
         frames = params.get("frames", [])
         functions = params.get("functions", [])
         highlights = params.get("highlights", {})
         caption = params.get("caption")
+        layout = str(params.get("layout") or "column").strip().lower()
+        row_layout = layout == "row"
 
         if not isinstance(frames, list):
             frames = []
@@ -62,7 +77,7 @@ class EnvironmentDiagramTemplate:
         frame_padding = int(params.get("frame_padding", 8))
 
         func_width = int(params.get("function_width", 200))
-        func_x = frame_x + frame_width + int(params.get("function_gap_horizontal", 120))
+        function_gap_horizontal = int(params.get("function_gap_horizontal", 120))
         func_line_height = int(params.get("function_line_height", 16))
         func_padding = int(params.get("function_padding", 8))
         func_gap = int(params.get("function_gap_vertical", 16))
@@ -73,6 +88,8 @@ class EnvironmentDiagramTemplate:
 
         frame_positions: Dict[str, Tuple[int, int, int, int]] = {}
         current_y = frame_y
+        current_x = frame_x
+        tallest_frame = 0
         for frame in frames:
             if not isinstance(frame, dict):
                 continue
@@ -81,8 +98,22 @@ class EnvironmentDiagramTemplate:
                 bindings = []
             frame_height = header_height + frame_padding * 2 + max(1, len(bindings)) * row_height
             frame_id = str(frame.get("id", ""))
-            frame_positions[frame_id] = (frame_x, current_y, frame_width, frame_height)
-            current_y += frame_height + frame_gap
+            if row_layout:
+                frame_positions[frame_id] = (current_x, frame_y, frame_width, frame_height)
+                current_x += frame_width + frame_gap
+                tallest_frame = max(tallest_frame, frame_height)
+            else:
+                frame_positions[frame_id] = (frame_x, current_y, frame_width, frame_height)
+                current_y += frame_height + frame_gap
+        if row_layout:
+            # The column below advances current_y past every frame; give the
+            # row the same bottom edge so the caption and canvas height follow.
+            current_y = frame_y + tallest_frame + frame_gap
+            frames_right_edge = current_x - frame_gap if frame_positions else frame_x + frame_width
+        else:
+            frames_right_edge = frame_x + frame_width
+
+        func_x = frames_right_edge + function_gap_horizontal
 
         functions_by_parent: Dict[str, List[Dict[str, Any]]] = {}
         for func in functions:
@@ -110,10 +141,9 @@ class EnvironmentDiagramTemplate:
                 )
                 offset += func_height + func_gap
 
-        svg_width = max(
-            func_x + func_width + 40,
-            frame_x + frame_width + 40,
-        )
+        svg_width = frames_right_edge + 40
+        if func_positions:
+            svg_width = max(svg_width, func_x + func_width + 40)
         svg_height = max(
             current_y + (40 if caption else 20),
             frame_y + 60,
@@ -216,12 +246,22 @@ class EnvironmentDiagramTemplate:
             parent_id = frame.get("parent")
             if parent_id and str(parent_id) in frame_positions:
                 parent_x, parent_y, parent_w, parent_h = frame_positions[str(parent_id)]
+                if row_layout:
+                    # Child on the right, parent on the left: leave from the
+                    # child's left edge at header height, arrive at the parent's
+                    # right edge at the same height.
+                    arrow_y = y + header_height / 2
+                    start_x, start_y = x, arrow_y
+                    end_x, end_y = parent_x + parent_w, min(arrow_y, parent_y + parent_h - 4)
+                else:
+                    start_x, start_y = x + width / 2, y
+                    end_x, end_y = parent_x + parent_w / 2, parent_y + parent_h
                 elements.append(
                     line(
-                        x + width / 2,
-                        y,
-                        parent_x + parent_w / 2,
-                        parent_y + parent_h,
+                        start_x,
+                        start_y,
+                        end_x,
+                        end_y,
                         **{
                             "class": "env-parent-arrow",
                             "marker_end": "url(#env-arrow)",
