@@ -58,6 +58,11 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   each panel. Directed reachability and BFS/DFS tie-breaking are explicit;
   invalid endpoints, starts and orders are refused, as are traces too large to
   keep readable. Documented in `docs/graph-traversal.md`.
+- **`environment_diagram` can lay its frames out in a row.** `layout: "row"`
+  places frames left to right with the parent arrows running back along the
+  row. Three stacked frames are a tall, narrow figure that a 16:9 slide shows
+  small; the same frames in a row fill the slide's width and keep their labels
+  legible. The column layout stays the default and renders unchanged.
 
 - **`algorithm_trace`: a checked multi-step storyboard for the CS figures.**
   One state is not an algorithm. The template composes the existing
@@ -99,6 +104,13 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   themes, and `readable_on()` for text drawn over a saturated role colour.
 
 ### Fixed
+
+- **`environment_diagram` no longer reserves a function-object column it does
+  not use.** The canvas always made room on the right for `functions`, so a
+  diagram of frames alone carried an empty right half, and a consumer fitting
+  the canvas to a box — a slide, an `algorithm_trace` panel — shrank the frames
+  to make room for nothing. The column is laid out only when functions are
+  given.
 
 - Binary-tree annotations now contribute to the canvas padding, so balance
   factors, heights, and existing notes no longer run beyond the SVG frame.

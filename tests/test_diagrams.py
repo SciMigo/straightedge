@@ -1561,6 +1561,63 @@ class TestEnvironmentDiagramTemplate:
         svg = render_diagram(hint)
         assert "<svg" in svg
 
+    FRAMES_ONLY = [
+        {"id": "global", "label": "Global",
+         "bindings": [{"name": "make_adder", "value": "func make_adder(n)"}]},
+        {"id": "f1", "label": "f1: make_adder", "parent": "global",
+         "bindings": [{"name": "n", "value": "3"}]},
+        {"id": "f2", "label": "f2: adder", "parent": "f1",
+         "bindings": [{"name": "x", "value": "4"}, {"name": "return", "value": "7"}]},
+    ]
+
+    @staticmethod
+    def _canvas(svg):
+        import re
+        match = re.search(r'viewBox="0 0 ([\d.]+) ([\d.]+)"', svg)
+        return float(match.group(1)), float(match.group(2))
+
+    def test_frames_alone_do_not_reserve_the_function_column(self):
+        """A diagram of frames carried an empty right half reserved for
+        function objects it did not have; a consumer fitting the canvas to a
+        box then shrank the frames to make room for nothing."""
+        svg = render_diagram({"type": "environment_diagram",
+                              "params": {"frames": self.FRAMES_ONLY}})
+        width, _ = self._canvas(svg)
+        assert width == 40 + 260 + 40   # frame_x + frame_width + margin
+
+    def test_function_column_is_kept_when_functions_are_given(self):
+        svg = render_diagram({"type": "environment_diagram", "params": {
+            "frames": self.FRAMES_ONLY,
+            "functions": [{"id": "f0", "params": ["x"], "body": "x + n", "parent_frame": "f1"}],
+        }})
+        width, _ = self._canvas(svg)
+        assert width > 40 + 260 + 40
+        assert "env-function" in svg
+
+    def test_row_layout_places_frames_side_by_side(self):
+        import re
+        svg = render_diagram({"type": "environment_diagram",
+                              "params": {"frames": self.FRAMES_ONLY, "layout": "row"}})
+        width, height = self._canvas(svg)
+        xs = sorted({float(m) for m in re.findall(r'class="env-frame env-frame-\w+"[^>]*\bx="([\d.]+)"', svg)}
+                    | {float(m) for m in re.findall(r'<rect[^>]*\bx="([\d.]+)"[^>]*class="env-frame ', svg)})
+        assert len(xs) == 3, xs                      # three distinct columns
+        assert width == 40 + 3 * 260 + 2 * 28 + 40    # frames in a row, tight canvas
+        assert height < width                         # a landscape figure
+        assert svg.count('class="env-parent-arrow"') == 2
+
+    def test_column_layout_is_the_default_and_unchanged(self):
+        stacked = render_diagram({"type": "environment_diagram",
+                                  "params": {"frames": self.FRAMES_ONLY}})
+        explicit = render_diagram({"type": "environment_diagram",
+                                   "params": {"frames": self.FRAMES_ONLY, "layout": "column"}})
+        assert stacked == explicit
+        row = render_diagram({"type": "environment_diagram",
+                              "params": {"frames": self.FRAMES_ONLY, "layout": "row"}})
+        col_w, col_h = self._canvas(stacked)
+        row_w, row_h = self._canvas(row)
+        assert col_h > row_h and col_w < row_w   # the column stacks, the row spreads
+
 
 class TestGraphSelfLoops:
     """A self-loop is the same node twice — the common shape in Markov chains
