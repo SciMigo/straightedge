@@ -315,6 +315,32 @@
 
         <div class="gallery-grid">
           <article class="scene-card">
+            <video controls playsinline preload="metadata" poster="https://pub-ae0e951cb13d4628913ced2bc423d839.r2.dev/straightedge/assets/posters/graph-max-flow.jpg" aria-label="Max flow and min cut animation on a six-vertex network">
+              <source src="https://pub-ae0e951cb13d4628913ced2bc423d839.r2.dev/straightedge/assets/mp4/graph-max-flow.mp4" type="video/mp4">
+              Your browser does not support embedded video.
+            </video>
+            <div class="card-copy">
+              <p class="card-kicker">Graph theory · max flow, min cut</p>
+              <h3>The cut is the certificate</h3>
+              <p class="prompt"><span>Input intent</span> Run Edmonds–Karp on a network; every augmenting path is a beat, and the last frame is the min cut whose capacity equals the flow. <a href="posts/graph-theory-computed.html">Read the write-up &rarr;</a></p>
+              <details class="source-input"><summary>Original input · template call</summary><p><code>straightedge render --template graph/max_flow</code> — pass <code>nodes</code>, <code>edges</code>, <code>source</code>, <code>sink</code> for your own network.</p></details>
+            </div>
+          </article>
+
+          <article class="scene-card">
+            <video controls playsinline preload="metadata" poster="https://pub-ae0e951cb13d4628913ced2bc423d839.r2.dev/straightedge/assets/posters/graph-dijkstra.jpg" aria-label="Dijkstra's algorithm animation with a live distance table">
+              <source src="https://pub-ae0e951cb13d4628913ced2bc423d839.r2.dev/straightedge/assets/mp4/graph-dijkstra.mp4" type="video/mp4">
+              Your browser does not support embedded video.
+            </video>
+            <div class="card-copy">
+              <p class="card-kicker">Graph theory · shortest paths</p>
+              <h3>Settle the closest, relax the rest</h3>
+              <p class="prompt"><span>Input intent</span> Dijkstra from A with the tentative distances under every vertex and in a table; a negative weight is refused before the render.</p>
+              <details class="source-input"><summary>Original input · Chinese adapter</summary><p lang="zh">“用 Dijkstra 算法求最短路”</p></details>
+            </div>
+          </article>
+
+          <article class="scene-card">
             <video controls playsinline preload="metadata" poster="https://pub-ae0e951cb13d4628913ced2bc423d839.r2.dev/straightedge/assets/posters/derivative-tangent.jpg" aria-label="Derivative tangent animation">
               <source src="https://pub-ae0e951cb13d4628913ced2bc423d839.r2.dev/straightedge/assets/mp4/derivative-tangent.mp4" type="video/mp4">
               Your browser does not support embedded video.

@@ -85,7 +85,29 @@ class Scene:
 
 
 SCENES: list[Scene] = [
-    # --- new in this change -------------------------------------------------
+    # --- graph theory, computed ---------------------------------------------
+    # Every state in these is computed by straightedge/graphs.py at generation
+    # time; the stock graph and network are the ones a bare prompt draws.
+    Scene("graph-max-flow", "Graph theory · max flow, min cut",
+          "The cut is the certificate",
+          template="graph/max_flow",
+          # The last hold, after the final state has settled; the 60% default
+          # lands mid-Transform, with the caption's glyphs half-morphed.
+          poster_at=8.4),
+    Scene("graph-dijkstra", "Graph theory · shortest paths",
+          "Settle the closest, relax the rest",
+          template="graph/shortest_path", params={"algorithm": "dijkstra"},
+          # The last hold, after the final state has settled; the 60% default
+          # lands mid-Transform, with the caption's glyphs half-morphed.
+          poster_at=9.4),
+    Scene("graph-kruskal", "Graph theory · minimum spanning tree",
+          "The edges Kruskal refuses",
+          template="graph/spanning_tree", params={"algorithm": "kruskal"},
+          # The last hold, after the final state has settled; the 60% default
+          # lands mid-Transform, with the caption's glyphs half-morphed.
+          poster_at=10.4),
+
+    # --- linear algebra -----------------------------------------------------
     Scene("linear-map", "Linear algebra · eigenvectors",
           "The directions that do not turn",
           template="linear_algebra/linear_map",
