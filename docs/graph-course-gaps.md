@@ -79,7 +79,7 @@ interview track.
 - [ ] 7 `turan(n, r)`
 - [x] 8 `floyd_warshall`
 - [x] 9 `mycielski`
-- [ ] 10 `edge_coloring`
+- [x] 10 `edge_coloring`
 - [ ] 11 `degeneracy_ordering`
 - [ ] 12 `topological_sort` tie-break
 - [ ] 13 `scc` finish-order and condensation
@@ -203,7 +203,7 @@ interview track.
   plus one, so base ≤ 3 for the 11-vertex figure cap; document this).
 - **Instance.** `M(C₅)` = Grötzsch graph, 11 vertices, 20 edges, χ = 4.
 
-### 10. `edge_coloring` — module 22
+### 10. ✅ `edge_coloring` — module 22
 
 - **Shows.** A proper edge colouring, one colour class per `color-N` edge
   role with a legend; for bipartite graphs the König/Vizing alternating

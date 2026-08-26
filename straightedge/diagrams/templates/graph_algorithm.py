@@ -13,7 +13,8 @@ from typing import Any, Dict, List, Tuple
 
 from ...graphs import (
     Graph, GraphError, Step, bellman_ford_steps, coerce_graph,
-    connectivity_steps, dijkstra_steps, ear_decomposition_steps, euler_steps,
+    connectivity_steps, dijkstra_steps, ear_decomposition_steps, edge_coloring_steps,
+    euler_steps,
     greedy_coloring_steps, hamiltonian_search_steps,
     kruskal_steps, matching_steps, max_flow_steps, prim_steps,
     prufer_decode_graph, prufer_decode_steps, prufer_encode_steps,
@@ -36,6 +37,7 @@ ALGORITHMS = {
     "low_link",
     "prufer_encode", "prufer_decode",
     "tree_center", "ear_decomposition", "stable_matching", "hamiltonian_search",
+    "edge_coloring",
 }
 WEIGHTED = {"dijkstra", "bellman_ford", "kruskal", "prim"}
 NEEDS_PARTITIONS = {"bipartite_matching", "vertex_cover", "stable_matching"}
@@ -109,6 +111,8 @@ def compute_steps(params: Dict[str, Any]) -> List[Step]:
     if algorithm == "hamiltonian_search":
         return hamiltonian_search_steps(graph, start, params.get("max_frames", 20),
                                         params.get("expect"))
+    if algorithm == "edge_coloring":
+        return edge_coloring_steps(graph, params.get("classes"), params.get("expect"))
     if algorithm == "dijkstra":
         return dijkstra_steps(graph, start)
     if algorithm == "bellman_ford":
@@ -304,6 +308,7 @@ class GraphAlgorithmTemplate:
         params.get("receivers")
         params.get("check")
         params.get("max_frames", 20)
+        params.get("classes")
         params.get("graph_layout", "circular")
         animate = bool(params.get("animate", True))
         duration_s = float(params.get("duration_s", 1.2))

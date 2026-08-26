@@ -245,3 +245,23 @@ def test_hamiltonian_search_refuses_a_false_cycle_expectation():
                    (0, 5), (1, 6), (2, 7), (3, 8), (4, 9),
                    (5, 7), (7, 9), (9, 6), (6, 8), (8, 5)]]})[0]
     assert "exhausted" in finding.message and finding.label.startswith("exhausted")
+
+
+def test_edge_coloring_draws_k6_round_robin_classes():
+    params = {"algorithm": "edge_coloring", "expect": 5,
+              "nodes": [{"id": str(i)} for i in range(6)],
+              "edges": [{"from": str(a), "to": str(b)}
+                        for a in range(6) for b in range(a + 1, 6)], "animate": False}
+    svg = render_diagram({"type": "graph_algorithm", "params": params})
+    assert "Color class 5" in svg
+    final = frames_from_steps(params, compute_steps(params))[-1]["visual"]["params"]
+    assert set(final["highlights"]["color_edges"]) == {
+        "color-1", "color-2", "color-3", "color-4", "color-5"}
+
+
+def test_edge_coloring_refuses_adjacent_edges_in_one_authored_class():
+    finding = refusal_findings("graph_algorithm", {
+        "algorithm": "edge_coloring", "nodes": [{"id": x} for x in "ABC"],
+        "edges": [{"from": "A", "to": "B"}, {"from": "A", "to": "C"}],
+        "classes": [[["A", "B"], ["A", "C"]]]})[0]
+    assert finding.label == "A" and "share vertex" in finding.message

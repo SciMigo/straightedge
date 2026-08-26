@@ -8,6 +8,11 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Exact small-graph edge coloring.** `edge_coloring` computes a proper
+  coloring with Δ or Δ+1 colors, draws each class with a numbered edge role,
+  and validates authored `classes`. Shared endpoints and false `expect`
+  values are refused with concrete witnesses.
+
 - **Checked Mycielski constructions.** The new `mycielski` template builds the
   original, shadow, and hub layers from the supplied base graph, then computes
   a coloring, exact small-graph chromatic numbers, and triangle-freeness. The

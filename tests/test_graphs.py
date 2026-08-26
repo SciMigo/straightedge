@@ -14,7 +14,8 @@ import pytest
 from straightedge.graphs import (
     GraphError, bellman_ford_steps, bipartition, coerce_graph, dijkstra_steps,
     connectivity_analysis, connectivity_steps, euler_steps, greedy_coloring_steps, konig_cover, kruskal_steps,
-    ear_decomposition_steps, hamiltonian_search_steps, havel_hakimi_steps,
+    ear_decomposition_steps, edge_coloring_steps, hamiltonian_search_steps,
+    havel_hakimi_steps,
     floyd_warshall_steps, matching_steps, max_flow_steps, mycielski_graph, mycielski_steps,
     prim_steps, scc_steps, stable_matching_steps, steps_for,
     prufer_decode_graph, prufer_decode_steps, prufer_encode_steps,
@@ -316,6 +317,30 @@ def test_mycielski_refuses_a_base_whose_output_exceeds_the_cap():
     with pytest.raises(GraphError, match="13 vertices") as refused:
         mycielski_graph(base)
     assert refused.value.witness == (6, 13)
+
+
+# ------------------------------------------------------------ edge coloring
+
+
+def test_edge_coloring_computes_k6_and_odd_cycle_chromatic_indices():
+    k6 = _graph([(str(a), str(b)) for a in range(6) for b in range(a + 1, 6)])
+    assert edge_coloring_steps(k6, expect=5)[-1].extras["chromatic_index"] == 5
+    c5 = _graph([(str(i), str((i + 1) % 5)) for i in range(5)])
+    assert edge_coloring_steps(c5, expect=3)[-1].extras["chromatic_index"] == 3
+
+
+def test_edge_coloring_verifies_authored_classes_and_refuses_shared_vertex():
+    k4 = _graph([(str(a), str(b)) for a in range(4) for b in range(a + 1, 4)])
+    classes = [[["0", "1"], ["2", "3"]],
+               [["0", "2"], ["1", "3"]],
+               [["0", "3"], ["1", "2"]]]
+    assert edge_coloring_steps(k4, classes, expect=3)[-1].extras["chromatic_index"] == 3
+    with pytest.raises(GraphError, match="share vertex") as refused:
+        edge_coloring_steps(k4, [[["0", "1"], ["0", "2"]]])
+    assert refused.value.witness == "0"
+    with pytest.raises(GraphError, match="below maximum degree") as too_few:
+        edge_coloring_steps(k4, expect=2)
+    assert too_few.value.witness == 3
 
 
 # ---------------------------------------------------------- DAGs and SCCs

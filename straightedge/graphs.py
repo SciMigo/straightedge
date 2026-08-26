@@ -972,6 +972,105 @@ def mycielski_steps(base: Graph) -> list[Step]:
     return steps
 
 
+# ------------------------------------------------------------ edge coloring
+
+
+def _edge_coloring_with_k(graph: Graph, limit: int) -> dict[EdgeKey, int] | None:
+    edges = [graph.key(edge.source, edge.target) for edge in graph.edges]
+    adjacent = {edge: {other for other in edges if other != edge and set(edge) & set(other)}
+                for edge in edges}
+    order = sorted(edges, key=lambda edge: (-len(adjacent[edge]), edges.index(edge)))
+    colors: dict[EdgeKey, int] = {}
+
+    def assign(index: int) -> bool:
+        if index == len(order):
+            return True
+        edge = order[index]
+        forbidden = {colors[other] for other in adjacent[edge] if other in colors}
+        highest = max(colors.values(), default=0)
+        for color in range(1, min(limit, highest + 1) + 1):
+            if color not in forbidden:
+                colors[edge] = color
+                if assign(index + 1):
+                    return True
+                del colors[edge]
+        return False
+
+    return dict(colors) if assign(0) else None
+
+
+def edge_coloring_steps(graph: Graph, classes: Any = None,
+                        expect: Any = None) -> list[Step]:
+    """Compute or verify a proper edge coloring of a simple undirected graph."""
+    if graph.directed:
+        raise GraphError("edge coloring here needs an undirected graph")
+    delta = max((graph.degree(vertex) for vertex in graph.ids), default=0)
+    if expect is not None:
+        if not isinstance(expect, int) or isinstance(expect, bool) or expect < 0:
+            raise GraphError("expect must be a nonnegative integer")
+        if expect < delta:
+            raise GraphError(f"expect {expect} is below maximum degree Δ={delta}", witness=delta)
+
+    colors: dict[EdgeKey, int]
+    if classes is not None:
+        if not isinstance(classes, list) or not classes:
+            raise GraphError("classes must be a non-empty array of edge arrays")
+        colors = {}
+        for color, edge_class in enumerate(classes, 1):
+            if not isinstance(edge_class, list):
+                raise GraphError(f"class {color} must be an array")
+            used_vertices: set[str] = set()
+            for raw in edge_class:
+                if isinstance(raw, dict):
+                    raw = [raw.get("from"), raw.get("to")]
+                if not isinstance(raw, (list, tuple)) or len(raw) != 2:
+                    raise GraphError(f"class {color} contains an invalid edge")
+                u, v = str(raw[0]), str(raw[1])
+                if not graph.has_edge(u, v):
+                    raise GraphError(f"class {color} contains non-edge {u}–{v}", witness=(u, v))
+                shared = next((vertex for vertex in (u, v) if vertex in used_vertices), None)
+                if shared is not None:
+                    raise GraphError(f"two edges in class {color} share vertex {shared}", witness=shared)
+                key = graph.key(u, v)
+                if key in colors:
+                    raise GraphError(f"edge {u}–{v} occurs in more than one class", witness=key)
+                colors[key] = color
+                used_vertices.update((u, v))
+        missing = [graph.key(edge.source, edge.target) for edge in graph.edges
+                   if graph.key(edge.source, edge.target) not in colors]
+        if missing:
+            raise GraphError("classes omit edge " + f"{missing[0][0]}–{missing[0][1]}",
+                             witness=missing[0])
+    else:
+        colors = {}
+        for limit in range(delta, delta + 2):
+            found = _edge_coloring_with_k(graph, limit)
+            if found is not None:
+                colors = found
+                break
+        if graph.edges and not colors:  # Vizing guarantees this cannot happen for a simple graph.
+            raise GraphError("could not compute an edge coloring")
+    chromatic_index = max(colors.values(), default=0)
+    if expect is not None and expect != chromatic_index:
+        raise GraphError(f"expected edge chromatic number {expect}, computed {chromatic_index}",
+                         witness=(expect, chromatic_index))
+
+    steps = [Step("Start", f"Maximum degree Δ={delta}", panel=(f"Δ = {delta}",))]
+    revealed: dict[EdgeKey, str] = {}
+    for color in range(1, chromatic_index + 1):
+        current = [edge for edge in colors if colors[edge] == color]
+        revealed.update({edge: f"color-{color}" for edge in current})
+        notation = ", ".join(f"{u}–{v}" for u, v in current)
+        steps.append(Step(
+            f"Color class {color}", f"Class {color}: {notation}", {}, dict(revealed),
+            panel=(f"class {color}: {notation}", f"colors used: {color}"),
+            extras={"classes": [[edge for edge in colors if colors[edge] == value]
+                                for value in range(1, color + 1)],
+                    "chromatic_index": chromatic_index, "delta": delta},
+        ))
+    return steps
+
+
 # ---------------------------------------------------------------- traversal
 
 
