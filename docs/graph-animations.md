@@ -100,6 +100,12 @@ accepts everything the video does and more:
 A storyboard holds 12 panels and an animation 24 frames; a longer trace is
 refused as unreadable rather than truncated.
 
+`havel_hakimi` is a separate array-first storyboard. Pass `sequence` and it
+sorts and reduces the degrees one panel at a time; `realize: true` appends the
+computed graph as the recursive reductions unwind. It refuses an odd sum, a
+degree at least `n`, or the first negative reduction and includes that failing
+sequence as the witness.
+
 ## Building a lab on this
 
 The pattern the `examples/` directory argues for applies: **compute, assert,

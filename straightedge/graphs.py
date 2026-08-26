@@ -386,6 +386,79 @@ def prufer_decode_steps(code: list[Any]) -> list[Step]:
     return steps
 
 
+# ------------------------------------------------------------ Havel–Hakimi
+
+
+def havel_hakimi_steps(sequence: list[Any], realize: bool = False) -> list[Step]:
+    """Reduce a degree sequence and optionally unwind a labelled realization."""
+    if not isinstance(sequence, list) or not sequence:
+        raise GraphError("sequence must be a non-empty array")
+    degrees: list[int] = []
+    for index, value in enumerate(sequence):
+        if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+            raise GraphError(f"sequence entry {value!r} at position {index + 1} must be nonnegative",
+                             witness=(index + 1, value))
+        if value >= len(sequence):
+            raise GraphError(f"degree {value} at position {index + 1} is at least n={len(sequence)}",
+                             witness=(index + 1, value))
+        degrees.append(value)
+    if sum(degrees) % 2:
+        raise GraphError(f"degree sum {sum(degrees)} is odd", witness=tuple(degrees))
+
+    items = [(degree, str(index + 1)) for index, degree in enumerate(degrees)]
+    items.sort(key=lambda item: (-item[0], _vertex_sort_key(item[1])))
+    steps = [Step("Start", "Sort the degree sequence in non-increasing order",
+                  panel=("sequence: (" + ", ".join(str(d) for d, _ in items) + ")",),
+                  extras={"values": [d for d, _ in items], "highlights": {}})]
+    batches: list[tuple[str, list[str]]] = []
+    while items and items[0][0] > 0:
+        degree, vertex = items.pop(0)
+        if degree > len(items):
+            witness = tuple([degree] + [d for d, _ in items])
+            raise GraphError(f"reduction cannot connect degree {degree} to only {len(items)} entries",
+                             witness=witness)
+        neighbors = [name for _, name in items[:degree]]
+        reduced = [(d - 1 if index < degree else d, name)
+                   for index, (d, name) in enumerate(items)]
+        raw = tuple(d for d, _ in reduced)
+        if any(d < 0 for d in raw):
+            raise GraphError("Havel–Hakimi reduction produced a negative entry: "
+                             + str(raw), witness=raw)
+        batches.append((vertex, neighbors))
+        reduced.sort(key=lambda item: (-item[0], _vertex_sort_key(item[1])))
+        displayed = [d for d, _ in reduced]
+        highlights = {str(index): "comparison" for index in range(min(degree, len(reduced)))}
+        steps.append(Step(
+            f"Remove {degree}",
+            f"Remove {degree}; decrement the next {degree} entries",
+            panel=("sequence: (" + ", ".join(str(d) for d in displayed) + ")",),
+            extras={"values": displayed, "highlights": highlights,
+                    "removed": degree, "vertex": vertex},
+        ))
+        items = reduced
+    if items and any(degree for degree, _ in items):
+        witness = tuple(degree for degree, _ in items)
+        raise GraphError("sequence does not reduce to zero", witness=witness)
+    if not realize:
+        return steps
+
+    all_edges = [(vertex, neighbor) for vertex, neighbors in batches for neighbor in neighbors]
+    visible: list[EdgeKey] = []
+    for vertex, neighbors in reversed(batches):
+        for neighbor in neighbors:
+            visible.append((min(vertex, neighbor), max(vertex, neighbor)))
+        steps.append(Step(
+            f"Join {vertex}",
+            f"Restore vertex {vertex} and join it to {', '.join(neighbors)}",
+            {vertex: "current", **{neighbor: "frontier" for neighbor in neighbors}},
+            {edge: "tree" for edge in visible},
+            panel=(f"realized edges: {len(visible)} of {len(all_edges)}",),
+            extras={"graph_nodes": [str(i) for i in range(1, len(degrees) + 1)],
+                    "graph_edges": list(all_edges), "visible_edges": list(visible)},
+        ))
+    return steps
+
+
 # ---------------------------------------------------------------- traversal
 
 

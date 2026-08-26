@@ -14,7 +14,7 @@ import pytest
 from straightedge.graphs import (
     GraphError, bellman_ford_steps, bipartition, coerce_graph, dijkstra_steps,
     connectivity_analysis, connectivity_steps, euler_steps, greedy_coloring_steps, konig_cover, kruskal_steps,
-    matching_steps, max_flow_steps, prim_steps, scc_steps, steps_for,
+    havel_hakimi_steps, matching_steps, max_flow_steps, prim_steps, scc_steps, steps_for,
     prufer_decode_graph, prufer_decode_steps, prufer_encode_steps,
     topological_sort_steps, traversal_steps, vertex_cover_steps,
 )
@@ -149,6 +149,31 @@ def test_prufer_refuses_a_non_tree_bad_entry_and_wrong_expectation():
     with pytest.raises(GraphError, match="position 2") as mismatch:
         prufer_encode_steps(tree, [3, 4])
     assert mismatch.value.witness == (2, "3", "4")
+
+
+# -------------------------------------------------------- Havel–Hakimi
+
+
+def test_havel_hakimi_reduces_and_realizes_the_course_sequence():
+    reduced = havel_hakimi_steps([3, 3, 2, 2, 2])
+    assert [step.extras["values"] for step in reduced] == [
+        [3, 3, 2, 2, 2], [2, 2, 1, 1], [1, 1, 0], [0, 0]]
+    realized = havel_hakimi_steps([3, 3, 2, 2, 2], realize=True)
+    final = realized[-1]
+    counts = {str(i): 0 for i in range(1, 6)}
+    for left, right in final.extras["graph_edges"]:
+        counts[left] += 1
+        counts[right] += 1
+    assert sorted(counts.values(), reverse=True) == [3, 3, 2, 2, 2]
+
+
+def test_havel_hakimi_refuses_odd_sum_and_negative_reduction_with_witness():
+    with pytest.raises(GraphError, match="odd") as odd:
+        havel_hakimi_steps([2, 2, 1])
+    assert odd.value.witness == (2, 2, 1)
+    with pytest.raises(GraphError, match="negative") as negative:
+        havel_hakimi_steps([3, 3, 3, 1])
+    assert negative.value.witness == (1, -1)
 
 
 # ---------------------------------------------------------- DAGs and SCCs

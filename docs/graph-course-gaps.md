@@ -71,7 +71,7 @@ are directory prefixes under `../graph-theory/modules/`; `iNN` is the
 interview track.
 
 - [x] 1 `prufer_encode` / `prufer_decode`
-- [ ] 2 `havel_hakimi`
+- [x] 2 `havel_hakimi`
 - [ ] 3 `tree_center`
 - [ ] 4 `ear_decomposition`
 - [ ] 5 `stable_matching`
@@ -102,7 +102,7 @@ interview track.
   until composite panels exist, put the code in the caption/panel line as
   `dijkstra` does with distances.
 
-### 2. `havel_hakimi` — module 05
+### 2. ✅ `havel_hakimi` — module 05
 
 - **Shows.** One panel per reduction: the sequence as an `array_state` with
   the removed entry highlighted and the next `d` entries decremented, then

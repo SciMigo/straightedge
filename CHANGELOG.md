@@ -8,6 +8,11 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Checked Havel–Hakimi reductions.** The new `havel_hakimi` template shows
+  every degree-sequence reduction as an array and can unwind those reductions
+  into a computed graph realization. It refuses odd sums, degrees at least
+  `n`, and negative intermediate entries with the failing sequence attached.
+
 - **Prüfer encoding and decoding storyboards.** `graph_algorithm` now deletes
   the smallest leaf to compute a tree's code or grows the uniquely decoded
   tree one edge at a time. Non-trees, out-of-range entries, and authored
