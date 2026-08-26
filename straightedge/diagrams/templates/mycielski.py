@@ -37,7 +37,7 @@ def _params(graph, params: Dict[str, Any]) -> Dict[str, Any]:
                       "y": 0.55 + 0.22 * math.sin(angle)})
         nodes.append({"id": f"v{i}", "x": 0.5 + 0.38 * math.cos(angle),
                       "y": 0.55 + 0.38 * math.sin(angle)})
-    nodes.append({"id": "w", "x": 0.5, "y": 0.08})
+    nodes.append({"id": "w", "x": 0.5, "y": 0.55})
     return {"algorithm": "greedy_coloring", "nodes": nodes,
             "edges": [{"from": edge.source, "to": edge.target} for edge in graph.edges],
             "graph_layout": "custom", "node_radius": int(params.get("node_radius", 17)),

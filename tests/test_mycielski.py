@@ -15,6 +15,8 @@ def test_c5_constructs_and_colors_the_grotzsch_graph():
     assert len(final["nodes"]) == 11 and len(final["edges"]) == 20
     assert set(final["highlights"]["nodes"].values()) == {
         "color-1", "color-2", "color-3", "color-4"}
+    hub = next(node for node in final["nodes"] if node["id"] == "w")
+    assert (hub["x"], hub["y"]) == (0.5, 0.55)
 
 
 def test_output_cap_refusal_reports_base_and_result_counts():

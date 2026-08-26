@@ -61,10 +61,15 @@ def _algorithm(params: Dict[str, Any]) -> str:
 def _left_partition(params: Dict[str, Any], graph: Graph) -> List[str]:
     partitions = params.get("partitions")
     if not isinstance(partitions, dict):
-        raise GraphError("bipartite_matching needs partitions.left and partitions.right")
-    left, right = partitions.get("left"), partitions.get("right")
+        raise GraphError("bipartite_matching needs exactly two named partitions")
+    keys = list(partitions)
+    if "left" in partitions and "right" in partitions:
+        keys = ["left", "right"]
+    if len(keys) != 2:
+        raise GraphError("bipartite_matching needs exactly two named partitions")
+    left, right = partitions.get(keys[0]), partitions.get(keys[1])
     if not isinstance(left, list) or not isinstance(right, list):
-        raise GraphError("partitions.left and partitions.right must be arrays")
+        raise GraphError("both named partitions must be arrays")
     left_ids = [require_vertex(graph, v, "left vertex") for v in left]
     right_ids = [require_vertex(graph, v, "right vertex") for v in right]
     if (set(left_ids) & set(right_ids)

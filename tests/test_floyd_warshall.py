@@ -7,8 +7,8 @@ from straightedge.diagrams.templates.floyd_warshall import frames
 F4 = {
     "directed": True, "nodes": [{"id": x} for x in "ABCD"],
     "edges": [{"from": a, "to": b, "weight": weight} for a, b, weight in
-              [("A", "B", 3), ("A", "D", 7), ("B", "A", 8),
-               ("B", "C", 2), ("C", "A", 5), ("C", "D", 1), ("D", "A", 2)]],
+              [("A", "B", 3), ("B", "C", -2), ("A", "C", 5),
+               ("C", "D", 1), ("D", "B", 4), ("A", "D", 10)]],
 }
 
 
@@ -16,7 +16,7 @@ def test_f4_draws_a_table_for_each_intermediate_and_highlights_changes():
     svg = render_diagram({"type": "floyd_warshall", "params": F4})
     assert all(label in svg for label in ("D(0)", "Via A", "Via B", "Via C", "Via D"))
     trace = frames(F4)
-    assert trace[-1]["visual"]["params"]["values"][0] == ["0", "3", "5", "6"]
+    assert trace[-1]["visual"]["params"]["values"][0] == ["0", "3", "1", "2"]
     assert trace[2]["visual"]["params"]["highlights"]
 
 

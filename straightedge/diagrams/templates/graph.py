@@ -218,9 +218,17 @@ def _bipartition(
         if not isinstance(declared, dict):
             return {}, findings + [Finding(
                 "bipartition", "error",
-                "partitions must be an object with left and right vertex arrays",
+                "partitions must be an object with exactly two vertex arrays",
             )]
-        for side, key in enumerate(("left", "right")):
+        keys = list(declared)
+        if "left" in declared and "right" in declared:
+            keys = ["left", "right"]
+        elif len(keys) != 2:
+            return {}, findings + [Finding(
+                "bipartition", "error",
+                "bipartite partitions must contain exactly two named arrays",
+            )]
+        for side, key in enumerate(keys):
             members = declared.get(key, [])
             if not isinstance(members, list):
                 findings.append(Finding(

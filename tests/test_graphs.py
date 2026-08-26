@@ -226,12 +226,12 @@ def test_ear_decomposition_refuses_an_articulation_vertex():
 
 
 STABLE_PROPOSERS = {
-    "A": ["3", "4", "1", "2"], "B": ["3", "4", "2", "1"],
-    "C": ["1", "4", "3", "2"], "D": ["3", "4", "1", "2"],
+    "A": ["4", "3", "1", "2"], "B": ["3", "4", "2", "1"],
+    "C": ["1", "2", "4", "3"], "D": ["1", "4", "3", "2"],
 }
 STABLE_RECEIVERS = {
-    "1": ["D", "A", "B", "C"], "2": ["B", "D", "C", "A"],
-    "3": ["D", "B", "A", "C"], "4": ["B", "A", "D", "C"],
+    "1": ["B", "A", "C", "D"], "2": ["A", "B", "D", "C"],
+    "3": ["D", "A", "B", "C"], "4": ["C", "B", "A", "D"],
 }
 
 
@@ -281,14 +281,13 @@ def test_hamiltonian_search_exhausts_petersen_and_refuses_false_expectation():
 
 
 def test_floyd_warshall_updates_one_checked_table_per_intermediate():
-    graph = _graph([("A", "B", 3), ("A", "D", 7), ("B", "A", 8),
-                    ("B", "C", 2), ("C", "A", 5), ("C", "D", 1),
-                    ("D", "A", 2)], directed=True)
+    graph = _graph([("A", "B", 3), ("B", "C", -2), ("A", "C", 5),
+                    ("C", "D", 1), ("D", "B", 4), ("A", "D", 10)], directed=True)
     steps = floyd_warshall_steps(graph)
     assert len(steps) == 5
     assert steps[-1].extras["values"] == [
-        ["0", "3", "5", "6"], ["5", "0", "2", "3"],
-        ["3", "6", "0", "1"], ["2", "5", "7", "0"]]
+        ["0", "3", "1", "2"], ["∞", "0", "-2", "-1"],
+        ["∞", "5", "0", "1"], ["∞", "4", "2", "0"]]
     assert steps[1].extras["k"] == "A"
 
 
@@ -393,12 +392,12 @@ def test_scc_finds_the_components():
 
 
 def test_scc_names_kosaraju_and_finishes_with_the_condensation_dag():
-    graph = _graph([("A", "B"), ("B", "C"), ("C", "A"), ("C", "D"),
-                    ("D", "E"), ("E", "F"), ("F", "D"), ("F", "G"),
+    graph = _graph([("A", "B"), ("B", "C"), ("C", "A"), ("B", "D"),
+                    ("D", "E"), ("E", "F"), ("F", "D"), ("G", "F"),
                     ("G", "H"), ("H", "G")], directed=True)
     steps = scc_steps(graph)
     assert steps[0].label == "Kosaraju: finish order"
-    assert steps[0].extras["finish_order"]
+    assert steps[0].extras["finish_order"] == list("CFEDBAHG")
     assert [step.label for step in steps[1:-1]] == ["Component 1", "Component 2", "Component 3"]
     assert len(steps[-2].edge_states) == 5  # three DFS trees: 2 + 2 + 1 edges
     override = steps[-1].extras["graph_override"]
@@ -474,8 +473,8 @@ def test_konig_cover_has_the_size_of_the_maximum_matching():
 
 def test_failed_matching_reveals_the_course_hall_violator_only_at_the_end():
     graph = _graph([("a", "1"), ("a", "2"), ("b", "1"), ("b", "2"),
-                    ("c", "2"), ("c", "3"), ("d", "1"), ("d", "3"),
-                    ("e", "4"), ("e", "5")])
+                    ("c", "1"), ("c", "2"), ("c", "3"), ("d", "3"),
+                    ("e", "3"), ("e", "4"), ("e", "5")])
     steps, matching = matching_steps(graph, list("abcde"))
     assert len(matching) == 4 and steps[-1].label == "Hall violator"
     assert steps[-1].extras["S"] == list("abcd")

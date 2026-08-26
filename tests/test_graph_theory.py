@@ -46,6 +46,16 @@ def test_explicit_partitions_and_labels_render():
     assert ">U<" in svg and ">V<" in svg
 
 
+def test_two_partitions_may_use_course_names_instead_of_left_and_right():
+    params = {
+        "nodes": _vertices("a", "b", "1", "2"),
+        "edges": [{"from": "a", "to": "1"}, {"from": "b", "to": "2"}],
+        "layout": "bipartite", "partitions": {"X": ["a", "b"], "Y": ["1", "2"]},
+    }
+    assert refusal_findings("graph", params) == []
+    assert render_diagram({"type": "graph", "params": params})
+
+
 def test_odd_cycle_is_refused_instead_of_drawn_as_bipartite():
     params = {
         "nodes": _vertices("A", "B", "C"),

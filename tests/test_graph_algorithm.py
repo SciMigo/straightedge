@@ -7,12 +7,12 @@ from straightedge.diagrams.templates.graph_algorithm import (
 
 NODES = [{"id": x} for x in "ABCD"]
 STABLE_PROPOSERS = {
-    "A": ["3", "4", "1", "2"], "B": ["3", "4", "2", "1"],
-    "C": ["1", "4", "3", "2"], "D": ["3", "4", "1", "2"],
+    "A": ["4", "3", "1", "2"], "B": ["3", "4", "2", "1"],
+    "C": ["1", "2", "4", "3"], "D": ["1", "4", "3", "2"],
 }
 STABLE_RECEIVERS = {
-    "1": ["D", "A", "B", "C"], "2": ["B", "D", "C", "A"],
-    "3": ["D", "B", "A", "C"], "4": ["B", "A", "D", "C"],
+    "1": ["B", "A", "C", "D"], "2": ["A", "B", "D", "C"],
+    "3": ["D", "A", "B", "C"], "4": ["C", "B", "A", "D"],
 }
 
 
@@ -301,12 +301,25 @@ def test_topological_sort_routes_fifo_and_min_tie_breaks():
     assert "tie_break must be min or fifo" in finding.message
 
 
+def test_topological_sort_matches_both_course_d8_orders():
+    params = {"algorithm": "topological_sort", "directed": True,
+              "nodes": [{"id": x} for x in "ABCDEFGH"],
+              "edges": [{"from": a, "to": b} for a, b in
+                        [("A", "C"), ("B", "C"), ("B", "D"), ("C", "E"),
+                         ("D", "E"), ("D", "F"), ("E", "G"), ("F", "G"),
+                         ("H", "F")]]}
+    assert compute_steps({**params, "tie_break": "min"})[-1].panel == (
+        "order: A, B, C, D, E, H, F, G",)
+    assert compute_steps({**params, "tie_break": "fifo"})[-1].panel == (
+        "order: A, B, H, C, D, E, F, G",)
+
+
 def test_scc_storyboard_names_kosaraju_and_draws_the_condensation():
     params = {"algorithm": "scc", "directed": True,
               "nodes": [{"id": x} for x in "ABCDEFGH"],
               "edges": [{"from": a, "to": b} for a, b in
-                        [("A", "B"), ("B", "C"), ("C", "A"), ("C", "D"),
-                         ("D", "E"), ("E", "F"), ("F", "D"), ("F", "G"),
+                        [("A", "B"), ("B", "C"), ("C", "A"), ("B", "D"),
+                         ("D", "E"), ("E", "F"), ("F", "D"), ("G", "F"),
                          ("G", "H"), ("H", "G")]], "animate": False}
     svg = render_diagram({"type": "graph_algorithm", "params": params})
     assert "Kosaraju: finish order" in svg and "Condensation DAG" in svg
@@ -320,9 +333,9 @@ def test_failed_bipartite_matching_finishes_on_the_hall_violator():
               "nodes": [{"id": x} for x in list("abcde") + list("12345")],
               "edges": [{"from": a, "to": b} for a, b in
                         [("a", "1"), ("a", "2"), ("b", "1"), ("b", "2"),
-                         ("c", "2"), ("c", "3"), ("d", "1"), ("d", "3"),
-                         ("e", "4"), ("e", "5")]],
-              "partitions": {"left": list("abcde"), "right": list("12345")},
+                         ("c", "1"), ("c", "2"), ("c", "3"), ("d", "3"),
+                         ("e", "3"), ("e", "4"), ("e", "5")]],
+              "partitions": {"X": list("abcde"), "Y": list("12345")},
               "animate": False}
     svg = render_diagram({"type": "graph_algorithm", "params": params})
     assert "Hall violator" in svg
