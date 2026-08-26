@@ -14,7 +14,7 @@ from typing import Any, Dict, List, Tuple
 from ...graphs import (
     Graph, GraphError, Step, bellman_ford_steps, coerce_graph,
     connectivity_steps, dijkstra_steps, ear_decomposition_steps, euler_steps,
-    greedy_coloring_steps,
+    greedy_coloring_steps, hamiltonian_search_steps,
     kruskal_steps, matching_steps, max_flow_steps, prim_steps,
     prufer_decode_graph, prufer_decode_steps, prufer_encode_steps,
     require_vertex, scc_steps, stable_matching_graph, stable_matching_steps,
@@ -35,7 +35,7 @@ ALGORITHMS = {
     "max_flow", "greedy_coloring", "bipartite_matching", "vertex_cover", "euler",
     "low_link",
     "prufer_encode", "prufer_decode",
-    "tree_center", "ear_decomposition", "stable_matching",
+    "tree_center", "ear_decomposition", "stable_matching", "hamiltonian_search",
 }
 WEIGHTED = {"dijkstra", "bellman_ford", "kruskal", "prim"}
 NEEDS_PARTITIONS = {"bipartite_matching", "vertex_cover", "stable_matching"}
@@ -106,6 +106,9 @@ def compute_steps(params: Dict[str, Any]) -> List[Step]:
         if start_cycle is not None and not isinstance(start_cycle, list):
             raise GraphError("start_cycle must be an array")
         return ear_decomposition_steps(graph, start_cycle)
+    if algorithm == "hamiltonian_search":
+        return hamiltonian_search_steps(graph, start, params.get("max_frames", 20),
+                                        params.get("expect"))
     if algorithm == "dijkstra":
         return dijkstra_steps(graph, start)
     if algorithm == "bellman_ford":
@@ -300,6 +303,7 @@ class GraphAlgorithmTemplate:
         params.get("proposers")
         params.get("receivers")
         params.get("check")
+        params.get("max_frames", 20)
         params.get("graph_layout", "circular")
         animate = bool(params.get("animate", True))
         duration_s = float(params.get("duration_s", 1.2))

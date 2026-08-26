@@ -99,6 +99,7 @@ accepts everything the video does and more:
 | `tree_center` | a tree; optional `show_eccentricities` | a cycle or disconnected components |
 | `ear_decomposition` | a 2-connected graph; optional `start_cycle` | an articulation vertex or disconnected components |
 | `stable_matching` | complete `proposers` / `receivers` preference objects; optional `check` | a malformed preference list or the first blocking pair |
+| `hamiltonian_search` | `start`, optional `max_frames` and `expect` | a false expected cycle/non-cycle claim, with the cycle or exhausted-state count |
 
 A storyboard holds 12 panels and an animation 24 frames; a longer trace is
 refused as unreadable rather than truncated.

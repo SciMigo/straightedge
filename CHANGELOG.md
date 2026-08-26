@@ -8,6 +8,11 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Bounded Hamiltonian backtracking traces.** `hamiltonian_search` explores
+  the full state space while emitting at most `max_frames`, shows partial paths
+  and backtracks, and reports the explored-state count. A false `expect` is
+  refused with the found cycle or exhausted-search witness.
+
 - **Gale–Shapley proposal traces and stability checks.** `stable_matching`
   shows each proposal, held offer, rejection, and the final matching. Complete
   strict preferences are checked as permutations, and an authored `check`

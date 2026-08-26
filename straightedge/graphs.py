@@ -749,6 +749,81 @@ def stable_matching_steps(proposers: Any, receivers: Any,
     return steps
 
 
+# ------------------------------------------------------ Hamiltonian search
+
+
+def hamiltonian_search_steps(graph: Graph, start: Any = None, max_frames: int = 20,
+                             expect: str | None = None) -> list[Step]:
+    """Backtrack over simple paths, bounding only the rendered trace, not the search."""
+    start_vertex = require_vertex(graph, graph.ids[0] if start is None else start, "start")
+    if not isinstance(max_frames, int) or isinstance(max_frames, bool) or not 2 <= max_frames <= 24:
+        raise GraphError("max_frames must be an integer from 2 to 24")
+    if expect is not None and expect not in {"cycle", "none"}:
+        raise GraphError("expect must be cycle or none")
+    path = [start_vertex]
+    found: list[str] | None = None
+    explored = 1
+    events: list[tuple[str, str, list[str], str | None]] = []
+
+    def search(vertex: str) -> bool:
+        nonlocal explored, found
+        if len(path) == len(graph.ids):
+            if graph.has_edge(path[-1], start_vertex):
+                found = list(path) + [start_vertex]
+                return True
+            return False
+        for neighbor in graph.neighbors(vertex):
+            if neighbor in path:
+                continue
+            path.append(neighbor)
+            explored += 1
+            events.append((f"Try {neighbor}", f"Extend the partial path to {neighbor}",
+                           list(path), None))
+            if search(neighbor):
+                return True
+            rejected = path.pop()
+            events.append((f"Backtrack {rejected}",
+                           f"No Hamiltonian cycle extends through {rejected}; backtrack",
+                           list(path), rejected))
+        return False
+
+    search(start_vertex)
+    if expect == "cycle" and found is None:
+        raise GraphError(f"no Hamiltonian cycle exists; exhausted {explored} search states",
+                         witness=("exhausted", explored))
+    if expect == "none" and found is not None:
+        raise GraphError("a Hamiltonian cycle exists: " + " → ".join(found), witness=found)
+
+    def state(label: str, caption: str, current_path: list[str], rejected: str | None) -> Step:
+        nodes = {vertex: "visited" for vertex in current_path}
+        nodes[current_path[-1]] = "current"
+        if rejected is not None:
+            nodes[rejected] = "rejected"
+        edges = {graph.key(u, v): "path" for u, v in zip(current_path, current_path[1:])}
+        return Step(label, caption, nodes, edges,
+                    panel=("path: " + " → ".join(current_path),),
+                    extras={"path": list(current_path), "explored": explored})
+
+    steps = [state("Start", f"Start backtracking at {start_vertex}", [start_vertex], None)]
+    for event in events[:max(0, max_frames - 2)]:
+        steps.append(state(*event))
+    if found is not None:
+        nodes = {vertex: "visited" for vertex in graph.ids}
+        nodes[start_vertex] = "current"
+        edges = {graph.key(u, v): "path" for u, v in zip(found, found[1:])}
+        steps.append(Step("Hamiltonian cycle", "Found a cycle through every vertex exactly once",
+                          nodes, edges,
+                          panel=("cycle: " + " → ".join(found), f"explored states = {explored}"),
+                          extras={"cycle": found, "explored": explored}))
+    else:
+        steps.append(Step("Exhausted search",
+                          f"All {explored} partial-path states are exhausted; no cycle exists",
+                          {start_vertex: "current"}, {},
+                          panel=("Hamiltonian cycle: none", f"explored states = {explored}"),
+                          extras={"cycle": None, "explored": explored}))
+    return steps
+
+
 # ---------------------------------------------------------------- traversal
 
 

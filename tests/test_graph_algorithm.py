@@ -223,3 +223,25 @@ def test_stable_matching_template_refuses_with_the_blocking_pair():
         "receivers": STABLE_RECEIVERS,
         "check": {"A": "4", "B": "3", "C": "1", "D": "2"}})[0]
     assert finding.label == "D–3" and "blocking pair" in finding.message
+
+
+def test_hamiltonian_search_draws_a_bounded_octahedron_trace():
+    params = {"algorithm": "hamiltonian_search", "start": "0", "max_frames": 8,
+              "expect": "cycle", "nodes": [{"id": str(i)} for i in range(6)],
+              "edges": [{"from": str(a), "to": str(b)}
+                        for a in range(6) for b in range(a + 1, 6)
+                        if {a, b} not in ({0, 1}, {2, 3}, {4, 5})], "animate": True}
+    svg = render_diagram({"type": "graph_algorithm", "params": params})
+    assert "Hamiltonian cycle" in svg
+    assert len(compute_steps(params)) <= 8
+
+
+def test_hamiltonian_search_refuses_a_false_cycle_expectation():
+    finding = refusal_findings("graph_algorithm", {
+        "algorithm": "hamiltonian_search", "start": "0", "expect": "cycle",
+        "nodes": [{"id": str(i)} for i in range(10)],
+        "edges": [{"from": str(a), "to": str(b)} for a, b in
+                  [(0, 1), (1, 2), (2, 3), (3, 4), (4, 0),
+                   (0, 5), (1, 6), (2, 7), (3, 8), (4, 9),
+                   (5, 7), (7, 9), (9, 6), (6, 8), (8, 5)]]})[0]
+    assert "exhausted" in finding.message and finding.label.startswith("exhausted")

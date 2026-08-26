@@ -75,7 +75,7 @@ interview track.
 - [x] 3 `tree_center`
 - [x] 4 `ear_decomposition`
 - [x] 5 `stable_matching`
-- [ ] 6 `hamiltonian_search`
+- [x] 6 `hamiltonian_search`
 - [ ] 7 `turan(n, r)`
 - [ ] 8 `floyd_warshall`
 - [ ] 9 `mycielski`
@@ -153,7 +153,7 @@ interview track.
 - **Instance.** Instance `I` (A–D / 1–4): GS output `{A1, B4, C2, D3}` after
   10 proposals; the unstable `{A4, B3, C1, D2}` has blocking pair `(D, 3)`.
 
-### 6. `hamiltonian_search` (backtracking frames) — modules 23, 24
+### 6. ✅ `hamiltonian_search` (backtracking frames) — modules 23, 24
 
 - **Shows.** The partial path as `visited` with the tip `current`, the
   pruned neighbour as `rejected`, and either the cycle found (`path`) or the

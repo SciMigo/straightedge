@@ -14,7 +14,8 @@ import pytest
 from straightedge.graphs import (
     GraphError, bellman_ford_steps, bipartition, coerce_graph, dijkstra_steps,
     connectivity_analysis, connectivity_steps, euler_steps, greedy_coloring_steps, konig_cover, kruskal_steps,
-    ear_decomposition_steps, havel_hakimi_steps, matching_steps, max_flow_steps,
+    ear_decomposition_steps, hamiltonian_search_steps, havel_hakimi_steps,
+    matching_steps, max_flow_steps,
     prim_steps, scc_steps, stable_matching_steps, steps_for,
     prufer_decode_graph, prufer_decode_steps, prufer_encode_steps,
     topological_sort_steps, traversal_steps, tree_center_steps, vertex_cover_steps,
@@ -247,6 +248,31 @@ def test_stable_matching_refuses_bad_preferences_and_names_a_blocking_pair():
         stable_matching_steps(STABLE_PROPOSERS, STABLE_RECEIVERS,
                               {"A": "4", "B": "3", "C": "1", "D": "2"})
     assert unstable.value.witness == ("D", "3")
+
+
+# ------------------------------------------------------ Hamiltonian search
+
+
+def test_hamiltonian_search_finds_an_octahedron_cycle_with_bounded_frames():
+    octahedron = _graph([(str(a), str(b)) for a in range(6) for b in range(a + 1, 6)
+                         if {a, b} not in ({0, 1}, {2, 3}, {4, 5})])
+    steps = hamiltonian_search_steps(octahedron, "0", max_frames=8, expect="cycle")
+    assert len(steps) <= 8 and steps[-1].label == "Hamiltonian cycle"
+    cycle = steps[-1].extras["cycle"]
+    assert cycle[0] == cycle[-1] == "0" and len(set(cycle[:-1])) == 6
+
+
+def test_hamiltonian_search_exhausts_petersen_and_refuses_false_expectation():
+    petersen = _graph([(str(a), str(b)) for a, b in
+                       [(0, 1), (1, 2), (2, 3), (3, 4), (4, 0),
+                        (0, 5), (1, 6), (2, 7), (3, 8), (4, 9),
+                        (5, 7), (7, 9), (9, 6), (6, 8), (8, 5)]])
+    steps = hamiltonian_search_steps(petersen, "0", max_frames=10, expect="none")
+    assert len(steps) <= 10 and steps[-1].extras["cycle"] is None
+    assert steps[-1].extras["explored"] > 10
+    with pytest.raises(GraphError, match="exhausted") as refused:
+        hamiltonian_search_steps(petersen, "0", expect="cycle")
+    assert refused.value.witness[0] == "exhausted"
 
 
 # ---------------------------------------------------------- DAGs and SCCs
