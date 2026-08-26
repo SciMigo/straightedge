@@ -94,6 +94,8 @@ accepts everything the video does and more:
 | `vertex_cover` | `partitions.left/right` | — (König's cover from the maximum matching) |
 | `euler` | undirected, connected edges | the odd-degree vertices, when there are not 0 or 2 |
 | `low_link` | undirected | — (bridges, articulation vertices and blocks are computed together) |
+| `prufer_encode` | a tree; optional `expect` | a cycle, disconnected components, or first mismatching code position |
+| `prufer_decode` | `code` on vertices `1..len(code)+2` | the first code entry outside that range |
 
 A storyboard holds 12 panels and an animation 24 frames; a longer trace is
 refused as unreadable rather than truncated.

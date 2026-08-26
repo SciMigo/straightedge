@@ -15,6 +15,7 @@ from straightedge.graphs import (
     GraphError, bellman_ford_steps, bipartition, coerce_graph, dijkstra_steps,
     connectivity_analysis, connectivity_steps, euler_steps, greedy_coloring_steps, konig_cover, kruskal_steps,
     matching_steps, max_flow_steps, prim_steps, scc_steps, steps_for,
+    prufer_decode_graph, prufer_decode_steps, prufer_encode_steps,
     topological_sort_steps, traversal_steps, vertex_cover_steps,
 )
 
@@ -122,6 +123,32 @@ def test_kruskal_shows_rejections_and_prim_agrees_on_the_weight():
 def test_spanning_trees_need_an_undirected_graph():
     with pytest.raises(GraphError, match="undirected"):
         kruskal_steps(_graph([("A", "B", 1)], directed=True))
+
+
+# ----------------------------------------------------------- Prüfer codes
+
+
+def test_prufer_code_round_trip_uses_the_course_tree():
+    tree = _graph([("1", "3"), ("2", "3"), ("3", "4"), ("4", "5"), ("4", "6")])
+    encoded = prufer_encode_steps(tree, [3, 3, 4, 4])
+    assert encoded[-1].extras["code"] == ["3", "3", "4", "4"]
+    decoded = prufer_decode_graph([3, 3, 4, 4])
+    assert {decoded.key(edge.source, edge.target) for edge in decoded.edges} == {
+        tree.key(edge.source, edge.target) for edge in tree.edges}
+    assert len(prufer_decode_steps([3, 3, 4, 4])) == 6
+
+
+def test_prufer_refuses_a_non_tree_bad_entry_and_wrong_expectation():
+    with pytest.raises(GraphError, match="cycle") as cyclic:
+        prufer_encode_steps(_graph([("1", "2"), ("2", "3"), ("3", "1")]))
+    assert set(cyclic.value.witness[:-1]) == {"1", "2", "3"}
+    with pytest.raises(GraphError, match="outside 1..4") as bad_code:
+        prufer_decode_graph([3, 5])
+    assert bad_code.value.witness == (2, 5)
+    tree = _graph([("1", "3"), ("2", "3"), ("3", "4")])
+    with pytest.raises(GraphError, match="position 2") as mismatch:
+        prufer_encode_steps(tree, [3, 4])
+    assert mismatch.value.witness == (2, "3", "4")
 
 
 # ---------------------------------------------------------- DAGs and SCCs

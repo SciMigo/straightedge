@@ -6,6 +6,14 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **Prüfer encoding and decoding storyboards.** `graph_algorithm` now deletes
+  the smallest leaf to compute a tree's code or grows the uniquely decoded
+  tree one edge at a time. Non-trees, out-of-range entries, and authored
+  `expect` codes are refused with the cycle, components, or first differing
+  position as a witness.
+
 ## [0.7.0] - 2026-08-26
 
 A minor release about graph theory, and about every state on screen being

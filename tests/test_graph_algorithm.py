@@ -1,6 +1,8 @@
 from straightedge.diagrams import render_diagram
 from straightedge.diagrams.registry import refusal_findings
-from straightedge.diagrams.templates.graph_algorithm import _coloring, _dijkstra, _kruskal, _matching
+from straightedge.diagrams.templates.graph_algorithm import (
+    _coloring, _dijkstra, _kruskal, _matching, compute_steps,
+)
 
 
 NODES = [{"id": x} for x in "ABCD"]
@@ -127,3 +129,27 @@ def test_refusals_carry_the_witness_in_the_right_shape():
                           {"from": "C", "to": "B", "weight": 1}]}
     finding = refusal_findings("graph_algorithm", negative)[0]
     assert finding.check == "graph_algorithm_negative_cycle" and "→" in finding.label
+
+
+def test_prufer_encode_and_decode_draw_the_course_instance():
+    tree = {"nodes": [{"id": str(i)} for i in range(1, 7)],
+            "edges": [{"from": a, "to": b} for a, b in
+                      [("1", "3"), ("2", "3"), ("3", "4"), ("4", "5"), ("4", "6")]]}
+    encoded = render_diagram({"type": "graph_algorithm", "params": {
+        **tree, "algorithm": "prufer_encode", "expect": [3, 3, 4, 4], "animate": False}})
+    assert "Delete 2" in encoded
+    assert compute_steps({**tree, "algorithm": "prufer_encode"})[-1].panel == (
+        "code: (3, 3, 4, 4)",)
+    decoded = render_diagram({"type": "graph_algorithm", "params": {
+        "algorithm": "prufer_decode", "code": [3, 3, 4, 4], "animate": True}})
+    assert "Add 5–4" in decoded
+    assert "join final leaves" in compute_steps(
+        {"algorithm": "prufer_decode", "code": [3, 3, 4, 4]})[-1].caption
+
+
+def test_prufer_template_refuses_the_first_mismatching_code_position():
+    finding = refusal_findings("graph_algorithm", {
+        "algorithm": "prufer_encode", "nodes": [{"id": str(i)} for i in range(1, 5)],
+        "edges": [{"from": "1", "to": "3"}, {"from": "2", "to": "3"},
+                  {"from": "3", "to": "4"}], "expect": [3, 4]})[0]
+    assert "position 2" in finding.message and finding.label.startswith("2")

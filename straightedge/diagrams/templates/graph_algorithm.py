@@ -15,6 +15,7 @@ from ...graphs import (
     Graph, GraphError, Step, bellman_ford_steps, coerce_graph,
     connectivity_steps, dijkstra_steps, euler_steps, greedy_coloring_steps,
     kruskal_steps, matching_steps, max_flow_steps, prim_steps,
+    prufer_decode_graph, prufer_decode_steps, prufer_encode_steps,
     require_vertex, scc_steps,
     topological_sort_steps, vertex_cover_steps,
 )
@@ -31,6 +32,7 @@ ALGORITHMS = {
     "dijkstra", "bellman_ford", "kruskal", "prim", "topological_sort", "scc",
     "max_flow", "greedy_coloring", "bipartite_matching", "vertex_cover", "euler",
     "low_link",
+    "prufer_encode", "prufer_decode",
 }
 WEIGHTED = {"dijkstra", "bellman_ford", "kruskal", "prim"}
 NEEDS_PARTITIONS = {"bipartite_matching", "vertex_cover"}
@@ -74,10 +76,20 @@ def compute_steps(params: Dict[str, Any]) -> List[Step]:
     algorithm = _algorithm(params)
     if algorithm not in ALGORITHMS:
         raise GraphError("algorithm must be one of " + ", ".join(sorted(ALGORITHMS)))
+    if algorithm == "prufer_decode":
+        graph = prufer_decode_graph(params.get("code"))
+        if len(graph.ids) > MAX_VERTICES:
+            raise GraphError(f"at most {MAX_VERTICES} vertices fit in one readable trace")
+        return prufer_decode_steps(params.get("code"))
     graph = coerce_graph(params)
     if len(graph.ids) > MAX_VERTICES:
         raise GraphError(f"at most {MAX_VERTICES} vertices fit in one readable trace")
     start = params.get("start", graph.ids[0])
+    if algorithm == "prufer_encode":
+        expect = params.get("expect")
+        if expect is not None and not isinstance(expect, list):
+            raise GraphError("expect must be an array")
+        return prufer_encode_steps(graph, expect)
     if algorithm == "dijkstra":
         return dijkstra_steps(graph, start)
     if algorithm == "bellman_ford":
@@ -150,8 +162,13 @@ def _findings(params: Dict[str, Any]) -> List[Finding]:
 
 
 def _base(params: Dict[str, Any]) -> Dict[str, Any]:
-    nodes, edges = _parts(params)
     algorithm = _algorithm(params)
+    if algorithm == "prufer_decode":
+        graph = prufer_decode_graph(params.get("code"))
+        nodes = [{"id": vertex} for vertex in graph.ids]
+        edges = [{"from": edge.source, "to": edge.target} for edge in graph.edges]
+    else:
+        nodes, edges = _parts(params)
     return {"nodes": nodes, "edges": edges, "directed": bool(params.get("directed", False)),
             "weighted": algorithm in WEIGHTED or algorithm == "max_flow",
             "layout": str(params.get("graph_layout", "circular")),
@@ -162,7 +179,8 @@ def _base(params: Dict[str, Any]) -> Dict[str, Any]:
 def frames_from_steps(params: Dict[str, Any], steps: List[Step]) -> List[Dict[str, Any]]:
     """``graph`` template calls, one per step, for a storyboard or animation."""
     base = _base(params)
-    graph = coerce_graph(params)
+    graph = (prufer_decode_graph(params.get("code")) if _algorithm(params) == "prufer_decode"
+             else coerce_graph(params))
     out = []
     for step in steps:
         nodes = {v: _NODE_STATES.get(role, role) for v, role in step.node_states.items()}
@@ -173,6 +191,10 @@ def frames_from_steps(params: Dict[str, Any], steps: List[Step]) -> List[Dict[st
         cut = [list(key) for key, role in step.edge_states.items() if role == "cut"]
         rejected = [list(key) for key, role in step.edge_states.items() if role == "rejected"]
         edges = base["edges"]
+        if "visible_edges" in step.extras:
+            visible = set(step.extras["visible_edges"])
+            edges = [edge for edge in edges
+                     if graph.key(str(edge["from"]), str(edge["to"])) in visible]
         if step.edge_labels:
             edges = [{**edge, "weight": step.edge_labels.get(
                 graph.key(str(edge["from"]), str(edge["to"])), edge.get("weight"))}
@@ -241,6 +263,8 @@ class GraphAlgorithmTemplate:
         params.get("directed", False)
         params.get("partitions")
         params.get("vertex_order")
+        params.get("code")
+        params.get("expect")
         params.get("graph_layout", "circular")
         animate = bool(params.get("animate", True))
         duration_s = float(params.get("duration_s", 1.2))

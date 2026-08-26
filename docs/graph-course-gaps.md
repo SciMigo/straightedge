@@ -70,7 +70,22 @@ Ordered by how many modules each unblocks, then by syllabus order. "Modules"
 are directory prefixes under `../graph-theory/modules/`; `iNN` is the
 interview track.
 
-### 1. `prufer_encode` / `prufer_decode` — module 08
+- [x] 1 `prufer_encode` / `prufer_decode`
+- [ ] 2 `havel_hakimi`
+- [ ] 3 `tree_center`
+- [ ] 4 `ear_decomposition`
+- [ ] 5 `stable_matching`
+- [ ] 6 `hamiltonian_search`
+- [ ] 7 `turan(n, r)`
+- [ ] 8 `floyd_warshall`
+- [ ] 9 `mycielski`
+- [ ] 10 `edge_coloring`
+- [ ] 11 `degeneracy_ordering`
+- [ ] 12 `topological_sort` tie-break
+- [ ] 13 `scc` finish-order and condensation
+- [ ] 14 `bipartite_matching` Hall violator
+
+### 1. ✅ `prufer_encode` / `prufer_decode` — module 08
 
 - **Shows.** Encoding: each step deletes the smallest leaf, appends its
   neighbour to the code; the tree with the deleted vertex as `rejected`, the

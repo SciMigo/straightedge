@@ -238,6 +238,154 @@ def _edge_text(u: str, v: str, directed: bool) -> str:
     return f"{u}→{v}" if directed else f"{u}–{v}"
 
 
+def require_tree(graph: Graph) -> None:
+    """Refuse a directed, cyclic, or disconnected graph with a checkable witness."""
+    if graph.directed:
+        raise GraphError("a tree must be undirected")
+    parent: dict[str, str | None] = {}
+
+    def visit(vertex: str, previous: str | None, path: list[str]) -> list[str] | None:
+        parent[vertex] = previous
+        for neighbor in graph.neighbors(vertex):
+            if neighbor == previous:
+                continue
+            if neighbor in parent:
+                start = path.index(neighbor) if neighbor in path else 0
+                return path[start:] + [neighbor]
+            found = visit(neighbor, vertex, path + [neighbor])
+            if found:
+                return found
+        return None
+
+    cycle = visit(graph.ids[0], None, [graph.ids[0]])
+    if cycle:
+        raise GraphError("the graph has a cycle, so it is not a tree", witness=cycle)
+    if len(parent) != len(graph.ids):
+        first = list(parent)
+        other = next(v for v in graph.ids if v not in parent)
+        second: list[str] = []
+        queue = [other]
+        seen = {other}
+        while queue:
+            vertex = queue.pop(0)
+            second.append(vertex)
+            for neighbor in graph.neighbors(vertex):
+                if neighbor not in seen:
+                    seen.add(neighbor)
+                    queue.append(neighbor)
+        raise GraphError("the graph is disconnected, so it is not a tree",
+                         witness=(tuple(first), tuple(second)))
+
+
+# --------------------------------------------------------------- Prüfer code
+
+
+def _vertex_sort_key(vertex: str) -> tuple[int, int | str]:
+    """Numeric labels sort numerically; all other labels sort lexically."""
+    try:
+        return (0, int(vertex))
+    except ValueError:
+        return (1, vertex)
+
+
+def prufer_encode_steps(graph: Graph, expect: list[Any] | None = None) -> list[Step]:
+    """Delete the smallest leaf repeatedly and expose the resulting Prüfer code."""
+    require_tree(graph)
+    if len(graph.ids) < 2:
+        raise GraphError("Prüfer encoding needs at least two vertices")
+    adjacency = {v: list(graph.neighbors(v)) for v in graph.ids}
+    remaining = set(graph.ids)
+    code: list[str] = []
+    removed: list[str] = []
+    steps = [Step("Start", "Repeatedly delete the smallest leaf",
+                  panel=("code: ()",), extras={"code": []})]
+    while len(remaining) > 2:
+        leaf = min((v for v in remaining
+                    if sum(n in remaining for n in adjacency[v]) == 1),
+                   key=_vertex_sort_key)
+        neighbor = next(n for n in adjacency[leaf] if n in remaining)
+        code.append(neighbor)
+        removed.append(leaf)
+        remaining.remove(leaf)
+        nodes = {v: "rejected" for v in removed}
+        nodes[leaf] = "current"
+        steps.append(Step(
+            f"Delete {leaf}",
+            f"Delete smallest leaf {leaf}; append its neighbour {neighbor}",
+            nodes, {graph.key(leaf, neighbor): "rejected"},
+            panel=("code: (" + ", ".join(code) + ")",),
+            extras={"code": list(code), "leaf": leaf, "neighbor": neighbor},
+        ))
+    if expect is not None:
+        wanted = [str(value) for value in expect]
+        for index in range(max(len(code), len(wanted))):
+            actual = code[index] if index < len(code) else None
+            claimed = wanted[index] if index < len(wanted) else None
+            if actual != claimed:
+                raise GraphError(
+                    f"expected Prüfer code first differs at position {index + 1}: "
+                    f"computed {actual!r}, expected {claimed!r}",
+                    witness=(index + 1, actual, claimed),
+                )
+    return steps
+
+
+def prufer_decode_graph(code: list[Any]) -> Graph:
+    """Build the labelled tree on ``1..len(code)+2`` represented by ``code``."""
+    if not isinstance(code, list):
+        raise GraphError("code must be an array")
+    n = len(code) + 2
+    parsed: list[int] = []
+    for index, value in enumerate(code):
+        if isinstance(value, bool):
+            value = -1
+        try:
+            entry = int(value)
+        except (TypeError, ValueError):
+            entry = -1
+        if entry < 1 or entry > n or str(entry) != str(value):
+            raise GraphError(f"code entry {value!r} at position {index + 1} is outside 1..{n}",
+                             witness=(index + 1, value))
+        parsed.append(entry)
+    degree = {vertex: 1 for vertex in range(1, n + 1)}
+    for vertex in parsed:
+        degree[vertex] += 1
+    edges: list[Edge] = []
+    for vertex in parsed:
+        leaf = min(v for v in degree if degree[v] == 1)
+        edges.append(Edge(str(leaf), str(vertex)))
+        degree[leaf] -= 1
+        degree[vertex] -= 1
+    last = [v for v in degree if degree[v] == 1]
+    edges.append(Edge(str(last[0]), str(last[1])))
+    ids = tuple(str(v) for v in range(1, n + 1))
+    return Graph(ids, {v: v for v in ids}, tuple(edges))
+
+
+def prufer_decode_steps(code: list[Any]) -> list[Step]:
+    """Reveal the deterministic smallest-leaf decoding, one edge per step."""
+    graph = prufer_decode_graph(code)
+    parsed = [str(value) for value in code]
+    steps = [Step("Start", f"Decode ({', '.join(parsed)}) on vertices 1..{len(parsed) + 2}",
+                  panel=("remaining code: (" + ", ".join(parsed) + ")",),
+                  extras={"visible_edges": []})]
+    visible: list[EdgeKey] = []
+    for index, edge in enumerate(graph.edges):
+        key = graph.key(edge.source, edge.target)
+        visible.append(key)
+        remaining = parsed[index + 1:] if index < len(parsed) else []
+        pointer = f"read {parsed[index]}" if index < len(parsed) else "join final leaves"
+        steps.append(Step(
+            f"Add {edge.source}–{edge.target}",
+            f"{pointer}; add edge {edge.source}–{edge.target}",
+            {edge.source: "current", edge.target: "frontier"},
+            {candidate: "tree" for candidate in visible},
+            panel=("remaining code: (" + ", ".join(remaining) + ")",),
+            extras={"visible_edges": list(visible)},
+        ))
+    return steps
+
+
 # ---------------------------------------------------------------- traversal
 
 
