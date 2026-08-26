@@ -214,6 +214,24 @@ def test_ear_decomposition_matches_the_course_prism():
         "color-1", "color-2", "color-3", "color-4"}
 
 
+def test_ear_decomposition_finds_its_own_first_ear():
+    """Without start_cycle the first ear is computed; the directed cycle
+    finder returned the DFS parent edge as a two-vertex cycle and refused
+    every 2-connected graph."""
+    prism = _graph([("0", "1"), ("1", "2"), ("2", "0"),
+                    ("3", "4"), ("4", "5"), ("5", "3"),
+                    ("0", "3"), ("1", "4"), ("2", "5")])
+    steps = ear_decomposition_steps(prism)
+    first = steps[0].extras["ears"][0]
+    assert first[0] == first[-1] and len(first) >= 4
+    assert all(prism.has_edge(u, v) for u, v in zip(first, first[1:]))
+    covered = {key for step in steps for key in step.edge_states}
+    assert covered == {prism.key(e.source, e.target) for e in prism.edges}
+    for edges in ([("0", "1"), ("1", "2"), ("2", "3"), ("3", "0")],
+                  [(a, b) for a in "0123" for b in "0123" if a < b]):
+        assert ear_decomposition_steps(_graph(edges))[0].extras["ears"][0][0] is not None
+
+
 def test_ear_decomposition_refuses_an_articulation_vertex():
     bowtie = _graph([("A", "B"), ("B", "C"), ("C", "A"),
                      ("C", "D"), ("D", "E"), ("E", "C")])

@@ -568,7 +568,11 @@ def ear_decomposition_steps(graph: Graph, start_cycle: list[Any] | None = None) 
             raise GraphError(f"start_cycle uses missing edge {missing[0]}–{missing[1]}",
                              witness=missing)
     else:
-        found = _find_cycle(graph, list(graph.ids))
+        # _find_cycle is the directed finder topological_sort uses; on an
+        # undirected graph it returns the back-edge to the DFS parent as a
+        # two-vertex "cycle", so every 2-connected input was refused unless
+        # the caller authored start_cycle.
+        found = _find_undirected_cycle(graph)
         if len(found) < 3:
             raise GraphError("the graph has no cycle, so it is not 2-connected")
         cycle = found + [found[0]]
@@ -1396,6 +1400,44 @@ def prim_steps(graph: Graph, start: str) -> list[Step]:
 
 
 # --------------------------------------------------------------- DAG / SCC
+
+
+def _find_undirected_cycle(graph: Graph) -> list[str]:
+    """A simple cycle of an undirected graph, in DFS order, or ``[]``.
+
+    A depth-first walk that remembers the edge it arrived by: a neighbour
+    already on the stack that is not that edge's other end closes a cycle,
+    and the stack from that neighbour onward is the cycle. Vertex and
+    neighbour order follow the graph, so the same input yields the same
+    cycle on every run.
+    """
+    on_stack: dict[str, int] = {}
+    done: set[str] = set()
+    stack: list[str] = []
+
+    def visit(v: str, parent: str | None) -> list[str] | None:
+        on_stack[v] = len(stack)
+        stack.append(v)
+        for w in graph.neighbors(v):
+            if w == parent:
+                continue
+            if w in on_stack:
+                return stack[on_stack[w]:]
+            if w not in done:
+                found = visit(w, v)
+                if found:
+                    return found
+        stack.pop()
+        del on_stack[v]
+        done.add(v)
+        return None
+
+    for v in graph.ids:
+        if v not in done:
+            found = visit(v, None)
+            if found:
+                return found
+    return []
 
 
 def _find_cycle(graph: Graph, among: Iterable[str]) -> list[str]:
