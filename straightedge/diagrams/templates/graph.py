@@ -406,6 +406,9 @@ class GraphTemplate:
         rejected_edges = set(_normalize_highlight_edges(
             {"edges": (params.get("highlights") or {}).get("rejected_edges", [])}
             if isinstance(params.get("highlights"), dict) else {}))
+        cut_edges = set(_normalize_highlight_edges(
+            {"edges": (params.get("highlights") or {}).get("cut_edges", [])}
+            if isinstance(params.get("highlights"), dict) else {}))
         path_edges = set(zip(path_nodes, path_nodes[1:]))
 
         # Ordered endpoint pairs, so an edge can tell whether its opposite
@@ -516,9 +519,13 @@ class GraphTemplate:
                 is_highlighted = True
             is_rejected = (source, target) in rejected_edges or (
                 not directed and (target, source) in rejected_edges)
+            is_cut = (source, target) in cut_edges or (
+                not directed and (target, source) in cut_edges)
             edge_class = "graph-edge"
             if is_path_edge:
                 edge_class = "graph-edge graph-edge-path"
+            elif is_cut:
+                edge_class = "graph-edge graph-edge-cut"
             elif is_highlighted:
                 edge_class = "graph-edge graph-edge-highlight"
             elif is_rejected:
@@ -738,6 +745,7 @@ class GraphTemplate:
 .graph-edge-highlight { stroke: #9C27B0; stroke-width: 2.5; }
 .graph-edge-path { stroke: #9C27B0; stroke-width: 3; }
 .graph-edge-rejected { stroke: #DC2626; stroke-width: 2; stroke-dasharray: 6 4; opacity: 0.75; }
+.graph-edge-cut { stroke: #B91C1C; stroke-width: 4; }
 .graph-edge-weight { font-size: 11px; font-family: sans-serif; fill: #495057; }
 .graph-distance-label { font-size: 11px; font-family: sans-serif; fill: #495057; }
 .graph-degree-label { font-size: 11px; font-family: sans-serif; fill: #495057; }

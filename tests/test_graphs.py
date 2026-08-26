@@ -272,3 +272,31 @@ def test_steps_for_runs_the_stock_graph_when_none_is_supplied():
     with pytest.raises(GraphError, match="runs"):
         steps_for("graph/shortest_path", {"algorithm": "kruskal"})
     assert steps_for("graph/connectivity", {"algorithm": "low_link"})[-1].label == "Block structure"
+
+
+def test_connectivity_trace_reveals_an_articulation_only_once_it_is_proved():
+    # U is a cut vertex because of V2; finishing V1 (low < d[U]) proves nothing.
+    graph = _graph([("R", "U"), ("U", "V1"), ("V1", "R"), ("U", "V2")])
+    by_label = {step.label: step for step in connectivity_steps(graph)}
+    assert by_label["Finish V1"].node_states.get("U") != "articulation"
+    assert by_label["Finish V1"].panel[1] == "articulations: —"
+    assert by_label["Finish V2"].node_states["U"] == "articulation"
+    # The root needs a second DFS child; the first child's subtree is not a proof.
+    root = _graph([("A", "B"), ("B", "C"), ("C", "A"), ("A", "D")])
+    labels = {step.label: step.panel[1] for step in connectivity_steps(root)}
+    assert labels["Finish B"] == "articulations: —"
+    assert labels["Finish D"] == "articulations: A"
+
+
+def test_connectivity_trace_lists_bridges_in_proof_order_not_hash_order():
+    graph = _graph([("A", "B"), ("B", "C"), ("C", "D"), ("D", "E"), ("E", "F")])
+    panels = [step.panel[0] for step in connectivity_steps(graph)]
+    assert panels[-2] == "bridges: E–F, D–E, C–D, B–C, A–B"
+
+
+def test_connectivity_honours_start_and_refuses_a_stranger():
+    graph = _graph([("A", "B"), ("B", "C"), ("C", "A"), ("C", "D")])
+    assert connectivity_analysis(graph, start="D").discovery["D"] == 1
+    assert connectivity_steps(graph, start="D")[1].label != connectivity_steps(graph)[1].label
+    with pytest.raises(GraphError, match="start 'Z' is not a vertex"):
+        steps_for("graph/connectivity", {"nodes": [{"id": "A"}], "edges": [], "start": "Z"})

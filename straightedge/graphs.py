@@ -863,15 +863,21 @@ def euler_steps(graph: Graph) -> list[Step]:
 # --------------------------------------------------------- connectivity / blocks
 
 
-def connectivity_analysis(graph: Graph) -> ConnectivityAnalysis:
+def connectivity_analysis(graph: Graph, start: Any = None) -> ConnectivityAnalysis:
     """Compute bridges, articulation vertices, and vertex-biconnected blocks.
 
     This is Tarjan's low-link DFS with an edge stack.  It deliberately accepts
     disconnected graphs: every component is analysed, and isolated vertices
-    become singleton blocks so the block-cut forest loses nothing.
+    become singleton blocks so the block-cut forest loses nothing.  ``start``
+    roots the first DFS tree; the remaining components follow in vertex order.
     """
     if graph.directed:
         raise GraphError("bridges and biconnected blocks here require an undirected graph")
+    roots = list(graph.ids)
+    if start is not None:
+        first = require_vertex(graph, start, "start")
+        roots.remove(first)
+        roots.insert(0, first)
     discovery: dict[str, int] = {}
     low: dict[str, int] = {}
     parent: dict[str, str | None] = {v: None for v in graph.ids}
@@ -917,7 +923,7 @@ def connectivity_analysis(graph: Graph) -> ConnectivityAnalysis:
                 low[u] = min(low[u], discovery[v])
         finish.append(u)
 
-    for root in graph.ids:
+    for root in roots:
         if root in discovery:
             continue
         before = len(discovery)
@@ -937,26 +943,40 @@ def connectivity_analysis(graph: Graph) -> ConnectivityAnalysis:
     )
 
 
-def connectivity_steps(graph: Graph) -> list[Step]:
-    """A bounded low-link trace ending on the bridge/articulation certificate."""
-    analysis = connectivity_analysis(graph)
+def connectivity_steps(graph: Graph, start: Any = None) -> list[Step]:
+    """A bounded low-link trace ending on the bridge/articulation certificate.
+
+    A vertex is painted as a bridge endpoint or an articulation vertex on the
+    step that proves it, not before: the finished child whose ``low`` value
+    cannot climb above its parent's discovery time is the certificate, and
+    the DFS root needs a second such child.
+    """
+    analysis = connectivity_analysis(graph, start)
     tree_edges = {graph.key(parent, child): "tree" for child, parent in analysis.parent.items()
                   if parent is not None}
     steps = [Step("Initialize", "Start a DFS; d is discovery time and low is the earliest reachable time",
                   badges={v: "d — · low —" for v in graph.ids},
                   panel=("bridges: —", "articulations: —"))]
     finished: set[str] = set()
-    revealed_bridges: set[EdgeKey] = set()
+    # A list, in the order the DFS proves them: a set would print the panel
+    # in hash order and the same request would render differently per run.
+    revealed_bridges: list[EdgeKey] = []
     revealed_cuts: set[str] = set()
+    root_children: dict[str, int] = {}
     for vertex in analysis.finish_order:
         finished.add(vertex)
         parent = analysis.parent[vertex]
-        if parent is not None and graph.key(parent, vertex) in analysis.bridges:
-            revealed_bridges.add(graph.key(parent, vertex))
-        if parent in analysis.articulations:
-            revealed_cuts.add(parent)
-        if vertex in analysis.articulations and parent is None:
-            revealed_cuts.add(vertex)
+        if parent is not None:
+            key = graph.key(parent, vertex)
+            if key in analysis.bridges:
+                revealed_bridges.append(key)
+            if analysis.low[vertex] >= analysis.discovery[parent]:
+                if analysis.parent[parent] is not None:
+                    revealed_cuts.add(parent)
+                else:
+                    root_children[parent] = root_children.get(parent, 0) + 1
+                    if root_children[parent] > 1:
+                        revealed_cuts.add(parent)
         nodes = {v: "visited" for v in finished}
         nodes.update({v: "articulation" for v in revealed_cuts})
         nodes[vertex] = "current"
@@ -1047,7 +1067,7 @@ def steps_for(concept: str, params: dict[str, Any]) -> list[Step]:
     if concept == ConceptGraph.SPANNING_TREE:
         return kruskal_steps(graph) if algorithm == "kruskal" else prim_steps(graph, start)
     if concept == ConceptGraph.CONNECTIVITY:
-        return connectivity_steps(graph)
+        return connectivity_steps(graph, start)
     return max_flow_steps(graph, params.get("source", graph.ids[0]),
                           params.get("sink", graph.ids[-1]))
 
@@ -1055,10 +1075,11 @@ def steps_for(concept: str, params: dict[str, Any]) -> list[Step]:
 @topic(Topic.GRAPH, priority=20,
        keywords=("图论", "最短路", "生成树", "网络流", "最大流", "最小割",
                  "广度优先", "深度优先", "拓扑排序", "二分图",
-                 "割点", "割边", "图中的桥", "双连通",
+                 "割点", "割边", "图中的桥", "图的桥", "找桥", "求桥", "双连通",
                  "bfs", "dfs", "dijkstra", "kruskal", "prim's", "bellman",
                  "graph theory", "spanning tree", "shortest path", "max flow",
-                 "bridge", "articulation", "biconnected", "block-cut", "connectivity",
+                 "bridges", "cut vertex", "cut vertices", "articulation", "biconnected",
+                 "block-cut", "low-link", "connectivity",
                  "min cut", "adjacency"))
 class GraphTheory:
     """Five graph lessons, including connectivity, with every state computed."""

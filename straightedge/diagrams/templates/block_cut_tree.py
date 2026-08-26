@@ -8,6 +8,12 @@ from ...graphs import GraphError, coerce_graph, connectivity_analysis
 from ...qc import Finding
 from ..registry import DIAGRAM_REGISTRY, register
 
+#: The ``graph_algorithm`` limit: past it the rows of blocks and articulation
+#: vertices overlap, and the recursive low-link walk is a stack away from
+#: turning a large request into a traceback instead of a refusal.
+MAX_VERTICES = 11
+ROW_HEIGHT = 64
+
 
 @register("block_cut_tree")
 class BlockCutTreeTemplate:
@@ -17,7 +23,11 @@ class BlockCutTreeTemplate:
               "articulation incidence"]
 
     def refusal_findings(self, params: Dict[str, Any]) -> List[Finding]:
-        try: connectivity_analysis(coerce_graph(params))
+        try:
+            graph = coerce_graph(params)
+            if len(graph.ids) > MAX_VERTICES:
+                raise GraphError(f"at most {MAX_VERTICES} vertices fit one legible block-cut forest")
+            connectivity_analysis(graph)
         except GraphError as exc:
             return [Finding("block_cut_refused", "error", str(exc))]
         return []
@@ -29,6 +39,8 @@ class BlockCutTreeTemplate:
         if self.refusal_findings(params): return ""
         analysis = connectivity_analysis(coerce_graph(params))
         blocks = list(analysis.blocks); cuts = list(analysis.articulations)
+        if "height" not in params:  # a path graph is all rows: grow rather than overlap
+            height = max(height, ROW_HEIGHT * max(len(blocks), len(cuts), 1) + 96)
         nodes = []
         membership = {}
         for i, block in enumerate(blocks):

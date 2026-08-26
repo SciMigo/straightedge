@@ -219,7 +219,7 @@ def test_smoke_matmul_views_non_square(tmp_path):
     (ConceptGraph.TRAVERSAL, "bfs"), (ConceptGraph.TRAVERSAL, "dfs"),
     (ConceptGraph.SHORTEST_PATH, "dijkstra"), (ConceptGraph.SHORTEST_PATH, "bellman_ford"),
     (ConceptGraph.SPANNING_TREE, "kruskal"), (ConceptGraph.SPANNING_TREE, "prim"),
-    (ConceptGraph.MAX_FLOW, "edmonds_karp"),
+    (ConceptGraph.MAX_FLOW, "edmonds_karp"), (ConceptGraph.CONNECTIVITY, "low_link"),
 ])
 def test_smoke_graph_scenes(tmp_path, concept, algorithm):
     """Every graph concept, on its stock graph: the Transform/animate chains

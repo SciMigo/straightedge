@@ -167,7 +167,10 @@ def frames_from_steps(params: Dict[str, Any], steps: List[Step]) -> List[Dict[st
     for step in steps:
         nodes = {v: _NODE_STATES.get(role, role) for v, role in step.node_states.items()}
         highlighted = [list(key) for key, role in step.edge_states.items()
-                       if role in {"tree", "path", "cut"}]
+                       if role in {"tree", "path"}]
+        # A bridge or a min-cut edge is the certificate; drawn like a tree
+        # edge it would exist only in the caption.
+        cut = [list(key) for key, role in step.edge_states.items() if role == "cut"]
         rejected = [list(key) for key, role in step.edge_states.items() if role == "rejected"]
         edges = base["edges"]
         if step.edge_labels:
@@ -181,7 +184,8 @@ def frames_from_steps(params: Dict[str, Any], steps: List[Step]) -> List[Dict[st
         if 0 < len(step.panel) <= 2:
             caption += " · " + " · ".join(step.panel)
         frame = {**base, "edges": edges, "caption": caption,
-                 "highlights": {"nodes": nodes, "edges": highlighted, "rejected_edges": rejected}}
+                 "highlights": {"nodes": nodes, "edges": highlighted,
+                                "rejected_edges": rejected, "cut_edges": cut}}
         if step.badges:
             frame["distance_labels"] = dict(step.badges)
         if _algorithm(params) in NEEDS_PARTITIONS:

@@ -124,8 +124,10 @@ class PriorityQueueTemplate:
                     "root": _tree(state["heap"]),
                     "caption": "heap array: [" + ", ".join(values) + "]"}}
             else:
+                # One cell is 90px wide; the caption must fit inside it or
+                # the animated lane refuses the frame as clipped.
                 visual = {"type": "array_state", "params": {
-                    "values": ["∅"], "caption": "empty priority queue"}}
+                    "values": ["∅"], "cell_width": 160, "caption": "heap array: []"}}
             frames.append({"label": state["label"], "visual": visual})
         if animate:
             return DIAGRAM_REGISTRY["animated_trace"].render({"title": str(title), "frames": frames,

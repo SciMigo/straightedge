@@ -18,6 +18,14 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   matrix and incidence matrix in `graph_representation`. Optional expected
   results are checked before drawing. Documented in
   `docs/graph-connectivity-structures.md`.
+  The `graph` figure gains a `highlights.cut_edges` role (thick red), so a
+  bridge or a min-cut edge in a `graph_algorithm` storyboard no longer looks
+  like a tree edge; `graph/connectivity` honours `start`, reveals an
+  articulation vertex only on the step that proves it, and lists bridges in
+  proof order rather than hash order. `block_cut_tree` refuses more than
+  eleven vertices instead of recursing into a traceback; `priority_queue` can
+  be drained in the animated lane; `graph_representation` surfaces its graph
+  panel's refusal and keeps a zero-weight edge distinct from a missing one.
 
 - **A `graph` topic in the animation lane.** `graph/traversal` (BFS, DFS),
   `graph/shortest_path` (Dijkstra, Bellman–Ford), `graph/spanning_tree`

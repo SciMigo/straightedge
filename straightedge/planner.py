@@ -658,10 +658,15 @@ def _linear_algebra_plan(request: str) -> AnimationPlan:
 _GRAPH_CONCEPT_WORDS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
     # (concept, algorithm, words) — first match wins, so the specific
     # algorithm names sit above the family words that would also claim them.
-    (ConceptGraph.CONNECTIVITY, "low_link",
-     ("割点", "割边", "桥", "双连通", "bridge", "articulation", "biconnected", "block-cut")),
     (ConceptGraph.MAX_FLOW, "edmonds_karp",
      ("最大流", "最小割", "网络流", "max flow", "min cut", "flow network", "augmenting")),
+    # Bare "桥"/"bridge" would claim Königsberg's seven bridges and a
+    # suspension bridge alike; the words below name the graph structure.
+    (ConceptGraph.CONNECTIVITY, "low_link",
+     ("割点", "割边", "图的桥", "图中的桥", "找桥", "求桥", "双连通",
+      "articulation", "biconnected", "block-cut", "cut vertex", "cut vertices",
+      "cut edge", "low-link", "lowlink", "tarjan", "find bridges", "find the bridges",
+      "bridge edge", "bridges of", "bridges in", "bridges and")),
     (ConceptGraph.SHORTEST_PATH, "bellman_ford", ("bellman", "负权", "negative weight")),
     (ConceptGraph.SHORTEST_PATH, "dijkstra", ("dijkstra", "最短路", "shortest path")),
     (ConceptGraph.SPANNING_TREE, "prim", ("prim's", "prim 算法", "普里姆")),

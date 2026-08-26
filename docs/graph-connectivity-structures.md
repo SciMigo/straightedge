@@ -28,13 +28,22 @@ svg = render_diagram({"type": "graph_algorithm", "params": {
 ```
 
 The algorithm requires an undirected simple graph. A bridge is also emitted as
-a two-vertex block, and an isolated vertex as a singleton block.
+a two-vertex block, and an isolated vertex as a singleton block. `start` roots
+the depth-first search (the first vertex by default); any other component is
+visited afterwards in vertex order. A vertex is painted as an articulation
+vertex on the step that proves it — the finished child whose low value cannot
+climb above the parent's discovery time, or the root's second child — and a
+bridge is drawn as a `cut` edge, thick and red, so it is told apart from the
+tree edges around it in the SVG lane as well as in Manim.
 
 ## Block-cut forest
 
 `block_cut_tree` accepts the ordinary `nodes`, `edges`, and optional `title`,
 `caption`, `width`, and `height` fields. It does not accept authored blocks:
-block membership and articulation incidence are derived from the graph.
+block membership and articulation incidence are derived from the graph. At
+most eleven vertices are accepted — the `graph_algorithm` limit — and, unless
+`height` is given, the figure grows with its rows so a long path does not
+stack its blocks on top of each other.
 
 ```python
 svg = render_diagram({"type": "block_cut_tree", "params": graph})
