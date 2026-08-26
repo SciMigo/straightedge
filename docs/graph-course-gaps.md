@@ -76,7 +76,7 @@ interview track.
 - [x] 4 `ear_decomposition`
 - [x] 5 `stable_matching`
 - [x] 6 `hamiltonian_search`
-- [ ] 7 `turan(n, r)`
+- [x] 7 `turan(n, r)`
 - [x] 8 `floyd_warshall`
 - [x] 9 `mycielski`
 - [x] 10 `edge_coloring`
@@ -169,16 +169,16 @@ interview track.
 - **Note.** Exercise 7.5 in the course emits frames "ready for
   `animated_trace` once a search template lands"; match that shape.
 
-### 7. `turan(n, r)` builder — module 24
+### 7. ✅ `turan(n, r)` builder — module 24
 
 - **Shows.** The complete `r`-partite graph on `n` vertices with parts as
   equal as possible; parts as N-way partitions; edge count in the caption.
 - **Inputs.** `n`, `r`; optional `highlight_clique_free: true`.
 - **Refuse.** `r > n`, `r < 1`.
 - **Instances.** `T₆,₂ = K₃,₃` (9 edges), `T₆,₃ = K₂,₂,₂` (12), `T₇,₃` (16).
-- **Needs.** `partitions` with more than two parts in the `graph` template
-  (today exactly `left`/`right`). Also wanted by i09 (three SCCs) and 20
-  (three colour classes).
+- **Implementation.** The dedicated template computes balanced N-way parts,
+  lays each part out as a column, and maps them to numbered colour roles
+  without widening the shared bipartite partition contract.
 
 ### 8. ✅ `floyd_warshall` as a `dp_table` sequence — module i07
 

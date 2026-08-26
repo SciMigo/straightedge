@@ -1121,6 +1121,33 @@ def degeneracy_ordering_steps(graph: Graph) -> list[Step]:
     return steps
 
 
+# ------------------------------------------------------------ Turán graphs
+
+
+def turan_graph(n: Any, r: Any) -> tuple[Graph, list[list[str]]]:
+    """Build the complete balanced ``r``-partite graph ``T(n,r)``."""
+    if not isinstance(n, int) or isinstance(n, bool) or n < 1:
+        raise GraphError("n must be a positive integer")
+    if not isinstance(r, int) or isinstance(r, bool):
+        raise GraphError("r must be an integer")
+    if r < 1:
+        raise GraphError("r must be at least 1", witness=r)
+    if r > n:
+        raise GraphError(f"r={r} cannot exceed n={n}", witness=(n, r))
+    quotient, larger = divmod(n, r)
+    ids = [str(vertex) for vertex in range(n)]
+    parts: list[list[str]] = []
+    cursor = 0
+    for index in range(r):
+        size = quotient + (1 if index < larger else 0)
+        parts.append(ids[cursor:cursor + size])
+        cursor += size
+    part_of = {vertex: index for index, part in enumerate(parts) for vertex in part}
+    edges = tuple(Edge(left, right) for i, left in enumerate(ids)
+                  for right in ids[i + 1:] if part_of[left] != part_of[right])
+    return Graph(tuple(ids), {vertex: vertex for vertex in ids}, edges), parts
+
+
 # ---------------------------------------------------------------- traversal
 
 

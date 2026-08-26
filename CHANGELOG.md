@@ -8,6 +8,11 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Balanced Turán graph figures.** The new `turan` template computes
+  `T(n,r)` from two integers, draws its N-way parts as colored columns, and
+  reports the verified edge count and clique-free claim. Invalid part counts
+  and figures over the 11-vertex cap are refused with witnesses.
+
 - **Hall witnesses for deficient bipartite matchings.** A failed final
   augmentation now ends on the alternating reach, highlights deterministic
   `S` and `N(S)`, and states the strict Hall inequality. Matching and König

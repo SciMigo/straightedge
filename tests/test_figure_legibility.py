@@ -100,6 +100,7 @@ CORPUS: dict[str, dict] = {
     'structure_chart': {"title": "Four features", "root": "Project finance", "children": [{"term": "Limited recourse", "desc": "Lenders rely on project cash flow"}, {"term": "Risk sharing", "desc": "Parties bear what they can control"}, {"term": "Off balance sheet", "desc": "Sponsor debt is not increased"}]},
     't_account': {"title": "借贷记账", "accounts": [{"name": "银行存款", "debit": [{"text": "收到投资", "amount": "100000"}], "credit": [{"text": "购买设备", "amount": "60000"}]}]},
     'timeline': {"title": "会计发展简史", "events": [{"date": "远古", "label": "结绳记事", "desc": "简单计数"}, {"date": "1494", "label": "复式记账", "desc": "帕乔利"}, {"date": "当代", "label": "会计信息化", "desc": "智能财务"}]},
+    'turan': {"n": 7, "r": 3, "highlight_clique_free": True},
     'unit_circle': {"angle": 45, "show_sin": True, "show_cos": True},
     'wbs': {"root": {"name": "项目", "children": [{"name": "设计", "children": [{"name": "方案"}, {"name": "施工图"}]}, {"name": "施工"}]}},
 }

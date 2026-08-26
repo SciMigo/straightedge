@@ -125,6 +125,13 @@ numbers for the small accepted graphs and the triangle-free check. Since the
 output must fit the figure lane, `2|V(G)|+1` may not exceed 11; in particular,
 `M(C₅)` is the 11-vertex, 20-edge Grötzsch graph with chromatic number four.
 
+`turan` accepts `n` and `r` and computes the balanced complete `r`-partite
+graph `T(n,r)`. Its fixed layout gives each part a column and a numbered color,
+and its caption reports the computed part sizes, edge count, and absence of
+`K_(r+1)`. It refuses `r < 1`, `r > n`, non-integer parameters, and figures
+over the shared 11-vertex cap. Thus the course instances render with 9 edges
+for `T(6,2)`, 12 for `T(6,3)`, and 16 for `T(7,3)`.
+
 ## Building a lab on this
 
 The pattern the `examples/` directory argues for applies: **compute, assert,
