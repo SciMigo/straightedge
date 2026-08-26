@@ -86,7 +86,7 @@ accepts everything the video does and more:
 | `bellman_ford` | weights, `start` | the negative cycle |
 | `kruskal` | undirected, weights | — (rejected edges are drawn dashed) |
 | `prim` | undirected, weights, `start` | — |
-| `topological_sort` | directed | the cycle, when the graph is not a DAG |
+| `topological_sort` | directed; `tie_break` is `"fifo"` or `"min"` | the cycle, or an unknown tie-break policy |
 | `scc` | directed | — (components are coloured, finish times badged) |
 | `max_flow` | directed, capacities, `source`, `sink` | source = sink, an uncapacitated edge |
 | `greedy_coloring` | optional `vertex_order` | — |

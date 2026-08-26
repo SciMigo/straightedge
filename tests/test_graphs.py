@@ -374,6 +374,16 @@ def test_topological_sort_orders_a_dag_and_names_a_cycle():
     assert set(info.value.witness) == {"A", "B", "C"}
 
 
+def test_topological_sort_supports_fifo_and_minimum_tie_breaks():
+    dag = coerce_graph({"directed": True, "nodes": [{"id": x} for x in "ABCD"],
+                        "edges": [{"from": "A", "to": "D"},
+                                  {"from": "B", "to": "C"}]})
+    assert topological_sort_steps(dag, "fifo")[-1].panel == ("order: A, B, D, C",)
+    assert topological_sort_steps(dag, "min")[-1].panel == ("order: A, B, C, D",)
+    with pytest.raises(GraphError, match="tie_break"):
+        topological_sort_steps(dag, "random")
+
+
 def test_scc_finds_the_components():
     g = _graph([("A", "B"), ("B", "C"), ("C", "A"), ("C", "D"), ("D", "E"), ("E", "D")],
                directed=True)

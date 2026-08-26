@@ -1401,10 +1401,12 @@ def _find_cycle(graph: Graph, among: Iterable[str]) -> list[str]:
     return []
 
 
-def topological_sort_steps(graph: Graph) -> list[Step]:
+def topological_sort_steps(graph: Graph, tie_break: str = "fifo") -> list[Step]:
     """Kahn's algorithm: repeatedly remove a vertex with no incoming edge."""
     if not graph.directed:
         raise GraphError("topological order needs a directed graph")
+    if tie_break not in {"min", "fifo"}:
+        raise GraphError("tie_break must be min or fifo")
     indegree = {v: 0 for v in graph.ids}
     for edge in graph.edges:
         indegree[edge.target] += 1
@@ -1414,24 +1416,28 @@ def topological_sort_steps(graph: Graph) -> list[Step]:
                   {v: "frontier" for v in graph.ids if indegree[v] == 0}, {},
                   {v: f"in {d}" for v, d in indegree.items()},
                   panel=("order: ∅",))]
-    while True:
-        ready = [v for v in graph.ids if v not in order and indegree[v] == 0]
-        if not ready:
-            break
-        current = ready[0]
+    ready = [v for v in graph.ids if indegree[v] == 0]
+    while ready:
+        if tie_break == "min":
+            current = min(ready, key=_vertex_sort_key)
+            ready.remove(current)
+        else:
+            current = ready.pop(0)
         order.append(current)
         for w in graph.neighbors(current):
             indegree[w] -= 1
             removed.add((current, w))
+            if indegree[w] == 0:
+                ready.append(w)
         nodes = {v: "visited" for v in order}
-        nodes.update({v: "frontier" for v in graph.ids
-                      if v not in order and indegree[v] == 0})
+        nodes.update({v: "frontier" for v in ready})
         nodes[current] = "current"
         steps.append(Step(f"Remove {current}",
                           f"Take {current} (no incoming edges left); position {len(order)}",
                           nodes, {k: "tree" for k in removed},
                           {v: f"in {d}" for v, d in indegree.items()},
-                          panel=("order: " + ", ".join(order),)))
+                          panel=("order: " + ", ".join(order),),
+                          extras={"tie_break": tie_break, "ready": list(ready)}))
     if len(order) != len(graph.ids):
         cycle = _find_cycle(graph, [v for v in graph.ids if v not in order])
         raise GraphError("the graph has a cycle, so it has no topological order: "

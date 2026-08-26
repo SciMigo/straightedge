@@ -287,3 +287,15 @@ def test_degeneracy_ordering_obeys_the_graph_trace_vertex_cap():
         "algorithm": "degeneracy_ordering", "nodes": [{"id": str(i)} for i in range(12)],
         "edges": []})[0]
     assert finding.check == "graph_algorithm_size" and "11 vertices" in finding.message
+
+
+def test_topological_sort_routes_fifo_and_min_tie_breaks():
+    params = {"algorithm": "topological_sort", "directed": True,
+              "nodes": [{"id": x} for x in "ABCD"],
+              "edges": [{"from": "A", "to": "D"}, {"from": "B", "to": "C"}]}
+    assert compute_steps({**params, "tie_break": "fifo"})[-1].panel == (
+        "order: A, B, D, C",)
+    assert compute_steps({**params, "tie_break": "min"})[-1].panel == (
+        "order: A, B, C, D",)
+    finding = refusal_findings("graph_algorithm", {**params, "tie_break": "random"})[0]
+    assert "tie_break must be min or fifo" in finding.message

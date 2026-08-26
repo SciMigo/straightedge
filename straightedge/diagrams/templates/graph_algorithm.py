@@ -126,7 +126,7 @@ def compute_steps(params: Dict[str, Any]) -> List[Step]:
     if algorithm == "prim":
         return prim_steps(graph, start)
     if algorithm == "topological_sort":
-        return topological_sort_steps(graph)
+        return topological_sort_steps(graph, str(params.get("tie_break", "fifo")))
     if algorithm == "scc":
         return scc_steps(graph)
     if algorithm == "max_flow":
@@ -313,6 +313,7 @@ class GraphAlgorithmTemplate:
         params.get("check")
         params.get("max_frames", 20)
         params.get("classes")
+        params.get("tie_break", "fifo")
         params.get("graph_layout", "circular")
         animate = bool(params.get("animate", True))
         duration_s = float(params.get("duration_s", 1.2))

@@ -81,7 +81,7 @@ interview track.
 - [x] 9 `mycielski`
 - [x] 10 `edge_coloring`
 - [x] 11 `degeneracy_ordering`
-- [ ] 12 `topological_sort` tie-break
+- [x] 12 `topological_sort` tie-break
 - [ ] 13 `scc` finish-order and condensation
 - [ ] 14 `bipartite_matching` Hall violator
 
@@ -229,7 +229,7 @@ interview track.
 - **Note.** `greedy_coloring` with an explicit `vertex_order` already covers
   the Brooks ordering slide (21); this template computes the order.
 
-### 12. `topological_sort` `tie_break` — module i03
+### 12. ✅ `topological_sort` `tie_break` — module i03
 
 - **Change.** Accept `tie_break: "min" | "fifo"` so the storyboard's peel
   order matches the lecture's stated order; refuse an unknown value.

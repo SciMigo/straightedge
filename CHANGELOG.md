@@ -8,6 +8,10 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Explicit topological-sort tie-breaking.** Kahn traces accept
+  `tie_break: "fifo" | "min"`; the ready frontier and resulting lecture order
+  now follow the named policy, and unknown policies are refused.
+
 - **Smallest-last degeneracy orderings.** `degeneracy_ordering` deletes a
   deterministic minimum-degree vertex per frame, tracks the maximum such
   degree, and finishes with a checked reverse-order greedy coloring using at
