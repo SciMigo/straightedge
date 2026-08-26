@@ -638,6 +638,117 @@ def ear_decomposition_steps(graph: Graph, start_cycle: list[Any] | None = None) 
     return steps
 
 
+# ---------------------------------------------------------- stable matching
+
+
+def stable_matching_graph(proposers: Any, receivers: Any) -> Graph:
+    """Validate complete strict preferences and return their bipartite graph."""
+    if not isinstance(proposers, dict) or not proposers:
+        raise GraphError("proposers must be a non-empty object of preference arrays")
+    if not isinstance(receivers, dict) or not receivers:
+        raise GraphError("receivers must be a non-empty object of preference arrays")
+    left = [str(value) for value in proposers]
+    right = [str(value) for value in receivers]
+    if set(left) & set(right):
+        raise GraphError("proposer and receiver names must be disjoint")
+    if len(left) != len(right):
+        raise GraphError("stable matching needs equally sized sides",
+                         witness=(len(left), len(right)))
+    for raw_name, preferences in proposers.items():
+        name = str(raw_name)
+        values = [str(value) for value in preferences] if isinstance(preferences, list) else []
+        if len(values) != len(right) or set(values) != set(right):
+            raise GraphError(f"preferences for proposer {name} must be a permutation of receivers",
+                             witness=name)
+    for raw_name, preferences in receivers.items():
+        name = str(raw_name)
+        values = [str(value) for value in preferences] if isinstance(preferences, list) else []
+        if len(values) != len(left) or set(values) != set(left):
+            raise GraphError(f"preferences for receiver {name} must be a permutation of proposers",
+                             witness=name)
+    ids = tuple(left + right)
+    edges = tuple(Edge(proposer, receiver) for proposer in left for receiver in right)
+    return Graph(ids, {vertex: vertex for vertex in ids}, edges)
+
+
+def stable_matching_steps(proposers: Any, receivers: Any,
+                          check: Any = None) -> list[Step]:
+    """Proposer-optimal Gale–Shapley, one proposal per step."""
+    graph = stable_matching_graph(proposers, receivers)
+    left = [str(value) for value in proposers]
+    right = [str(value) for value in receivers]
+    proposer_preferences = {str(name): [str(value) for value in values]
+                            for name, values in proposers.items()}
+    receiver_rank = {str(name): {str(value): index for index, value in enumerate(values)}
+                     for name, values in receivers.items()}
+
+    if check is not None:
+        if not isinstance(check, dict):
+            raise GraphError("check must map every proposer to one receiver")
+        authored = {str(name): str(value) for name, value in check.items()}
+        if set(authored) != set(left) or len(set(authored.values())) != len(right) \
+                or set(authored.values()) != set(right):
+            raise GraphError("check must be a one-to-one matching of both sides")
+        partner = {receiver: proposer for proposer, receiver in authored.items()}
+        for proposer in left:
+            own = authored[proposer]
+            for receiver in proposer_preferences[proposer]:
+                if receiver == own:
+                    break
+                if receiver_rank[receiver][proposer] < receiver_rank[receiver][partner[receiver]]:
+                    raise GraphError(
+                        f"authored matching is unstable: ({proposer}, {receiver}) is a blocking pair",
+                        witness=(proposer, receiver))
+
+    held: dict[str, str] = {}
+    next_choice = {proposer: 0 for proposer in left}
+    free = list(left)
+    steps = [Step("Start", "Every proposer is free", panel=("held offers: —",),
+                  extras={"proposals": 0})]
+    proposals = 0
+    while free:
+        proposer = free.pop(0)
+        if next_choice[proposer] >= len(right):
+            raise GraphError(f"proposer {proposer} exhausted every preference", witness=proposer)
+        receiver = proposer_preferences[proposer][next_choice[proposer]]
+        next_choice[proposer] += 1
+        proposals += 1
+        previous = held.get(receiver)
+        rejected: str | None = None
+        if previous is None or receiver_rank[receiver][proposer] < receiver_rank[receiver][previous]:
+            held[receiver] = proposer
+            if previous is not None:
+                rejected = previous
+                free.append(previous)
+        else:
+            rejected = proposer
+            free.append(proposer)
+        held_edges = {graph.key(value, key): "tree" for key, value in held.items()}
+        if rejected is not None:
+            held_edges[graph.key(rejected, receiver)] = "rejected"
+        nodes = {value: "visited" for pair in held_edges for value in pair}
+        nodes[proposer] = "current"
+        nodes[receiver] = "frontier"
+        held_text = ", ".join(f"{value}–{key}" for key, value in held.items())
+        outcome = (f"{receiver} holds {held[receiver]}"
+                   if rejected is None else f"{receiver} rejects {rejected}; holds {held[receiver]}")
+        steps.append(Step(
+            f"{proposer} proposes to {receiver}", outcome, nodes, held_edges,
+            panel=("held: " + held_text,), extras={"proposals": proposals, "held": dict(held)},
+        ))
+    matching = {proposer: receiver for receiver, proposer in held.items()}
+    final_edges = {graph.key(proposer, receiver): "path"
+                   for proposer, receiver in matching.items()}
+    steps.append(Step(
+        "Stable matching", f"No proposer is free after {proposals} proposals",
+        {vertex: "visited" for vertex in graph.ids}, final_edges,
+        panel=("matching: " + ", ".join(f"{p}–{matching[p]}" for p in left),
+               f"proposals = {proposals}"),
+        extras={"matching": matching, "proposals": proposals},
+    ))
+    return steps
+
+
 # ---------------------------------------------------------------- traversal
 
 

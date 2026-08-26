@@ -17,7 +17,7 @@ from ...graphs import (
     greedy_coloring_steps,
     kruskal_steps, matching_steps, max_flow_steps, prim_steps,
     prufer_decode_graph, prufer_decode_steps, prufer_encode_steps,
-    require_vertex, scc_steps,
+    require_vertex, scc_steps, stable_matching_graph, stable_matching_steps,
     topological_sort_steps, vertex_cover_steps,
     tree_center_steps,
 )
@@ -35,10 +35,10 @@ ALGORITHMS = {
     "max_flow", "greedy_coloring", "bipartite_matching", "vertex_cover", "euler",
     "low_link",
     "prufer_encode", "prufer_decode",
-    "tree_center", "ear_decomposition",
+    "tree_center", "ear_decomposition", "stable_matching",
 }
 WEIGHTED = {"dijkstra", "bellman_ford", "kruskal", "prim"}
-NEEDS_PARTITIONS = {"bipartite_matching", "vertex_cover"}
+NEEDS_PARTITIONS = {"bipartite_matching", "vertex_cover", "stable_matching"}
 
 #: Step roles → the ``graph`` template's node states.
 _NODE_STATES = {"current": "current", "frontier": "target", "visited": "visited",
@@ -84,6 +84,12 @@ def compute_steps(params: Dict[str, Any]) -> List[Step]:
         if len(graph.ids) > MAX_VERTICES:
             raise GraphError(f"at most {MAX_VERTICES} vertices fit in one readable trace")
         return prufer_decode_steps(params.get("code"))
+    if algorithm == "stable_matching":
+        graph = stable_matching_graph(params.get("proposers"), params.get("receivers"))
+        if len(graph.ids) > MAX_VERTICES:
+            raise GraphError(f"at most {MAX_VERTICES} vertices fit in one readable trace")
+        return stable_matching_steps(params.get("proposers"), params.get("receivers"),
+                                     params.get("check"))
     graph = coerce_graph(params)
     if len(graph.ids) > MAX_VERTICES:
         raise GraphError(f"at most {MAX_VERTICES} vertices fit in one readable trace")
@@ -177,6 +183,10 @@ def _base(params: Dict[str, Any]) -> Dict[str, Any]:
         graph = prufer_decode_graph(params.get("code"))
         nodes = [{"id": vertex} for vertex in graph.ids]
         edges = [{"from": edge.source, "to": edge.target} for edge in graph.edges]
+    elif algorithm == "stable_matching":
+        graph = stable_matching_graph(params.get("proposers"), params.get("receivers"))
+        nodes = [{"id": vertex} for vertex in graph.ids]
+        edges = [{"from": edge.source, "to": edge.target} for edge in graph.edges]
     else:
         nodes, edges = _parts(params)
     return {"nodes": nodes, "edges": edges, "directed": bool(params.get("directed", False)),
@@ -189,8 +199,10 @@ def _base(params: Dict[str, Any]) -> Dict[str, Any]:
 def frames_from_steps(params: Dict[str, Any], steps: List[Step]) -> List[Dict[str, Any]]:
     """``graph`` template calls, one per step, for a storyboard or animation."""
     base = _base(params)
-    graph = (prufer_decode_graph(params.get("code")) if _algorithm(params) == "prufer_decode"
-             else coerce_graph(params))
+    algorithm = _algorithm(params)
+    graph = (prufer_decode_graph(params.get("code")) if algorithm == "prufer_decode"
+             else stable_matching_graph(params.get("proposers"), params.get("receivers"))
+             if algorithm == "stable_matching" else coerce_graph(params))
     out = []
     for step in steps:
         nodes = {v: _NODE_STATES.get(role, role) for v, role in step.node_states.items()}
@@ -227,7 +239,10 @@ def frames_from_steps(params: Dict[str, Any], steps: List[Step]) -> List[Dict[st
             frame["distance_labels"] = dict(step.badges)
         if _algorithm(params) in NEEDS_PARTITIONS:
             frame["layout"] = "bipartite"
-            frame["partitions"] = params.get("partitions")
+            frame["partitions"] = ({"left": list(params.get("proposers", {})),
+                                    "right": list(params.get("receivers", {}))}
+                                   if algorithm == "stable_matching"
+                                   else params.get("partitions"))
         out.append({"label": step.label, "visual": {"type": "graph", "params": frame}})
     return out
 
@@ -282,6 +297,9 @@ class GraphAlgorithmTemplate:
         params.get("expect")
         params.get("show_eccentricities", False)
         params.get("start_cycle")
+        params.get("proposers")
+        params.get("receivers")
+        params.get("check")
         params.get("graph_layout", "circular")
         animate = bool(params.get("animate", True))
         duration_s = float(params.get("duration_s", 1.2))

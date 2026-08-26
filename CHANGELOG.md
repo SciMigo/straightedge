@@ -8,6 +8,11 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Gale–Shapley proposal traces and stability checks.** `stable_matching`
+  shows each proposal, held offer, rejection, and the final matching. Complete
+  strict preferences are checked as permutations, and an authored `check`
+  matching is refused with its first blocking pair.
+
 - **Open-ear decompositions with numbered edge colors.** `graph_algorithm`
   computes one ear per frame, can honor a checked starting cycle, and refuses
   a graph with its articulation-vertex witness. The shared `graph` renderer

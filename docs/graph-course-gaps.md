@@ -74,7 +74,7 @@ interview track.
 - [x] 2 `havel_hakimi`
 - [x] 3 `tree_center`
 - [x] 4 `ear_decomposition`
-- [ ] 5 `stable_matching`
+- [x] 5 `stable_matching`
 - [ ] 6 `hamiltonian_search`
 - [ ] 7 `turan(n, r)`
 - [ ] 8 `floyd_warshall`
@@ -141,7 +141,7 @@ interview track.
   existing `color-N` node roles) — this also unblocks 16's three disjoint
   paths and 22's edge colourings.
 
-### 5. `stable_matching` (Gale–Shapley) — module 12
+### 5. ✅ `stable_matching` (Gale–Shapley) — module 12
 
 - **Shows.** One panel per proposal round: proposers, receivers, the held
   offer per receiver, the rejected proposal as `rejected`; final matching

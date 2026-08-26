@@ -98,6 +98,7 @@ accepts everything the video does and more:
 | `prufer_decode` | `code` on vertices `1..len(code)+2` | the first code entry outside that range |
 | `tree_center` | a tree; optional `show_eccentricities` | a cycle or disconnected components |
 | `ear_decomposition` | a 2-connected graph; optional `start_cycle` | an articulation vertex or disconnected components |
+| `stable_matching` | complete `proposers` / `receivers` preference objects; optional `check` | a malformed preference list or the first blocking pair |
 
 A storyboard holds 12 panels and an animation 24 frames; a longer trace is
 refused as unreadable rather than truncated.

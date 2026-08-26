@@ -15,7 +15,7 @@ from straightedge.graphs import (
     GraphError, bellman_ford_steps, bipartition, coerce_graph, dijkstra_steps,
     connectivity_analysis, connectivity_steps, euler_steps, greedy_coloring_steps, konig_cover, kruskal_steps,
     ear_decomposition_steps, havel_hakimi_steps, matching_steps, max_flow_steps,
-    prim_steps, scc_steps, steps_for,
+    prim_steps, scc_steps, stable_matching_steps, steps_for,
     prufer_decode_graph, prufer_decode_steps, prufer_encode_steps,
     topological_sort_steps, traversal_steps, tree_center_steps, vertex_cover_steps,
 )
@@ -217,6 +217,36 @@ def test_ear_decomposition_refuses_an_articulation_vertex():
     with pytest.raises(GraphError, match="articulation") as refused:
         ear_decomposition_steps(bowtie)
     assert refused.value.witness == "C"
+
+
+# ---------------------------------------------------------- stable matching
+
+
+STABLE_PROPOSERS = {
+    "A": ["3", "4", "1", "2"], "B": ["3", "4", "2", "1"],
+    "C": ["1", "4", "3", "2"], "D": ["3", "4", "1", "2"],
+}
+STABLE_RECEIVERS = {
+    "1": ["D", "A", "B", "C"], "2": ["B", "D", "C", "A"],
+    "3": ["D", "B", "A", "C"], "4": ["B", "A", "D", "C"],
+}
+
+
+def test_gale_shapley_course_outcome_takes_ten_proposals():
+    steps = stable_matching_steps(STABLE_PROPOSERS, STABLE_RECEIVERS)
+    assert steps[-1].extras["matching"] == {"A": "1", "B": "4", "C": "2", "D": "3"}
+    assert steps[-1].extras["proposals"] == 10
+    assert len([step for step in steps if "proposes to" in step.label]) == 10
+
+
+def test_stable_matching_refuses_bad_preferences_and_names_a_blocking_pair():
+    with pytest.raises(GraphError, match="permutation") as preferences:
+        stable_matching_steps({**STABLE_PROPOSERS, "A": ["1"]}, STABLE_RECEIVERS)
+    assert preferences.value.witness == "A"
+    with pytest.raises(GraphError, match="blocking pair") as unstable:
+        stable_matching_steps(STABLE_PROPOSERS, STABLE_RECEIVERS,
+                              {"A": "4", "B": "3", "C": "1", "D": "2"})
+    assert unstable.value.witness == ("D", "3")
 
 
 # ---------------------------------------------------------- DAGs and SCCs

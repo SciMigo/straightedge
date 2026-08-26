@@ -6,6 +6,14 @@ from straightedge.diagrams.templates.graph_algorithm import (
 
 
 NODES = [{"id": x} for x in "ABCD"]
+STABLE_PROPOSERS = {
+    "A": ["3", "4", "1", "2"], "B": ["3", "4", "2", "1"],
+    "C": ["1", "4", "3", "2"], "D": ["3", "4", "1", "2"],
+}
+STABLE_RECEIVERS = {
+    "1": ["D", "A", "B", "C"], "2": ["B", "D", "C", "A"],
+    "3": ["D", "B", "A", "C"], "4": ["B", "A", "D", "C"],
+}
 
 
 def test_dijkstra_computes_an_animated_svg_with_distances():
@@ -197,3 +205,21 @@ def test_ear_decomposition_template_names_the_cut_vertex():
                   [("A", "B"), ("B", "C"), ("C", "A"),
                    ("C", "D"), ("D", "E"), ("E", "C")]]})[0]
     assert finding.label == "C" and "articulation" in finding.message
+
+
+def test_stable_matching_draws_ten_proposals_and_the_course_outcome():
+    params = {"algorithm": "stable_matching", "proposers": STABLE_PROPOSERS,
+              "receivers": STABLE_RECEIVERS, "animate": False}
+    svg = render_diagram({"type": "graph_algorithm", "params": params})
+    assert "Stable matching" in svg
+    final = compute_steps(params)[-1]
+    assert final.extras["matching"] == {"A": "1", "B": "4", "C": "2", "D": "3"}
+    assert final.panel[1] == "proposals = 10"
+
+
+def test_stable_matching_template_refuses_with_the_blocking_pair():
+    finding = refusal_findings("graph_algorithm", {
+        "algorithm": "stable_matching", "proposers": STABLE_PROPOSERS,
+        "receivers": STABLE_RECEIVERS,
+        "check": {"A": "4", "B": "3", "C": "1", "D": "2"}})[0]
+    assert finding.label == "D–3" and "blocking pair" in finding.message
