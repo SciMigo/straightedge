@@ -8,6 +8,11 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Smallest-last degeneracy orderings.** `degeneracy_ordering` deletes a
+  deterministic minimum-degree vertex per frame, tracks the maximum such
+  degree, and finishes with a checked reverse-order greedy coloring using at
+  most `d+1` colors.
+
 - **Exact small-graph edge coloring.** `edge_coloring` computes a proper
   coloring with Δ or Δ+1 colors, draws each class with a numbered edge role,
   and validates authored `classes`. Shared endpoints and false `expect`

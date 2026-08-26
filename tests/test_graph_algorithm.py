@@ -265,3 +265,25 @@ def test_edge_coloring_refuses_adjacent_edges_in_one_authored_class():
         "edges": [{"from": "A", "to": "B"}, {"from": "A", "to": "C"}],
         "classes": [[["A", "B"], ["A", "C"]]]})[0]
     assert finding.label == "A" and "share vertex" in finding.message
+
+
+def test_degeneracy_ordering_draws_petersen_deletions_then_coloring():
+    params = {"algorithm": "degeneracy_ordering",
+              "nodes": [{"id": str(i)} for i in range(10)],
+              "edges": [{"from": str(a), "to": str(b)} for a, b in
+                        [(0, 1), (1, 2), (2, 3), (3, 4), (4, 0),
+                         (0, 5), (1, 6), (2, 7), (3, 8), (4, 9),
+                         (5, 7), (7, 9), (9, 6), (6, 8), (8, 5)]],
+              "animate": False}
+    svg = render_diagram({"type": "graph_algorithm", "params": params})
+    assert "Reverse greedy coloring" in svg
+    steps = compute_steps(params)
+    assert steps[-1].extras["degeneracy"] == 3
+    assert len(steps[-1].extras["classes"]) == 3
+
+
+def test_degeneracy_ordering_obeys_the_graph_trace_vertex_cap():
+    finding = refusal_findings("graph_algorithm", {
+        "algorithm": "degeneracy_ordering", "nodes": [{"id": str(i)} for i in range(12)],
+        "edges": []})[0]
+    assert finding.check == "graph_algorithm_size" and "11 vertices" in finding.message

@@ -101,6 +101,7 @@ accepts everything the video does and more:
 | `stable_matching` | complete `proposers` / `receivers` preference objects; optional `check` | a malformed preference list or the first blocking pair |
 | `hamiltonian_search` | `start`, optional `max_frames` and `expect` | a false expected cycle/non-cycle claim, with the cycle or exhausted-state count |
 | `edge_coloring` | optional authored `classes` and `expect` | adjacent same-class edges, omitted edges, or an impossible expectation below Δ |
+| `degeneracy_ordering` | an undirected graph | the shared 11-vertex trace cap |
 
 A storyboard holds 12 panels and an animation 24 frames; a longer trace is
 refused as unreadable rather than truncated.

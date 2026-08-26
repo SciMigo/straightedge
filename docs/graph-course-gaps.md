@@ -80,7 +80,7 @@ interview track.
 - [x] 8 `floyd_warshall`
 - [x] 9 `mycielski`
 - [x] 10 `edge_coloring`
-- [ ] 11 `degeneracy_ordering`
+- [x] 11 `degeneracy_ordering`
 - [ ] 12 `topological_sort` tie-break
 - [ ] 13 `scc` finish-order and condensation
 - [ ] 14 `bipartite_matching` Hall violator
@@ -217,7 +217,7 @@ interview track.
   `B` (class 2). The Shannon triangle needs multigraphs — out of scope here.
 - **Needs.** `color-N` edge roles (see item 4).
 
-### 11. `degeneracy_ordering` (smallest-last) — module 20
+### 11. ✅ `degeneracy_ordering` (smallest-last) — module 20
 
 - **Shows.** One panel per deletion of a minimum-degree vertex (`rejected`),
   the degeneracy `d` in the panel, then the greedy colouring in reverse

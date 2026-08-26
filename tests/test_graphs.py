@@ -12,7 +12,8 @@ from __future__ import annotations
 import pytest
 
 from straightedge.graphs import (
-    GraphError, bellman_ford_steps, bipartition, coerce_graph, dijkstra_steps,
+    GraphError, bellman_ford_steps, bipartition, coerce_graph, degeneracy_ordering_steps,
+    dijkstra_steps,
     connectivity_analysis, connectivity_steps, euler_steps, greedy_coloring_steps, konig_cover, kruskal_steps,
     ear_decomposition_steps, edge_coloring_steps, hamiltonian_search_steps,
     havel_hakimi_steps,
@@ -341,6 +342,23 @@ def test_edge_coloring_verifies_authored_classes_and_refuses_shared_vertex():
     with pytest.raises(GraphError, match="below maximum degree") as too_few:
         edge_coloring_steps(k4, expect=2)
     assert too_few.value.witness == 3
+
+
+# -------------------------------------------------------------- degeneracy
+
+
+def test_degeneracy_ordering_colors_petersen_in_twelve_panels():
+    petersen = _graph([(str(a), str(b)) for a, b in
+                       [(0, 1), (1, 2), (2, 3), (3, 4), (4, 0),
+                        (0, 5), (1, 6), (2, 7), (3, 8), (4, 9),
+                        (5, 7), (7, 9), (9, 6), (6, 8), (8, 5)]])
+    steps = degeneracy_ordering_steps(petersen)
+    assert len(steps) == 12 and steps[-1].extras["degeneracy"] == 3
+    assert len(steps[-1].extras["classes"]) == 3
+    colors = steps[-1].extras["colors"]
+    assert all(colors[edge.source] != colors[edge.target] for edge in petersen.edges)
+    assert all("color-" not in role for step in steps[:-1]
+               for role in step.node_states.values())
 
 
 # ---------------------------------------------------------- DAGs and SCCs

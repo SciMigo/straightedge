@@ -1071,6 +1071,56 @@ def edge_coloring_steps(graph: Graph, classes: Any = None,
     return steps
 
 
+# -------------------------------------------------------------- degeneracy
+
+
+def degeneracy_ordering_steps(graph: Graph) -> list[Step]:
+    """Smallest-last deletion followed by greedy coloring in reverse order."""
+    if graph.directed:
+        raise GraphError("degeneracy ordering here needs an undirected graph")
+    remaining = set(graph.ids)
+    order: list[str] = []
+    removed: list[str] = []
+    degeneracy = 0
+    steps = [Step("Start", "Repeatedly delete a current minimum-degree vertex",
+                  panel=("degeneracy so far: 0",))]
+    while remaining:
+        degree = {vertex: sum(neighbor in remaining for neighbor in graph.neighbors(vertex))
+                  for vertex in graph.ids if vertex in remaining}
+        minimum = min(degree.values())
+        vertex = next(value for value in graph.ids
+                      if value in remaining and degree[value] == minimum)
+        degeneracy = max(degeneracy, minimum)
+        remaining.remove(vertex)
+        order.append(vertex)
+        removed.append(vertex)
+        nodes = {value: "rejected" for value in removed}
+        nodes[vertex] = "current"
+        steps.append(Step(
+            f"Delete {vertex}", f"Delete minimum-degree vertex {vertex} (degree {minimum})",
+            nodes, badges={value: f"deg {degree[value]}" for value in degree},
+            panel=("order: " + ", ".join(order), f"degeneracy so far: {degeneracy}"),
+            extras={"order": list(order), "degree": minimum, "degeneracy": degeneracy},
+        ))
+    colors: dict[str, int] = {}
+    for vertex in reversed(order):
+        used = {colors[neighbor] for neighbor in graph.neighbors(vertex) if neighbor in colors}
+        colors[vertex] = next(color for color in range(1, degeneracy + 2)
+                              if color not in used)
+    classes = [[vertex for vertex in graph.ids if colors[vertex] == color]
+               for color in range(1, max(colors.values(), default=0) + 1)]
+    steps.append(Step(
+        "Reverse greedy coloring",
+        f"Color in reverse deletion order using {len(classes)} ≤ {degeneracy + 1} colors",
+        {vertex: f"color-{colors[vertex]}" for vertex in graph.ids},
+        panel=(f"degeneracy = {degeneracy}",
+               "classes: " + " | ".join("{" + ",".join(group) + "}" for group in classes)),
+        extras={"order": order, "degeneracy": degeneracy, "colors": colors,
+                "classes": classes},
+    ))
+    return steps
+
+
 # ---------------------------------------------------------------- traversal
 
 
