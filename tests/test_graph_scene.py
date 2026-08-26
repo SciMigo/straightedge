@@ -23,6 +23,7 @@ def test_every_concept_and_algorithm_emits_one_beat_per_step_plus_the_drawing():
         (ConceptGraph.SHORTEST_PATH, ("dijkstra", "bellman_ford")),
         (ConceptGraph.SPANNING_TREE, ("kruskal", "prim")),
         (ConceptGraph.MAX_FLOW, ("edmonds_karp",)),
+        (ConceptGraph.CONNECTIVITY, ("low_link",)),
     ):
         for algorithm in algorithms:
             plan = plan_from_template(concept, {"algorithm": algorithm})
@@ -40,6 +41,7 @@ def test_a_request_routes_to_the_graph_topic_and_its_concept():
     assert plan.parameters["algorithm"] == "dijkstra"
     assert build_plan("画网络流的最大流和最小割").concept == ConceptGraph.MAX_FLOW
     assert build_plan("用 DFS 遍历这个图").parameters["algorithm"] == "dfs"
+    assert build_plan("找出图中的桥和割点").concept == ConceptGraph.CONNECTIVITY
     # A bare graph-theory request is a traversal, not a fallback to geometry.
     assert build_plan("画一个图论的例子").concept == ConceptGraph.TRAVERSAL
 
@@ -74,7 +76,7 @@ def test_the_precondition_refuses_what_the_algorithm_cannot_do():
 def test_the_precondition_publishes_the_parameters_it_reads():
     from straightedge import list_templates
     listed = {t.id: t for t in list_templates()}
-    for concept in (ConceptGraph.TRAVERSAL, ConceptGraph.MAX_FLOW):
+    for concept in (ConceptGraph.TRAVERSAL, ConceptGraph.MAX_FLOW, ConceptGraph.CONNECTIVITY):
         assert {"nodes", "edges", "algorithm", "start"} <= set(listed[concept].params)
         assert listed[concept].invocation == "prompt"
 

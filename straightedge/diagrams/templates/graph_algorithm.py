@@ -12,9 +12,10 @@ from __future__ import annotations
 from typing import Any, Dict, List, Tuple
 
 from ...graphs import (
-    Graph, GraphError, Step, bellman_ford_steps, coerce_graph, dijkstra_steps,
-    euler_steps, greedy_coloring_steps, kruskal_steps, matching_steps,
-    max_flow_steps, prim_steps, require_vertex, scc_steps,
+    Graph, GraphError, Step, bellman_ford_steps, coerce_graph,
+    connectivity_steps, dijkstra_steps, euler_steps, greedy_coloring_steps,
+    kruskal_steps, matching_steps, max_flow_steps, prim_steps,
+    require_vertex, scc_steps,
     topological_sort_steps, vertex_cover_steps,
 )
 from ...qc import Finding
@@ -29,13 +30,14 @@ MAX_ANIMATED_STEPS = 24
 ALGORITHMS = {
     "dijkstra", "bellman_ford", "kruskal", "prim", "topological_sort", "scc",
     "max_flow", "greedy_coloring", "bipartite_matching", "vertex_cover", "euler",
+    "low_link",
 }
 WEIGHTED = {"dijkstra", "bellman_ford", "kruskal", "prim"}
 NEEDS_PARTITIONS = {"bipartite_matching", "vertex_cover"}
 
 #: Step roles → the ``graph`` template's node states.
 _NODE_STATES = {"current": "current", "frontier": "target", "visited": "visited",
-                "source": "current", "sink": "target"}
+                "source": "current", "sink": "target", "articulation": "articulation"}
 
 
 def _parts(params: Dict[str, Any]) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
@@ -99,6 +101,8 @@ def compute_steps(params: Dict[str, Any]) -> List[Step]:
         return greedy_coloring_steps(graph, [str(x) for x in order] if order else None)
     if algorithm == "euler":
         return euler_steps(graph)
+    if algorithm == "low_link":
+        return connectivity_steps(graph)
     left = _left_partition(params, graph)
     if algorithm == "bipartite_matching":
         return matching_steps(graph, left)[0]
@@ -163,7 +167,10 @@ def frames_from_steps(params: Dict[str, Any], steps: List[Step]) -> List[Dict[st
     for step in steps:
         nodes = {v: _NODE_STATES.get(role, role) for v, role in step.node_states.items()}
         highlighted = [list(key) for key, role in step.edge_states.items()
-                       if role in {"tree", "path", "cut"}]
+                       if role in {"tree", "path"}]
+        # A bridge or a min-cut edge is the certificate; drawn like a tree
+        # edge it would exist only in the caption.
+        cut = [list(key) for key, role in step.edge_states.items() if role == "cut"]
         rejected = [list(key) for key, role in step.edge_states.items() if role == "rejected"]
         edges = base["edges"]
         if step.edge_labels:
@@ -177,7 +184,8 @@ def frames_from_steps(params: Dict[str, Any], steps: List[Step]) -> List[Dict[st
         if 0 < len(step.panel) <= 2:
             caption += " · " + " · ".join(step.panel)
         frame = {**base, "edges": edges, "caption": caption,
-                 "highlights": {"nodes": nodes, "edges": highlighted, "rejected_edges": rejected}}
+                 "highlights": {"nodes": nodes, "edges": highlighted,
+                                "rejected_edges": rejected, "cut_edges": cut}}
         if step.badges:
             frame["distance_labels"] = dict(step.badges)
         if _algorithm(params) in NEEDS_PARTITIONS:
@@ -216,7 +224,8 @@ class GraphAlgorithmTemplate:
     motion = "optional"
     checks = ["valid vertices and endpoints", "algorithm-specific assumptions",
               "nonnegative Dijkstra weights", "negative-cycle and DAG-cycle witnesses",
-              "bipartition integrity", "Euler degree parity", "computed intermediate states"]
+              "bipartition integrity", "Euler degree parity", "low-link bridge and block invariants",
+              "computed intermediate states"]
 
     def refusal_findings(self, params: Dict[str, Any]) -> List[Finding]:
         return _findings(params)

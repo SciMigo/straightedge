@@ -474,7 +474,7 @@ def _is_vertex_name(name: str) -> bool:
 # ------------------------------------------------------------------ graphs
 
 @register(ConceptGraph.TRAVERSAL, ConceptGraph.SHORTEST_PATH,
-          ConceptGraph.SPANNING_TREE, ConceptGraph.MAX_FLOW)
+          ConceptGraph.SPANNING_TREE, ConceptGraph.MAX_FLOW, ConceptGraph.CONNECTIVITY)
 def _graph_states_are_computable(plan: AnimationPlan) -> list[Violation]:
     """The algorithm must run on the supplied graph, and fit in one video.
 
