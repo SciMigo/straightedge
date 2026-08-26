@@ -77,7 +77,7 @@ interview track.
 - [x] 5 `stable_matching`
 - [x] 6 `hamiltonian_search`
 - [ ] 7 `turan(n, r)`
-- [ ] 8 `floyd_warshall`
+- [x] 8 `floyd_warshall`
 - [ ] 9 `mycielski`
 - [ ] 10 `edge_coloring`
 - [ ] 11 `degeneracy_ordering`
@@ -180,7 +180,7 @@ interview track.
   (today exactly `left`/`right`). Also wanted by i09 (three SCCs) and 20
   (three colour classes).
 
-### 8. `floyd_warshall` as a `dp_table` sequence — module i07
+### 8. ✅ `floyd_warshall` as a `dp_table` sequence — module i07
 
 - **Shows.** One `dp_table` per intermediate vertex `k`, changed entries
   highlighted, `∞` rendered; the digraph beside it.

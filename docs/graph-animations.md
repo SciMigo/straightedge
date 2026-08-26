@@ -110,6 +110,13 @@ computed graph as the recursive reductions unwind. It refuses an odd sum, a
 degree at least `n`, or the first negative reduction and includes that failing
 sequence as the witness.
 
+`floyd_warshall` is a table-first storyboard: it emits the initial distance
+matrix and one `dp_table` after each permitted intermediate vertex, highlighting
+exactly the entries that improved. A negative diagonal refuses the figure with
+the responsible vertex and reconstructed negative cycle. The graph/table
+side-by-side composition remains part of the separately tracked composite-panel
+work.
+
 ## Building a lab on this
 
 The pattern the `examples/` directory argues for applies: **compute, assert,

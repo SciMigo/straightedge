@@ -15,7 +15,7 @@ from straightedge.graphs import (
     GraphError, bellman_ford_steps, bipartition, coerce_graph, dijkstra_steps,
     connectivity_analysis, connectivity_steps, euler_steps, greedy_coloring_steps, konig_cover, kruskal_steps,
     ear_decomposition_steps, hamiltonian_search_steps, havel_hakimi_steps,
-    matching_steps, max_flow_steps,
+    floyd_warshall_steps, matching_steps, max_flow_steps,
     prim_steps, scc_steps, stable_matching_steps, steps_for,
     prufer_decode_graph, prufer_decode_steps, prufer_encode_steps,
     topological_sort_steps, traversal_steps, tree_center_steps, vertex_cover_steps,
@@ -273,6 +273,28 @@ def test_hamiltonian_search_exhausts_petersen_and_refuses_false_expectation():
     with pytest.raises(GraphError, match="exhausted") as refused:
         hamiltonian_search_steps(petersen, "0", expect="cycle")
     assert refused.value.witness[0] == "exhausted"
+
+
+# --------------------------------------------------------- Floyd–Warshall
+
+
+def test_floyd_warshall_updates_one_checked_table_per_intermediate():
+    graph = _graph([("A", "B", 3), ("A", "D", 7), ("B", "A", 8),
+                    ("B", "C", 2), ("C", "A", 5), ("C", "D", 1),
+                    ("D", "A", 2)], directed=True)
+    steps = floyd_warshall_steps(graph)
+    assert len(steps) == 5
+    assert steps[-1].extras["values"] == [
+        ["0", "3", "5", "6"], ["5", "0", "2", "3"],
+        ["3", "6", "0", "1"], ["2", "5", "7", "0"]]
+    assert steps[1].extras["k"] == "A"
+
+
+def test_floyd_warshall_refuses_a_negative_cycle_with_the_cycle_witness():
+    graph = _graph([("A", "B", 1), ("B", "C", -3), ("C", "A", 1)], directed=True)
+    with pytest.raises(GraphError, match="diagonal entry") as refused:
+        floyd_warshall_steps(graph)
+    assert set(refused.value.witness) == {"A", "B", "C"}
 
 
 # ---------------------------------------------------------- DAGs and SCCs

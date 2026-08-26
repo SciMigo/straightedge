@@ -8,6 +8,11 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Floyd–Warshall DP-table sequences.** The new `floyd_warshall` template
+  highlights every distance improved by each intermediate vertex and renders
+  infinity explicitly. A negative diagonal refuses the trace with the vertex
+  and reconstructed negative-cycle witness.
+
 - **Bounded Hamiltonian backtracking traces.** `hamiltonian_search` explores
   the full state space while emitting at most `max_frames`, shows partial paths
   and backtracks, and reports the explored-state count. A false `expect` is

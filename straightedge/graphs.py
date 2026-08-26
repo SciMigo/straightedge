@@ -824,6 +824,59 @@ def hamiltonian_search_steps(graph: Graph, start: Any = None, max_frames: int = 
     return steps
 
 
+# --------------------------------------------------------- Floyd–Warshall
+
+
+def floyd_warshall_steps(graph: Graph) -> list[Step]:
+    """All-pairs shortest paths, exposing the table after each intermediate."""
+    if not graph.directed:
+        raise GraphError("Floyd–Warshall here needs a directed graph")
+    require_weights(graph)
+    n = len(graph.ids)
+    index = {vertex: i for i, vertex in enumerate(graph.ids)}
+    distance = [[math.inf] * n for _ in range(n)]
+    for i in range(n):
+        distance[i][i] = 0.0
+    for edge in graph.edges:
+        i, j = index[edge.source], index[edge.target]
+        distance[i][j] = min(distance[i][j], float(edge.weight))
+
+    def values() -> list[list[str]]:
+        return [[_fmt(value) for value in row] for row in distance]
+
+    steps = [Step("D(0)", "Direct-edge distances before intermediate vertices",
+                  extras={"values": values(), "changed": [], "k": None,
+                          "labels": list(graph.ids)})]
+    for k, intermediate in enumerate(graph.ids):
+        changed: list[tuple[int, int]] = []
+        before = [list(row) for row in distance]
+        for i in range(n):
+            for j in range(n):
+                candidate = before[i][k] + before[k][j]
+                if candidate < distance[i][j]:
+                    distance[i][j] = candidate
+                    changed.append((i, j))
+        negative = next((graph.ids[i] for i in range(n) if distance[i][i] < 0), None)
+        if negative is not None:
+            witness: Any = negative
+            try:
+                bellman_ford_steps(graph, negative)
+            except GraphError as exc:
+                if "negative cycle" in str(exc):
+                    witness = exc.witness
+            raise GraphError(
+                f"negative cycle detected: diagonal entry D[{negative},{negative}] became negative",
+                witness=witness)
+        steps.append(Step(
+            f"Via {intermediate}",
+            f"Allow {intermediate} as an intermediate vertex; {len(changed)} entries improve",
+            panel=(f"k = {intermediate}", f"changed entries = {len(changed)}"),
+            extras={"values": values(), "changed": changed, "k": intermediate,
+                    "labels": list(graph.ids)},
+        ))
+    return steps
+
+
 # ---------------------------------------------------------------- traversal
 
 
