@@ -14,7 +14,8 @@ import pytest
 from straightedge.graphs import (
     GraphError, bellman_ford_steps, bipartition, coerce_graph, dijkstra_steps,
     connectivity_analysis, connectivity_steps, euler_steps, greedy_coloring_steps, konig_cover, kruskal_steps,
-    havel_hakimi_steps, matching_steps, max_flow_steps, prim_steps, scc_steps, steps_for,
+    ear_decomposition_steps, havel_hakimi_steps, matching_steps, max_flow_steps,
+    prim_steps, scc_steps, steps_for,
     prufer_decode_graph, prufer_decode_steps, prufer_encode_steps,
     topological_sort_steps, traversal_steps, tree_center_steps, vertex_cover_steps,
 )
@@ -193,6 +194,29 @@ def test_tree_center_refuses_a_cycle_with_its_witness():
     with pytest.raises(GraphError, match="cycle") as refused:
         tree_center_steps(_graph([("1", "2"), ("2", "3"), ("3", "1")]))
     assert set(refused.value.witness[:-1]) == {"1", "2", "3"}
+
+
+# -------------------------------------------------------- ear decomposition
+
+
+def test_ear_decomposition_matches_the_course_prism():
+    prism = _graph([("0", "1"), ("1", "2"), ("2", "0"),
+                    ("3", "4"), ("4", "5"), ("5", "3"),
+                    ("0", "3"), ("1", "4"), ("2", "5")])
+    steps = ear_decomposition_steps(prism, [2, 1, 0, 2])
+    assert [step.extras["ears"][-1] for step in steps] == [
+        ["2", "1", "0", "2"], ["0", "3", "4", "1"],
+        ["2", "5", "4"], ["3", "5"]]
+    assert set(steps[-1].edge_states.values()) == {
+        "color-1", "color-2", "color-3", "color-4"}
+
+
+def test_ear_decomposition_refuses_an_articulation_vertex():
+    bowtie = _graph([("A", "B"), ("B", "C"), ("C", "A"),
+                     ("C", "D"), ("D", "E"), ("E", "C")])
+    with pytest.raises(GraphError, match="articulation") as refused:
+        ear_decomposition_steps(bowtie)
+    assert refused.value.witness == "C"
 
 
 # ---------------------------------------------------------- DAGs and SCCs

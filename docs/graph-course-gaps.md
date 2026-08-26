@@ -73,7 +73,7 @@ interview track.
 - [x] 1 `prufer_encode` / `prufer_decode`
 - [x] 2 `havel_hakimi`
 - [x] 3 `tree_center`
-- [ ] 4 `ear_decomposition`
+- [x] 4 `ear_decomposition`
 - [ ] 5 `stable_matching`
 - [ ] 6 `hamiltonian_search`
 - [ ] 7 `turan(n, r)`
@@ -129,7 +129,7 @@ interview track.
   (eccentricity, later disc/low and DP values) so labels stop being abused
   as `"3 (ε=3)"`.
 
-### 4. `ear_decomposition` — module 15
+### 4. ✅ `ear_decomposition` — module 15
 
 - **Shows.** One ear per panel: `P₀` a cycle, each `Pᵢ` a path whose ends
   lie on earlier ears; ears numbered and each drawn in its own colour.

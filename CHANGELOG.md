@@ -8,6 +8,11 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Open-ear decompositions with numbered edge colors.** `graph_algorithm`
+  computes one ear per frame, can honor a checked starting cycle, and refuses
+  a graph with its articulation-vertex witness. The shared `graph` renderer
+  now supports eleven deterministic `color-N` edge roles.
+
 - **Jordan tree centers by leaf stripping.** `graph_algorithm` now removes all
   leaves in simultaneous rounds, reveals the one or two centers only when the
   terminal round proves them, and can badge the computed eccentricities. It

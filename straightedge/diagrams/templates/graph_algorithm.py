@@ -13,7 +13,8 @@ from typing import Any, Dict, List, Tuple
 
 from ...graphs import (
     Graph, GraphError, Step, bellman_ford_steps, coerce_graph,
-    connectivity_steps, dijkstra_steps, euler_steps, greedy_coloring_steps,
+    connectivity_steps, dijkstra_steps, ear_decomposition_steps, euler_steps,
+    greedy_coloring_steps,
     kruskal_steps, matching_steps, max_flow_steps, prim_steps,
     prufer_decode_graph, prufer_decode_steps, prufer_encode_steps,
     require_vertex, scc_steps,
@@ -34,7 +35,7 @@ ALGORITHMS = {
     "max_flow", "greedy_coloring", "bipartite_matching", "vertex_cover", "euler",
     "low_link",
     "prufer_encode", "prufer_decode",
-    "tree_center",
+    "tree_center", "ear_decomposition",
 }
 WEIGHTED = {"dijkstra", "bellman_ford", "kruskal", "prim"}
 NEEDS_PARTITIONS = {"bipartite_matching", "vertex_cover"}
@@ -94,6 +95,11 @@ def compute_steps(params: Dict[str, Any]) -> List[Step]:
         return prufer_encode_steps(graph, expect)
     if algorithm == "tree_center":
         return tree_center_steps(graph, bool(params.get("show_eccentricities", False)))
+    if algorithm == "ear_decomposition":
+        start_cycle = params.get("start_cycle")
+        if start_cycle is not None and not isinstance(start_cycle, list):
+            raise GraphError("start_cycle must be an array")
+        return ear_decomposition_steps(graph, start_cycle)
     if algorithm == "dijkstra":
         return dijkstra_steps(graph, start)
     if algorithm == "bellman_ford":
@@ -194,6 +200,10 @@ def frames_from_steps(params: Dict[str, Any], steps: List[Step]) -> List[Dict[st
         # edge it would exist only in the caption.
         cut = [list(key) for key, role in step.edge_states.items() if role == "cut"]
         rejected = [list(key) for key, role in step.edge_states.items() if role == "rejected"]
+        color_edges: Dict[str, List[List[str]]] = {}
+        for key, role in step.edge_states.items():
+            if role.startswith("color-"):
+                color_edges.setdefault(role, []).append(list(key))
         edges = base["edges"]
         if "visible_edges" in step.extras:
             visible = set(step.extras["visible_edges"])
@@ -211,7 +221,8 @@ def frames_from_steps(params: Dict[str, Any], steps: List[Step]) -> List[Dict[st
             caption += " · " + " · ".join(step.panel)
         frame = {**base, "edges": edges, "caption": caption,
                  "highlights": {"nodes": nodes, "edges": highlighted,
-                                "rejected_edges": rejected, "cut_edges": cut}}
+                                "rejected_edges": rejected, "cut_edges": cut,
+                                "color_edges": color_edges}}
         if step.badges:
             frame["distance_labels"] = dict(step.badges)
         if _algorithm(params) in NEEDS_PARTITIONS:
@@ -270,6 +281,7 @@ class GraphAlgorithmTemplate:
         params.get("code")
         params.get("expect")
         params.get("show_eccentricities", False)
+        params.get("start_cycle")
         params.get("graph_layout", "circular")
         animate = bool(params.get("animate", True))
         duration_s = float(params.get("duration_s", 1.2))

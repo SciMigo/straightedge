@@ -1,7 +1,7 @@
 from straightedge.diagrams import render_diagram
 from straightedge.diagrams.registry import refusal_findings
 from straightedge.diagrams.templates.graph_algorithm import (
-    _coloring, _dijkstra, _kruskal, _matching, compute_steps,
+    _coloring, _dijkstra, _kruskal, _matching, compute_steps, frames_from_steps,
 )
 
 
@@ -175,3 +175,25 @@ def test_tree_center_template_refuses_a_non_tree():
                   {"from": "C", "to": "A"}]})[0]
     assert finding.check == "graph_algorithm_cycle"
     assert set(finding.label.split(" → ")) == {"A", "B", "C"}
+
+
+def test_ear_decomposition_draws_numbered_colored_ears():
+    params = {"algorithm": "ear_decomposition", "nodes": [{"id": str(i)} for i in range(6)],
+              "edges": [{"from": str(a), "to": str(b)} for a, b in
+                        [(0, 1), (1, 2), (2, 0), (3, 4), (4, 5), (5, 3),
+                         (0, 3), (1, 4), (2, 5)]],
+              "start_cycle": [2, 1, 0, 2], "animate": False}
+    svg = render_diagram({"type": "graph_algorithm", "params": params})
+    assert all(label in svg for label in ("P0", "P1", "P2", "P3"))
+    final = frames_from_steps(params, compute_steps(params))[-1]["visual"]["params"]
+    assert set(final["highlights"]["color_edges"]) == {
+        "color-1", "color-2", "color-3", "color-4"}
+
+
+def test_ear_decomposition_template_names_the_cut_vertex():
+    finding = refusal_findings("graph_algorithm", {
+        "algorithm": "ear_decomposition", "nodes": [{"id": x} for x in "ABCDE"],
+        "edges": [{"from": a, "to": b} for a, b in
+                  [("A", "B"), ("B", "C"), ("C", "A"),
+                   ("C", "D"), ("D", "E"), ("E", "C")]]})[0]
+    assert finding.label == "C" and "articulation" in finding.message

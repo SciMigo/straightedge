@@ -528,6 +528,116 @@ def tree_center_steps(graph: Graph, show_eccentricities: bool = False) -> list[S
     return steps
 
 
+# --------------------------------------------------------- ear decomposition
+
+
+def ear_decomposition_steps(graph: Graph, start_cycle: list[Any] | None = None) -> list[Step]:
+    """Compute an open-ear decomposition of a 2-connected graph."""
+    if graph.directed:
+        raise GraphError("ear decomposition needs an undirected graph")
+    if len(graph.ids) < 3:
+        raise GraphError("a 2-connected graph needs at least three vertices", witness=graph.ids)
+    analysis = connectivity_analysis(graph)
+    if analysis.articulations:
+        cut = analysis.articulations[0]
+        raise GraphError(f"the graph is not 2-connected; {cut} is an articulation vertex",
+                         witness=cut)
+    reach = {graph.ids[0]}
+    queue = [graph.ids[0]]
+    while queue:
+        vertex = queue.pop(0)
+        for neighbor in graph.neighbors(vertex):
+            if neighbor not in reach:
+                reach.add(neighbor)
+                queue.append(neighbor)
+    if len(reach) != len(graph.ids):
+        other = next(vertex for vertex in graph.ids if vertex not in reach)
+        raise GraphError("the graph is disconnected, so it is not 2-connected",
+                         witness=(graph.ids[0], other))
+
+    if start_cycle is not None:
+        if not isinstance(start_cycle, list) or len(start_cycle) < 4:
+            raise GraphError("start_cycle must be a closed cycle with at least three vertices")
+        cycle = [require_vertex(graph, vertex, "start_cycle entry") for vertex in start_cycle]
+        if cycle[0] != cycle[-1] or len(set(cycle[:-1])) != len(cycle) - 1:
+            raise GraphError("start_cycle must close once without repeating an internal vertex",
+                             witness=cycle)
+        missing = next(((u, v) for u, v in zip(cycle, cycle[1:])
+                        if not graph.has_edge(u, v)), None)
+        if missing:
+            raise GraphError(f"start_cycle uses missing edge {missing[0]}–{missing[1]}",
+                             witness=missing)
+    else:
+        found = _find_cycle(graph, list(graph.ids))
+        if len(found) < 3:
+            raise GraphError("the graph has no cycle, so it is not 2-connected")
+        cycle = found + [found[0]]
+
+    ears: list[list[str]] = [cycle]
+    introduced = set(cycle[:-1])
+    used: set[EdgeKey] = {graph.key(u, v) for u, v in zip(cycle, cycle[1:])}
+    all_edges = [graph.key(edge.source, edge.target) for edge in graph.edges]
+
+    def new_vertex_ear() -> list[str] | None:
+        def extend(start: str, vertex: str, path: list[str]) -> list[str] | None:
+            for neighbor in graph.neighbors(vertex):
+                key = graph.key(vertex, neighbor)
+                if key not in used and neighbor in introduced and neighbor != start:
+                    return path + [neighbor]
+            for neighbor in graph.neighbors(vertex):
+                key = graph.key(vertex, neighbor)
+                if key in used or neighbor in path:
+                    continue
+                if neighbor in introduced:
+                    continue
+                found_path = extend(start, neighbor, path + [neighbor])
+                if found_path:
+                    return found_path
+            return None
+
+        for start in graph.ids:
+            if start not in introduced:
+                continue
+            for neighbor in graph.neighbors(start):
+                if neighbor in introduced or graph.key(start, neighbor) in used:
+                    continue
+                found_path = extend(start, neighbor, [start, neighbor])
+                if found_path:
+                    return found_path
+        return None
+
+    while len(used) < len(all_edges):
+        ear = new_vertex_ear()
+        if ear is None:
+            key = next((edge for edge in all_edges if edge not in used
+                        and edge[0] in introduced and edge[1] in introduced), None)
+            if key is None:
+                remaining = next(edge for edge in all_edges if edge not in used)
+                raise GraphError("could not extend an ear through the remaining edge",
+                                 witness=remaining)
+            ear = [key[0], key[1]]
+        ears.append(ear)
+        introduced.update(ear)
+        used.update(graph.key(u, v) for u, v in zip(ear, ear[1:]))
+
+    steps: list[Step] = []
+    colored: dict[EdgeKey, str] = {}
+    visible_nodes: set[str] = set()
+    for index, ear in enumerate(ears):
+        role = f"color-{index + 1}"
+        new_edges = [graph.key(u, v) for u, v in zip(ear, ear[1:])]
+        colored.update({edge: role for edge in new_edges})
+        visible_nodes.update(ear)
+        notation = "–".join(ear)
+        steps.append(Step(
+            f"P{index}", f"P{index} = {notation}",
+            {vertex: "visited" for vertex in graph.ids if vertex in visible_nodes},
+            dict(colored), panel=(f"P{index}: {notation}",),
+            extras={"ears": [list(value) for value in ears[:index + 1]]},
+        ))
+    return steps
+
+
 # ---------------------------------------------------------------- traversal
 
 
