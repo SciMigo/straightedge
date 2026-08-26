@@ -87,7 +87,7 @@ accepts everything the video does and more:
 | `kruskal` | undirected, weights | — (rejected edges are drawn dashed) |
 | `prim` | undirected, weights, `start` | — |
 | `topological_sort` | directed; `tie_break` is `"fifo"` or `"min"` | the cycle, or an unknown tie-break policy |
-| `scc` | directed | — (components are coloured, finish times badged) |
+| `scc` | directed | — (Kosaraju finish order, reverse DFS trees, and condensation DAG) |
 | `max_flow` | directed, capacities, `source`, `sink` | source = sink, an uncapacitated edge |
 | `greedy_coloring` | optional `vertex_order` | — |
 | `bipartite_matching` | `partitions.left/right` | an edge inside one side |

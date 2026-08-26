@@ -8,6 +8,11 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Complete Kosaraju SCC storyboards.** `scc` now names the algorithm, exposes
+  the first-pass finish order, grows actual reverse-pass DFS trees one
+  component at a time, and finishes on a computed hierarchical condensation
+  DAG rather than merely recoloring the original graph.
+
 - **Explicit topological-sort tie-breaking.** Kahn traces accept
   `tie_break: "fifo" | "min"`; the ready frontier and resulting lecture order
   now follow the named policy, and unknown policies are refused.

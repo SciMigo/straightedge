@@ -392,6 +392,20 @@ def test_scc_finds_the_components():
     assert {frozenset(c) for c in components} == {frozenset("ABC"), frozenset("DE")}
 
 
+def test_scc_names_kosaraju_and_finishes_with_the_condensation_dag():
+    graph = _graph([("A", "B"), ("B", "C"), ("C", "A"), ("C", "D"),
+                    ("D", "E"), ("E", "F"), ("F", "D"), ("F", "G"),
+                    ("G", "H"), ("H", "G")], directed=True)
+    steps = scc_steps(graph)
+    assert steps[0].label == "Kosaraju: finish order"
+    assert steps[0].extras["finish_order"]
+    assert [step.label for step in steps[1:-1]] == ["Component 1", "Component 2", "Component 3"]
+    assert len(steps[-2].edge_states) == 5  # three DFS trees: 2 + 2 + 1 edges
+    override = steps[-1].extras["graph_override"]
+    assert steps[-1].label == "Condensation DAG" and override["layout"] == "hierarchical"
+    assert len(override["nodes"]) == 3 and len(override["edges"]) == 2
+
+
 # ----------------------------------------------------------------- flows
 
 

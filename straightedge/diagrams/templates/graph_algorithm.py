@@ -216,6 +216,16 @@ def frames_from_steps(params: Dict[str, Any], steps: List[Step]) -> List[Dict[st
              if algorithm == "stable_matching" else coerce_graph(params))
     out = []
     for step in steps:
+        frame_base = base
+        frame_graph = graph
+        override = step.extras.get("graph_override")
+        if isinstance(override, dict):
+            override_nodes = override.get("nodes", [])
+            override_edges = override.get("edges", [])
+            frame_base = {**base, "nodes": override_nodes, "edges": override_edges,
+                          "directed": bool(override.get("directed", False)),
+                          "layout": str(override.get("layout", "circular"))}
+            frame_graph = coerce_graph(frame_base)
         nodes = {v: _NODE_STATES.get(role, role) for v, role in step.node_states.items()}
         highlighted = [list(key) for key, role in step.edge_states.items()
                        if role in {"tree", "path"}]
@@ -227,22 +237,22 @@ def frames_from_steps(params: Dict[str, Any], steps: List[Step]) -> List[Dict[st
         for key, role in step.edge_states.items():
             if role.startswith("color-"):
                 color_edges.setdefault(role, []).append(list(key))
-        edges = base["edges"]
+        edges = frame_base["edges"]
         if "visible_edges" in step.extras:
             visible = set(step.extras["visible_edges"])
             edges = [edge for edge in edges
-                     if graph.key(str(edge["from"]), str(edge["to"])) in visible]
+                     if frame_graph.key(str(edge["from"]), str(edge["to"])) in visible]
         if step.edge_labels:
             edges = [{**edge, "weight": step.edge_labels.get(
-                graph.key(str(edge["from"]), str(edge["to"])), edge.get("weight"))}
-                for edge in base["edges"]]
+                frame_graph.key(str(edge["from"]), str(edge["to"])), edge.get("weight"))}
+                for edge in frame_base["edges"]]
         # A one- or two-line panel (a running total, a matching size) fits
         # after the caption; a distance table does not, and its numbers are
         # already on the vertices as badges.
         caption = step.caption
         if 0 < len(step.panel) <= 2:
             caption += " · " + " · ".join(step.panel)
-        frame = {**base, "edges": edges, "caption": caption,
+        frame = {**frame_base, "edges": edges, "caption": caption,
                  "highlights": {"nodes": nodes, "edges": highlighted,
                                 "rejected_edges": rejected, "cut_edges": cut,
                                 "color_edges": color_edges}}

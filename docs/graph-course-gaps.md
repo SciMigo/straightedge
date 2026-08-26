@@ -82,7 +82,7 @@ interview track.
 - [x] 10 `edge_coloring`
 - [x] 11 `degeneracy_ordering`
 - [x] 12 `topological_sort` tie-break
-- [ ] 13 `scc` finish-order and condensation
+- [x] 13 `scc` finish-order and condensation
 - [ ] 14 `bipartite_matching` Hall violator
 
 ### 1. ✅ `prufer_encode` / `prufer_decode` — module 08
@@ -238,7 +238,7 @@ interview track.
   stack panel for cycle detection — a `graph_traversal` option rather than a
   new algorithm.
 
-### 13. `scc` names its algorithm; finish-order panel — module i09
+### 13. ✅ `scc` names its algorithm; finish-order panel — module i09
 
 - **Change.** State in the summary that `scc` is Kosaraju; emit the first
   pass's finish order as an `array_state`-style panel line and show the

@@ -299,3 +299,17 @@ def test_topological_sort_routes_fifo_and_min_tie_breaks():
         "order: A, B, C, D",)
     finding = refusal_findings("graph_algorithm", {**params, "tie_break": "random"})[0]
     assert "tie_break must be min or fifo" in finding.message
+
+
+def test_scc_storyboard_names_kosaraju_and_draws_the_condensation():
+    params = {"algorithm": "scc", "directed": True,
+              "nodes": [{"id": x} for x in "ABCDEFGH"],
+              "edges": [{"from": a, "to": b} for a, b in
+                        [("A", "B"), ("B", "C"), ("C", "A"), ("C", "D"),
+                         ("D", "E"), ("E", "F"), ("F", "D"), ("F", "G"),
+                         ("G", "H"), ("H", "G")]], "animate": False}
+    svg = render_diagram({"type": "graph_algorithm", "params": params})
+    assert "Kosaraju: finish order" in svg and "Condensation DAG" in svg
+    final = frames_from_steps(params, compute_steps(params))[-1]["visual"]["params"]
+    assert final["layout"] == "hierarchical" and final["directed"] is True
+    assert len(final["nodes"]) == 3 and len(final["edges"]) == 2

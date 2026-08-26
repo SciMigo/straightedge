@@ -1462,35 +1462,65 @@ def scc_steps(graph: Graph) -> list[Step]:
     for v in graph.ids:
         if v not in seen:
             visit(v)
-    steps = [Step("Finish order", "Depth-first search finishes vertices in this order",
+    steps = [Step("Kosaraju: finish order",
+                  "Kosaraju first pass: depth-first search records finish order",
                   {}, {}, {v: f"f={i + 1}" for i, v in enumerate(finished)},
-                  panel=("finish order: " + ", ".join(finished),))]
+                  panel=("finish order: " + ", ".join(finished),),
+                  extras={"algorithm": "Kosaraju", "finish_order": list(finished)})]
     reverse = {v: [] for v in graph.ids}
     for edge in graph.edges:
         reverse[edge.target].append(edge.source)
     assigned: dict[str, int] = {}
     components: list[list[str]] = []
+    forest: list[EdgeKey] = []
     for v in reversed(finished):
         if v in assigned:
             continue
-        component, stack = [], [v]
-        assigned[v] = len(components) + 1
-        while stack:
-            x = stack.pop()
+        component: list[str] = []
+        number = len(components) + 1
+
+        def reverse_visit(x: str) -> None:
+            assigned[x] = number
             component.append(x)
             for w in reverse[x]:
                 if w not in assigned:
-                    assigned[w] = len(components) + 1
-                    stack.append(w)
+                    forest.append((w, x))  # the corresponding edge as drawn in G
+                    reverse_visit(w)
+
+        reverse_visit(v)
         components.append(component)
         nodes = {x: f"color-{c}" for x, c in assigned.items()}
-        edges = {graph.key(e.source, e.target): "tree" for e in graph.edges
-                 if assigned.get(e.source) == assigned.get(e.target)}
+        edges = {edge: "tree" for edge in forest}
         steps.append(Step(f"Component {len(components)}",
-                          f"From {v} on the reversed graph: {{{', '.join(component)}}}",
+                          f"Kosaraju second pass from {v} on Gᵀ: {{{', '.join(component)}}}",
                           nodes, edges, {x: f"f={i + 1}" for i, x in enumerate(finished)},
                           panel=tuple(f"C{i + 1} = {{{', '.join(c)}}}"
-                                      for i, c in enumerate(components))))
+                                      for i, c in enumerate(components)),
+                          extras={"algorithm": "Kosaraju", "components":
+                                  [list(component_) for component_ in components],
+                                  "finish_order": list(finished)}))
+    condensation_edges: list[EdgeKey] = []
+    for edge in graph.edges:
+        source = f"C{assigned[edge.source]}"
+        target = f"C{assigned[edge.target]}"
+        if source != target and (source, target) not in condensation_edges:
+            condensation_edges.append((source, target))
+    condensation_nodes = [
+        {"id": f"C{index + 1}", "label": f"C{index + 1}: {''.join(component)}"}
+        for index, component in enumerate(components)]
+    component_panel = tuple(f"C{i + 1} = {{{', '.join(component)}}}"
+                            for i, component in enumerate(components))
+    steps.append(Step(
+        "Condensation DAG", "Kosaraju components contracted to the condensation DAG",
+        {f"C{index + 1}": f"color-{index + 1}" for index in range(len(components))},
+        {edge: "tree" for edge in condensation_edges}, panel=component_panel,
+        extras={"algorithm": "Kosaraju", "components": components,
+                "finish_order": list(finished),
+                "graph_override": {"nodes": condensation_nodes,
+                                   "edges": [{"from": u, "to": v}
+                                             for u, v in condensation_edges],
+                                   "directed": True, "layout": "hierarchical"}},
+    ))
     return steps
 
 
