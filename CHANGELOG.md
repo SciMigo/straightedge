@@ -8,9 +8,29 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Low-link connectivity and four checked graph/CS figures.** The shared graph
+  engine now computes bridges, articulation vertices and vertex-biconnected
+  blocks with Tarjan low-link values. `graph/connectivity` animates the result
+  in Manim and `graph_algorithm` can render the same trace as dependency-free
+  SVG. New public SVG templates derive a `block_cut_tree`, compute union-by-rank
+  with path compression in `disjoint_set`, execute min-heap `priority_queue`
+  operations, and synchronize a graph with its adjacency list, adjacency
+  matrix and incidence matrix in `graph_representation`. Optional expected
+  results are checked before drawing. Documented in
+  `docs/graph-connectivity-structures.md`.
+  The `graph` figure gains a `highlights.cut_edges` role (thick red), so a
+  bridge or a min-cut edge in a `graph_algorithm` storyboard no longer looks
+  like a tree edge; `graph/connectivity` honours `start`, reveals an
+  articulation vertex only on the step that proves it, and lists bridges in
+  proof order rather than hash order. `block_cut_tree` refuses more than
+  eleven vertices instead of recursing into a traceback; `priority_queue` can
+  be drained in the animated lane; `graph_representation` surfaces its graph
+  panel's refusal and keeps a zero-weight edge distinct from a missing one.
+
 - **A `graph` topic in the animation lane.** `graph/traversal` (BFS, DFS),
   `graph/shortest_path` (Dijkstra, Bellman–Ford), `graph/spanning_tree`
-  (Kruskal, Prim) and `graph/max_flow` (Edmonds–Karp with its min cut) render
+  (Kruskal, Prim), `graph/connectivity` (Tarjan low-link) and `graph/max_flow`
+  (Edmonds–Karp with its min cut) render
   as Manim videos from a graph passed in parameters, or from a stock graph
   by prompt. The algorithm runs at generation time in the new
   `straightedge/graphs.py`, one beat per computed step, and

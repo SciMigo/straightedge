@@ -100,14 +100,16 @@ template are published by `list_templates()`; see
 diagram type returns an empty string so a missing optional figure does not abort
 an entire document build.
 
-The registry currently contains 45 templates across several domains:
+The registry currently contains 49 templates across several domains:
 
 - Math and data: function graphs, coordinate planes, Riemann sums, unit circles,
   polar graphs, matrices, step functions, heatmaps, tables, and compass-and-
   straightedge constructions with exactly placed points.
 - Computer science: binary trees, linked lists, stacks, queues, hash tables, call
   stacks, dynamic-programming tables, architecture diagrams, checked search
-  trees (BST, AVL, and left-leaning red-black), planar embeddings, network flows, and graphs. An
+  trees (BST, AVL, and left-leaning red-black), disjoint-set forests,
+  min-priority queues, planar embeddings, network flows, block-cut forests,
+  and equivalent graph representations. An
   [`algorithm_trace`](https://github.com/SciMigo/straightedge/blob/main/docs/algorithm-trace.md)
   composes these into a checked multi-step storyboard; a state machine is
   `graph` with `directed` edges, not a template of its own. The same
@@ -119,7 +121,8 @@ The registry currently contains 45 templates across several domains:
   [`graph_algorithm`](docs/graph-animations.md) computes Dijkstra, Bellman–Ford,
   Kruskal, Prim, topological order, strongly connected components, max flow
   with its min cut, greedy colouring, bipartite matching, König's vertex cover
-  and Euler circuits — and refuses, with the witness, what the graph makes false.
+  Euler circuits, and low-link connectivity (bridges, articulation vertices,
+  and biconnected blocks) — and refuses, with the witness, what the graph makes false.
 - Projects and business: Gantt charts, calendar roadmaps, org charts,
   work-breakdown structures, project networks, timelines, flow diagrams, and
   T-accounts.

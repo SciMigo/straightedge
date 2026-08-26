@@ -39,6 +39,7 @@ NODE_STYLES: dict[str, tuple[str, float]] = {
     "visited": ("C_DONE", 0.6),
     "source": ("C_FLOW", 0.8),
     "sink": ("C_WARM", 0.8),
+    "articulation": ("C_WARM", 0.9),
 }
 NEUTRAL_NODE = ("C_WELL", 1.0)
 COLOR_CLASSES = ("C_FLOW", "C_HOLD", "C_DONE", "C_AUX", "C_WARM", "C_DEEP", "C_WARN", "C_MUTED")
@@ -61,6 +62,7 @@ DEFAULT_TITLES = {
     ("graph/spanning_tree", "kruskal"): "Kruskal's algorithm",
     ("graph/spanning_tree", "prim"): "Prim's algorithm from {start}",
     ("graph/max_flow", "edmonds_karp"): "Max flow and min cut",
+    ("graph/connectivity", "low_link"): "Bridges, articulation vertices, and blocks",
 }
 
 
@@ -164,6 +166,7 @@ def _resolve(plan: AnimationPlan) -> tuple[str, dict[str, Any], Graph, list[Step
     algorithm = str(params.get("algorithm", "")).strip().lower() or {
         ConceptGraph.TRAVERSAL: "bfs", ConceptGraph.SHORTEST_PATH: "dijkstra",
         ConceptGraph.SPANNING_TREE: "kruskal", ConceptGraph.MAX_FLOW: "edmonds_karp",
+        ConceptGraph.CONNECTIVITY: "low_link",
     }[concept]
     return concept, params, graph, steps, algorithm
 
