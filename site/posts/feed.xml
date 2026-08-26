@@ -5,13 +5,13 @@
   <link href="https://scimigo.github.io/straightedge/posts/feed.xml" rel="self"/>
   <link href="https://scimigo.github.io/straightedge/posts/"/>
   <id>https://scimigo.github.io/straightedge/posts/</id>
-  <updated>2026-08-25T00:00:00Z</updated>
+  <updated>2026-08-26T00:00:00Z</updated>
   <author><name>SciMigo</name></author>
   <entry>
     <title>The picture cannot show a state the algorithm did not reach</title>
     <link href="https://scimigo.github.io/straightedge/posts/graph-theory-computed.html"/>
     <id>https://scimigo.github.io/straightedge/posts/graph-theory-computed.html</id>
-    <updated>2026-08-25T00:00:00Z</updated>
+    <updated>2026-08-26T00:00:00Z</updated>
     <summary>Eleven graph algorithms — BFS, DFS, Dijkstra, Bellman–Ford, Kruskal, Prim, topological sort, strongly connected components, max flow with its min cut, greedy colouring, bipartite matching with König&#x27;s cover, Euler circuits — computed once and drawn twice, as Manim video and as SVG storyboard. A graph that makes the claim false is refused with the witness.</summary>
   </entry>
   <entry>

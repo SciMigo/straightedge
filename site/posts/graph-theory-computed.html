@@ -48,7 +48,7 @@
         <p class="post-kicker">Graph theory, computed · 01</p>
         <h1>The picture cannot show a state the algorithm did not reach</h1>
         <p class="post-dateline">
-          <time datetime="2026-08-25">25 Aug 2026</time>
+          <time datetime="2026-08-26">26 Aug 2026</time>
           <span class="dot" aria-hidden="true">·</span>
           <span class="tag">Graph algorithms</span>
         </p>
@@ -211,14 +211,28 @@
               <tr><td>Greedy colouring</td><td>—</td><td>—</td></tr>
               <tr><td>Bipartite matching · König cover</td><td>a declared partition</td><td class="diff">an edge inside one side</td></tr>
               <tr><td>Euler circuit / trail</td><td>connected edges</td><td class="diff">the odd-degree vertices</td></tr>
+              <tr><td>Bridges · articulation vertices · blocks</td><td>undirected</td><td class="diff">a directed graph</td></tr>
             </tbody>
           </table>
         </div>
         <p>
-          All eleven are in the SVG lane as <code>graph_algorithm</code>. Four
-          concepts — traversal, shortest path, spanning tree, max flow — are
-          also Manim videos under the <code>graph</code> topic, reachable by
-          prompt on a stock graph or by template with your own.
+          All twelve are in the SVG lane as <code>graph_algorithm</code>. Five
+          concepts — traversal, shortest path, spanning tree, max flow,
+          connectivity — are also Manim videos under the <code>graph</code>
+          topic, reachable by prompt on a stock graph or by template with your
+          own.
+        </p>
+        <p>
+          The structures a graph lesson keeps beside the graph are computed the
+          same way. <code>block_cut_tree</code> derives the blocks and the
+          articulation vertices that join them from the low-link pass;
+          <code>disjoint_set</code> runs union by rank with path compression
+          and refuses a <code>find</code> whose expected root is wrong;
+          <code>priority_queue</code> executes insert, decrease-key and pop-min
+          on a binary heap and refuses a claimed minimum that is not the
+          minimum; <code>graph_representation</code> draws one graph next to
+          its adjacency list, adjacency matrix and incidence matrix so the
+          three cannot disagree.
         </p>
 
         <h2>Run it on your graph</h2>
