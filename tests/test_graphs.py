@@ -16,7 +16,7 @@ from straightedge.graphs import (
     connectivity_analysis, connectivity_steps, euler_steps, greedy_coloring_steps, konig_cover, kruskal_steps,
     havel_hakimi_steps, matching_steps, max_flow_steps, prim_steps, scc_steps, steps_for,
     prufer_decode_graph, prufer_decode_steps, prufer_encode_steps,
-    topological_sort_steps, traversal_steps, vertex_cover_steps,
+    topological_sort_steps, traversal_steps, tree_center_steps, vertex_cover_steps,
 )
 
 
@@ -174,6 +174,25 @@ def test_havel_hakimi_refuses_odd_sum_and_negative_reduction_with_witness():
     with pytest.raises(GraphError, match="negative") as negative:
         havel_hakimi_steps([3, 3, 3, 1])
     assert negative.value.witness == (1, -1)
+
+
+# ------------------------------------------------------------ tree centres
+
+
+def test_tree_center_strips_the_course_tree_and_computes_eccentricities():
+    tree = _graph([("1", "2"), ("2", "3"), ("3", "4"), ("4", "5"),
+                   ("5", "6"), ("3", "7"), ("4", "8")])
+    steps = tree_center_steps(tree, show_eccentricities=True)
+    assert steps[-1].extras == {"centers": ["3", "4"], "radius": 3, "diameter": 5}
+    assert steps[-1].node_states["3"] == steps[-1].node_states["4"] == "target"
+    assert steps[-2].node_states.get("3") != "target"
+    assert steps[-1].badges == {"3": "ε=3", "4": "ε=3"}
+
+
+def test_tree_center_refuses_a_cycle_with_its_witness():
+    with pytest.raises(GraphError, match="cycle") as refused:
+        tree_center_steps(_graph([("1", "2"), ("2", "3"), ("3", "1")]))
+    assert set(refused.value.witness[:-1]) == {"1", "2", "3"}
 
 
 # ---------------------------------------------------------- DAGs and SCCs

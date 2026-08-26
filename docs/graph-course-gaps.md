@@ -72,7 +72,7 @@ interview track.
 
 - [x] 1 `prufer_encode` / `prufer_decode`
 - [x] 2 `havel_hakimi`
-- [ ] 3 `tree_center`
+- [x] 3 `tree_center`
 - [ ] 4 `ear_decomposition`
 - [ ] 5 `stable_matching`
 - [ ] 6 `hamiltonian_search`
@@ -116,7 +116,7 @@ interview track.
 - **Note.** This is an `array_state` storyboard first and a graph second;
   it may fit better as its own template than as a `graph_algorithm` value.
 
-### 3. `tree_center` (leaf stripping) — module 07
+### 3. ✅ `tree_center` (leaf stripping) — module 07
 
 - **Shows.** Jordan's theorem: strip all leaves each round (as `rejected`),
   until one or two vertices remain (`target`); panel carries eccentricity

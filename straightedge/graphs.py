@@ -459,6 +459,75 @@ def havel_hakimi_steps(sequence: list[Any], realize: bool = False) -> list[Step]
     return steps
 
 
+# ------------------------------------------------------------- tree centres
+
+
+def tree_center_steps(graph: Graph, show_eccentricities: bool = False) -> list[Step]:
+    """Strip all leaves by rounds until Jordan's one or two centres remain."""
+    require_tree(graph)
+    if len(graph.ids) == 1:
+        return [Step("Center", f"{graph.ids[0]} is the center", {graph.ids[0]: "target"},
+                     badges={graph.ids[0]: "ε=0"} if show_eccentricities else {},
+                     panel=(f"center: {{{graph.ids[0]}}}", "radius = diameter = 0"),
+                     extras={"centers": [graph.ids[0]], "radius": 0, "diameter": 0})]
+
+    def distances(source: str) -> dict[str, int]:
+        distance = {source: 0}
+        queue = [source]
+        while queue:
+            vertex = queue.pop(0)
+            for neighbor in graph.neighbors(vertex):
+                if neighbor not in distance:
+                    distance[neighbor] = distance[vertex] + 1
+                    queue.append(neighbor)
+        return distance
+
+    eccentricity = {vertex: max(distances(vertex).values()) for vertex in graph.ids}
+    diameter = max(eccentricity.values())
+    radius = min(eccentricity.values())
+    remaining = set(graph.ids)
+    removed: list[str] = []
+    round_number = 0
+    initial_leaves = [v for v in graph.ids if graph.degree(v) <= 1]
+    steps = [Step("Start", "Strip every leaf in simultaneous rounds",
+                  {v: "frontier" for v in initial_leaves},
+                  badges=({v: f"ε={eccentricity[v]}" for v in graph.ids}
+                          if show_eccentricities else {}),
+                  panel=("leaves: " + ", ".join(initial_leaves),))]
+    while len(remaining) > 2:
+        leaves = [v for v in graph.ids if v in remaining and
+                  sum(neighbor in remaining for neighbor in graph.neighbors(v)) <= 1]
+        round_number += 1
+        remaining.difference_update(leaves)
+        removed.extend(leaves)
+        next_leaves = [v for v in graph.ids if v in remaining and
+                       sum(neighbor in remaining for neighbor in graph.neighbors(v)) <= 1]
+        nodes = {v: "rejected" for v in removed}
+        nodes.update({v: "frontier" for v in next_leaves})
+        steps.append(Step(
+            f"Strip round {round_number}",
+            f"Remove leaves {{{', '.join(leaves)}}}", nodes,
+            badges=({v: f"ε={eccentricity[v]}" for v in graph.ids if v in remaining}
+                    if show_eccentricities else {}),
+            panel=("remaining: {" + ", ".join(v for v in graph.ids if v in remaining) + "}",),
+            extras={"removed": list(leaves), "remaining": [v for v in graph.ids if v in remaining]},
+        ))
+    centers = [v for v in graph.ids if v in remaining]
+    nodes = {v: "rejected" for v in removed}
+    nodes.update({v: "target" for v in centers})
+    steps.append(Step(
+        "Center" if len(centers) == 1 else "Centers",
+        "Jordan center" + ("" if len(centers) == 1 else "s") + ": {" + ", ".join(centers) + "}",
+        nodes,
+        badges=({v: f"ε={eccentricity[v]}" for v in centers}
+                if show_eccentricities else {}),
+        panel=("center: {" + ", ".join(centers) + "}",
+               f"radius = {radius} · diameter = {diameter}"),
+        extras={"centers": centers, "radius": radius, "diameter": diameter},
+    ))
+    return steps
+
+
 # ---------------------------------------------------------------- traversal
 
 

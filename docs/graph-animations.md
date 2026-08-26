@@ -96,6 +96,7 @@ accepts everything the video does and more:
 | `low_link` | undirected | — (bridges, articulation vertices and blocks are computed together) |
 | `prufer_encode` | a tree; optional `expect` | a cycle, disconnected components, or first mismatching code position |
 | `prufer_decode` | `code` on vertices `1..len(code)+2` | the first code entry outside that range |
+| `tree_center` | a tree; optional `show_eccentricities` | a cycle or disconnected components |
 
 A storyboard holds 12 panels and an animation 24 frames; a longer trace is
 refused as unreadable rather than truncated.

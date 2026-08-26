@@ -18,6 +18,7 @@ from ...graphs import (
     prufer_decode_graph, prufer_decode_steps, prufer_encode_steps,
     require_vertex, scc_steps,
     topological_sort_steps, vertex_cover_steps,
+    tree_center_steps,
 )
 from ...qc import Finding
 from ..registry import DIAGRAM_REGISTRY, register
@@ -33,6 +34,7 @@ ALGORITHMS = {
     "max_flow", "greedy_coloring", "bipartite_matching", "vertex_cover", "euler",
     "low_link",
     "prufer_encode", "prufer_decode",
+    "tree_center",
 }
 WEIGHTED = {"dijkstra", "bellman_ford", "kruskal", "prim"}
 NEEDS_PARTITIONS = {"bipartite_matching", "vertex_cover"}
@@ -90,6 +92,8 @@ def compute_steps(params: Dict[str, Any]) -> List[Step]:
         if expect is not None and not isinstance(expect, list):
             raise GraphError("expect must be an array")
         return prufer_encode_steps(graph, expect)
+    if algorithm == "tree_center":
+        return tree_center_steps(graph, bool(params.get("show_eccentricities", False)))
     if algorithm == "dijkstra":
         return dijkstra_steps(graph, start)
     if algorithm == "bellman_ford":
@@ -265,6 +269,7 @@ class GraphAlgorithmTemplate:
         params.get("vertex_order")
         params.get("code")
         params.get("expect")
+        params.get("show_eccentricities", False)
         params.get("graph_layout", "circular")
         animate = bool(params.get("animate", True))
         duration_s = float(params.get("duration_s", 1.2))

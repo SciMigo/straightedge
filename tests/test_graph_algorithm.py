@@ -153,3 +153,25 @@ def test_prufer_template_refuses_the_first_mismatching_code_position():
         "edges": [{"from": "1", "to": "3"}, {"from": "2", "to": "3"},
                   {"from": "3", "to": "4"}], "expect": [3, 4]})[0]
     assert "position 2" in finding.message and finding.label.startswith("2")
+
+
+def test_tree_center_draws_jordans_leaf_stripping_certificate():
+    params = {"algorithm": "tree_center", "show_eccentricities": True,
+              "nodes": [{"id": str(i)} for i in range(1, 9)],
+              "edges": [{"from": a, "to": b} for a, b in
+                        [("1", "2"), ("2", "3"), ("3", "4"), ("4", "5"),
+                         ("5", "6"), ("3", "7"), ("4", "8")]], "animate": False}
+    svg = render_diagram({"type": "graph_algorithm", "params": params})
+    assert "Centers" in svg
+    steps = compute_steps(params)
+    assert steps[-1].panel == ("center: {3, 4}", "radius = 3 · diameter = 5")
+    assert all(step.node_states.get("3") != "target" for step in steps[:-1])
+
+
+def test_tree_center_template_refuses_a_non_tree():
+    finding = refusal_findings("graph_algorithm", {
+        "algorithm": "tree_center", "nodes": [{"id": x} for x in "ABC"],
+        "edges": [{"from": "A", "to": "B"}, {"from": "B", "to": "C"},
+                  {"from": "C", "to": "A"}]})[0]
+    assert finding.check == "graph_algorithm_cycle"
+    assert set(finding.label.split(" → ")) == {"A", "B", "C"}

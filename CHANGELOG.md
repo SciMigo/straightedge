@@ -8,6 +8,11 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Jordan tree centers by leaf stripping.** `graph_algorithm` now removes all
+  leaves in simultaneous rounds, reveals the one or two centers only when the
+  terminal round proves them, and can badge the computed eccentricities. It
+  refuses a non-tree with its cycle or disconnected components.
+
 - **Checked Havel–Hakimi reductions.** The new `havel_hakimi` template shows
   every degree-sequence reduction as an array and can unwind those reductions
   into a computed graph realization. It refuses odd sums, degrees at least
