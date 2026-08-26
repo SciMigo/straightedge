@@ -36,6 +36,7 @@ class ConceptGraph:
     SHORTEST_PATH = "graph/shortest_path"
     SPANNING_TREE = "graph/spanning_tree"
     MAX_FLOW = "graph/max_flow"
+    CONNECTIVITY = "graph/connectivity"
 
 
 class GraphError(ValueError):
@@ -131,6 +132,23 @@ class Step:
     #: Algorithm-specific state a lane may want verbatim (a traversal's
     #: frontier list, say) rather than parsed back out of the caption.
     extras: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class ConnectivityAnalysis:
+    """Tarjan low-link result for an undirected graph.
+
+    Blocks are vertex sets, not renderer geometry.  A bridge therefore appears
+    as a two-vertex block and an isolated vertex as a one-vertex block.
+    """
+
+    discovery: dict[str, int]
+    low: dict[str, int]
+    parent: dict[str, str | None]
+    bridges: tuple[EdgeKey, ...]
+    articulations: tuple[str, ...]
+    blocks: tuple[tuple[str, ...], ...]
+    finish_order: tuple[str, ...]
 
 
 # ------------------------------------------------------------------ coercion
@@ -842,6 +860,132 @@ def euler_steps(graph: Graph) -> list[Step]:
     return steps
 
 
+# --------------------------------------------------------- connectivity / blocks
+
+
+def connectivity_analysis(graph: Graph) -> ConnectivityAnalysis:
+    """Compute bridges, articulation vertices, and vertex-biconnected blocks.
+
+    This is Tarjan's low-link DFS with an edge stack.  It deliberately accepts
+    disconnected graphs: every component is analysed, and isolated vertices
+    become singleton blocks so the block-cut forest loses nothing.
+    """
+    if graph.directed:
+        raise GraphError("bridges and biconnected blocks here require an undirected graph")
+    discovery: dict[str, int] = {}
+    low: dict[str, int] = {}
+    parent: dict[str, str | None] = {v: None for v in graph.ids}
+    bridges: list[EdgeKey] = []
+    articulations: set[str] = set()
+    blocks: list[tuple[str, ...]] = []
+    edge_stack: list[EdgeKey] = []
+    finish: list[str] = []
+    clock = 0
+    rank = {v: i for i, v in enumerate(graph.ids)}
+
+    def block_through(stop: EdgeKey) -> None:
+        vertices: set[str] = set()
+        while edge_stack:
+            edge = edge_stack.pop()
+            vertices.update(edge)
+            if edge == stop:
+                break
+        if vertices:
+            blocks.append(tuple(sorted(vertices, key=rank.get)))
+
+    def visit(u: str) -> None:
+        nonlocal clock
+        clock += 1
+        discovery[u] = low[u] = clock
+        children = 0
+        for v in graph.neighbors(u):
+            key = graph.key(u, v)
+            if v not in discovery:
+                parent[v] = u
+                children += 1
+                edge_stack.append(key)
+                visit(v)
+                low[u] = min(low[u], low[v])
+                if low[v] > discovery[u]:
+                    bridges.append(key)
+                if low[v] >= discovery[u]:
+                    if parent[u] is not None or children > 1:
+                        articulations.add(u)
+                    block_through(key)
+            elif v != parent[u] and discovery[v] < discovery[u]:
+                edge_stack.append(key)
+                low[u] = min(low[u], discovery[v])
+        finish.append(u)
+
+    for root in graph.ids:
+        if root in discovery:
+            continue
+        before = len(discovery)
+        visit(root)
+        if len(discovery) == before + 1 and graph.degree(root) == 0:
+            blocks.append((root,))
+        if edge_stack:  # defensive: a component's final block
+            vertices = {v for edge in edge_stack for v in edge}
+            edge_stack.clear()
+            blocks.append(tuple(sorted(vertices, key=rank.get)))
+
+    return ConnectivityAnalysis(
+        discovery=dict(discovery), low=dict(low), parent=dict(parent),
+        bridges=tuple(bridges),
+        articulations=tuple(v for v in graph.ids if v in articulations),
+        blocks=tuple(blocks), finish_order=tuple(finish),
+    )
+
+
+def connectivity_steps(graph: Graph) -> list[Step]:
+    """A bounded low-link trace ending on the bridge/articulation certificate."""
+    analysis = connectivity_analysis(graph)
+    tree_edges = {graph.key(parent, child): "tree" for child, parent in analysis.parent.items()
+                  if parent is not None}
+    steps = [Step("Initialize", "Start a DFS; d is discovery time and low is the earliest reachable time",
+                  badges={v: "d — · low —" for v in graph.ids},
+                  panel=("bridges: —", "articulations: —"))]
+    finished: set[str] = set()
+    revealed_bridges: set[EdgeKey] = set()
+    revealed_cuts: set[str] = set()
+    for vertex in analysis.finish_order:
+        finished.add(vertex)
+        parent = analysis.parent[vertex]
+        if parent is not None and graph.key(parent, vertex) in analysis.bridges:
+            revealed_bridges.add(graph.key(parent, vertex))
+        if parent in analysis.articulations:
+            revealed_cuts.add(parent)
+        if vertex in analysis.articulations and parent is None:
+            revealed_cuts.add(vertex)
+        nodes = {v: "visited" for v in finished}
+        nodes.update({v: "articulation" for v in revealed_cuts})
+        nodes[vertex] = "current"
+        edges = dict(tree_edges)
+        edges.update({edge: "cut" for edge in revealed_bridges})
+        steps.append(Step(
+            f"Finish {vertex}",
+            f"Finish {vertex}: d={analysis.discovery[vertex]}, low={analysis.low[vertex]}",
+            nodes, edges,
+            badges={v: f"d {analysis.discovery[v]} · low {analysis.low[v]}" for v in finished},
+            panel=("bridges: " + (", ".join(f"{u}–{v}" for u, v in revealed_bridges) or "—"),
+                   "articulations: " + (", ".join(v for v in graph.ids if v in revealed_cuts) or "—")),
+            extras={"analysis": analysis},
+        ))
+    final_nodes = {v: ("articulation" if v in analysis.articulations else "visited")
+                   for v in graph.ids}
+    final_edges = {key: ("cut" if key in analysis.bridges else "tree")
+                   for key in tree_edges}
+    steps.append(Step(
+        "Block structure", f"{len(analysis.blocks)} blocks; articulation vertices join the blocks",
+        final_nodes, final_edges,
+        badges={v: f"d {analysis.discovery[v]} · low {analysis.low[v]}" for v in graph.ids},
+        panel=("bridges: " + (", ".join(f"{u}–{v}" for u, v in analysis.bridges) or "none"),
+               "blocks: " + " | ".join("{" + ",".join(block) + "}" for block in analysis.blocks)),
+        extras={"analysis": analysis},
+    ))
+    return steps
+
+
 # ---------------------------------------------------------------- topic
 
 
@@ -877,6 +1021,7 @@ CONCEPT_ALGORITHMS: dict[str, tuple[str, ...]] = {
     ConceptGraph.SHORTEST_PATH: ("dijkstra", "bellman_ford"),
     ConceptGraph.SPANNING_TREE: ("kruskal", "prim"),
     ConceptGraph.MAX_FLOW: ("edmonds_karp",),
+    ConceptGraph.CONNECTIVITY: ("low_link",),
 }
 
 
@@ -901,6 +1046,8 @@ def steps_for(concept: str, params: dict[str, Any]) -> list[Step]:
         return (dijkstra_steps if algorithm == "dijkstra" else bellman_ford_steps)(graph, start)
     if concept == ConceptGraph.SPANNING_TREE:
         return kruskal_steps(graph) if algorithm == "kruskal" else prim_steps(graph, start)
+    if concept == ConceptGraph.CONNECTIVITY:
+        return connectivity_steps(graph)
     return max_flow_steps(graph, params.get("source", graph.ids[0]),
                           params.get("sink", graph.ids[-1]))
 
@@ -908,10 +1055,12 @@ def steps_for(concept: str, params: dict[str, Any]) -> list[Step]:
 @topic(Topic.GRAPH, priority=20,
        keywords=("图论", "最短路", "生成树", "网络流", "最大流", "最小割",
                  "广度优先", "深度优先", "拓扑排序", "二分图",
+                 "割点", "割边", "图中的桥", "双连通",
                  "bfs", "dfs", "dijkstra", "kruskal", "prim's", "bellman",
                  "graph theory", "spanning tree", "shortest path", "max flow",
+                 "bridge", "articulation", "biconnected", "block-cut", "connectivity",
                  "min cut", "adjacency"))
 class GraphTheory:
-    """A traversal, a shortest path, a spanning tree or a flow, every state computed."""
+    """Five graph lessons, including connectivity, with every state computed."""
 
     concepts = ConceptGraph

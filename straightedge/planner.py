@@ -658,6 +658,8 @@ def _linear_algebra_plan(request: str) -> AnimationPlan:
 _GRAPH_CONCEPT_WORDS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
     # (concept, algorithm, words) — first match wins, so the specific
     # algorithm names sit above the family words that would also claim them.
+    (ConceptGraph.CONNECTIVITY, "low_link",
+     ("割点", "割边", "桥", "双连通", "bridge", "articulation", "biconnected", "block-cut")),
     (ConceptGraph.MAX_FLOW, "edmonds_karp",
      ("最大流", "最小割", "网络流", "max flow", "min cut", "flow network", "augmenting")),
     (ConceptGraph.SHORTEST_PATH, "bellman_ford", ("bellman", "负权", "negative weight")),
@@ -673,12 +675,13 @@ _GRAPH_TITLES_ZH = {
     ConceptGraph.SHORTEST_PATH: ("单源最短路径", "逐步松弛边，直到每个距离都确定"),
     ConceptGraph.SPANNING_TREE: ("最小生成树", "按权重选边，展示接受与拒绝的理由"),
     ConceptGraph.MAX_FLOW: ("最大流与最小割", "沿增广路径推流，最后给出割的证明"),
+    ConceptGraph.CONNECTIVITY: ("图的连通结构", "用 low-link 值找出桥、割点与双连通分量"),
 }
 
 
 @plan_for(Topic.GRAPH)
 def _graph_plan(request: str) -> AnimationPlan:
-    """One of four computed lessons on a stock graph.
+    """One of five computed lessons on a stock graph.
 
     A text request carries no graph, so the plan names the concept and the
     algorithm and the scene draws :data:`straightedge.graphs.STOCK_GRAPH`;

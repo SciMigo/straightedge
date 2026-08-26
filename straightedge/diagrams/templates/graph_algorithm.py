@@ -12,9 +12,10 @@ from __future__ import annotations
 from typing import Any, Dict, List, Tuple
 
 from ...graphs import (
-    Graph, GraphError, Step, bellman_ford_steps, coerce_graph, dijkstra_steps,
-    euler_steps, greedy_coloring_steps, kruskal_steps, matching_steps,
-    max_flow_steps, prim_steps, require_vertex, scc_steps,
+    Graph, GraphError, Step, bellman_ford_steps, coerce_graph,
+    connectivity_steps, dijkstra_steps, euler_steps, greedy_coloring_steps,
+    kruskal_steps, matching_steps, max_flow_steps, prim_steps,
+    require_vertex, scc_steps,
     topological_sort_steps, vertex_cover_steps,
 )
 from ...qc import Finding
@@ -29,13 +30,14 @@ MAX_ANIMATED_STEPS = 24
 ALGORITHMS = {
     "dijkstra", "bellman_ford", "kruskal", "prim", "topological_sort", "scc",
     "max_flow", "greedy_coloring", "bipartite_matching", "vertex_cover", "euler",
+    "low_link",
 }
 WEIGHTED = {"dijkstra", "bellman_ford", "kruskal", "prim"}
 NEEDS_PARTITIONS = {"bipartite_matching", "vertex_cover"}
 
 #: Step roles → the ``graph`` template's node states.
 _NODE_STATES = {"current": "current", "frontier": "target", "visited": "visited",
-                "source": "current", "sink": "target"}
+                "source": "current", "sink": "target", "articulation": "articulation"}
 
 
 def _parts(params: Dict[str, Any]) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
@@ -99,6 +101,8 @@ def compute_steps(params: Dict[str, Any]) -> List[Step]:
         return greedy_coloring_steps(graph, [str(x) for x in order] if order else None)
     if algorithm == "euler":
         return euler_steps(graph)
+    if algorithm == "low_link":
+        return connectivity_steps(graph)
     left = _left_partition(params, graph)
     if algorithm == "bipartite_matching":
         return matching_steps(graph, left)[0]
@@ -216,7 +220,8 @@ class GraphAlgorithmTemplate:
     motion = "optional"
     checks = ["valid vertices and endpoints", "algorithm-specific assumptions",
               "nonnegative Dijkstra weights", "negative-cycle and DAG-cycle witnesses",
-              "bipartition integrity", "Euler degree parity", "computed intermediate states"]
+              "bipartition integrity", "Euler degree parity", "low-link bridge and block invariants",
+              "computed intermediate states"]
 
     def refusal_findings(self, params: Dict[str, Any]) -> List[Finding]:
         return _findings(params)

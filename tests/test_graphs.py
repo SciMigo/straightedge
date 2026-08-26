@@ -13,7 +13,7 @@ import pytest
 
 from straightedge.graphs import (
     GraphError, bellman_ford_steps, bipartition, coerce_graph, dijkstra_steps,
-    euler_steps, greedy_coloring_steps, konig_cover, kruskal_steps,
+    connectivity_analysis, connectivity_steps, euler_steps, greedy_coloring_steps, konig_cover, kruskal_steps,
     matching_steps, max_flow_steps, prim_steps, scc_steps, steps_for,
     topological_sort_steps, traversal_steps, vertex_cover_steps,
 )
@@ -227,6 +227,42 @@ def test_euler_circuit_uses_every_edge_once_and_refuses_odd_degrees():
     assert euler_steps(trail)[-1].panel[0] == "trail: A → B → C"
 
 
+# ----------------------------------------------------------- connectivity
+
+
+def test_low_link_finds_bridges_articulations_and_biconnected_blocks():
+    graph = _graph([("A", "B"), ("B", "C"), ("C", "A"), ("C", "D"),
+                    ("D", "E"), ("E", "F"), ("F", "D")])
+    found = connectivity_analysis(graph)
+    assert found.bridges == (("C", "D"),)
+    assert set(found.articulations) == {"C", "D"}
+    assert {frozenset(block) for block in found.blocks} == {
+        frozenset("ABC"), frozenset("CD"), frozenset("DEF")}
+    assert found.low["C"] == found.discovery["A"]
+    assert found.low["F"] == found.discovery["D"]
+
+
+def test_low_link_handles_a_forest_and_refuses_direction():
+    forest = coerce_graph({"nodes": [{"id": x} for x in "ABCD"],
+                           "edges": [{"from": "A", "to": "B"},
+                                     {"from": "B", "to": "C"}]})
+    found = connectivity_analysis(forest)
+    assert set(found.bridges) == {("A", "B"), ("B", "C")}
+    assert found.articulations == ("B",)
+    assert frozenset({"D"}) in {frozenset(block) for block in found.blocks}
+    with pytest.raises(GraphError, match="undirected"):
+        connectivity_analysis(_graph([("A", "B")], directed=True))
+
+
+def test_connectivity_trace_draws_the_computed_certificate():
+    graph = _graph([("A", "B"), ("B", "C"), ("C", "A"), ("C", "D")])
+    final = connectivity_steps(graph)[-1]
+    assert final.node_states["C"] == "articulation"
+    assert final.edge_states[("C", "D")] == "cut"
+    assert "bridges: C–D" in final.panel
+    assert any(line.startswith("blocks:") for line in final.panel)
+
+
 # ------------------------------------------------------------ the topic
 
 
@@ -235,3 +271,4 @@ def test_steps_for_runs_the_stock_graph_when_none_is_supplied():
     assert steps[0].label == "Initialize" and len(steps) == 7
     with pytest.raises(GraphError, match="runs"):
         steps_for("graph/shortest_path", {"algorithm": "kruskal"})
+    assert steps_for("graph/connectivity", {"algorithm": "low_link"})[-1].label == "Block structure"

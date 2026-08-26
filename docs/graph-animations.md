@@ -12,7 +12,7 @@ goes in as parameters, every intermediate state comes out computed, and an
 input that makes the requested claim false is refused with the witness — the
 odd cycle, the negative cycle, the vertices of odd degree — rather than drawn.
 
-## The four video concepts
+## The five video concepts
 
 | Concept | `algorithm` | What the frame shows |
 |---|---|---|
@@ -20,6 +20,7 @@ odd cycle, the negative cycle, the vertices of odd degree — rather than drawn.
 | `graph/shortest_path` | `dijkstra` (default), `bellman_ford` | tentative distances under every vertex and in a table; settled vertices; predecessor edges |
 | `graph/spanning_tree` | `kruskal` (default), `prim` | accepted edges in the tree colour, **rejected edges dashed** (Kruskal), candidate edges (Prim); running weight |
 | `graph/max_flow` | `edmonds_karp` | `flow/capacity` on every edge, each augmenting path, and the min cut the residual graph certifies |
+| `graph/connectivity` | `low_link` | DFS discovery and low-link values, bridges, articulation vertices, and the resulting biconnected blocks |
 
 Every concept is reachable by name, with a graph of your own:
 
@@ -35,7 +36,8 @@ straightedge render --template graph/shortest_path \
 ```
 
 and by prompt (`用 Dijkstra 算法求最短路`, `画网络流的最大流和最小割`, `用 DFS
-遍历图`), which draws the stock six-vertex graph or the stock flow network.
+遍历图`, `找出图中的桥和割点`), which draws the stock six-vertex graph or the stock
+flow network.
 
 ### Parameters
 
@@ -91,6 +93,7 @@ accepts everything the video does and more:
 | `bipartite_matching` | `partitions.left/right` | an edge inside one side |
 | `vertex_cover` | `partitions.left/right` | — (König's cover from the maximum matching) |
 | `euler` | undirected, connected edges | the odd-degree vertices, when there are not 0 or 2 |
+| `low_link` | undirected | — (bridges, articulation vertices and blocks are computed together) |
 
 A storyboard holds 12 panels and an animation 24 frames; a longer trace is
 refused as unreadable rather than truncated.

@@ -721,6 +721,7 @@ class GraphTemplate:
 .graph-node-rejected { fill: #f8d7da; }
 .graph-node-comparison { fill: #FF9800; }
 .graph-node-path { fill: #9C27B0; }
+.graph-node-articulation { fill: #FECACA; stroke: #B91C1C; stroke-width: 3; }
 .graph-node-color-1 { fill: #DBEAFE; stroke: #2563EB; stroke-width: 2.5; }
 .graph-node-color-2 { fill: #FEE2E2; stroke: #DC2626; stroke-width: 2.5; }
 .graph-node-color-3 { fill: #DCFCE7; stroke: #16A34A; stroke-width: 2.5; }
