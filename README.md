@@ -123,6 +123,8 @@ The registry currently contains 49 templates across several domains:
   with its min cut, greedy colouring, bipartite matching, König's vertex cover
   Euler circuits, and low-link connectivity (bridges, articulation vertices,
   and biconnected blocks) — and refuses, with the witness, what the graph makes false.
+  What a graph-theory course still asks for beyond these is listed in
+  [docs/graph-course-gaps.md](docs/graph-course-gaps.md).
 - Projects and business: Gantt charts, calendar roadmaps, org charts,
   work-breakdown structures, project networks, timelines, flow diagrams, and
   T-accounts.
