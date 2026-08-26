@@ -8,6 +8,11 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Hall witnesses for deficient bipartite matchings.** A failed final
+  augmentation now ends on the alternating reach, highlights deterministic
+  `S` and `N(S)`, and states the strict Hall inequality. Matching and König
+  cover now share the same alternating-reach computation.
+
 - **Complete Kosaraju SCC storyboards.** `scc` now names the algorithm, exposes
   the first-pass finish order, grows actual reverse-pass DFS trees one
   component at a time, and finishes on a computed hierarchical condensation

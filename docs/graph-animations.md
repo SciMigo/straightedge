@@ -90,7 +90,7 @@ accepts everything the video does and more:
 | `scc` | directed | — (Kosaraju finish order, reverse DFS trees, and condensation DAG) |
 | `max_flow` | directed, capacities, `source`, `sink` | source = sink, an uncapacitated edge |
 | `greedy_coloring` | optional `vertex_order` | — |
-| `bipartite_matching` | `partitions.left/right` | an edge inside one side |
+| `bipartite_matching` | `partitions.left/right` | an edge inside one side; a failed search ends on its Hall violator |
 | `vertex_cover` | `partitions.left/right` | — (König's cover from the maximum matching) |
 | `euler` | undirected, connected edges | the odd-degree vertices, when there are not 0 or 2 |
 | `low_link` | undirected | — (bridges, articulation vertices and blocks are computed together) |

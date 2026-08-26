@@ -313,3 +313,20 @@ def test_scc_storyboard_names_kosaraju_and_draws_the_condensation():
     final = frames_from_steps(params, compute_steps(params))[-1]["visual"]["params"]
     assert final["layout"] == "hierarchical" and final["directed"] is True
     assert len(final["nodes"]) == 3 and len(final["edges"]) == 2
+
+
+def test_failed_bipartite_matching_finishes_on_the_hall_violator():
+    params = {"algorithm": "bipartite_matching",
+              "nodes": [{"id": x} for x in list("abcde") + list("12345")],
+              "edges": [{"from": a, "to": b} for a, b in
+                        [("a", "1"), ("a", "2"), ("b", "1"), ("b", "2"),
+                         ("c", "2"), ("c", "3"), ("d", "1"), ("d", "3"),
+                         ("e", "4"), ("e", "5")]],
+              "partitions": {"left": list("abcde"), "right": list("12345")},
+              "animate": False}
+    svg = render_diagram({"type": "graph_algorithm", "params": params})
+    assert "Hall violator" in svg
+    steps = compute_steps(params)
+    assert steps[-1].extras["S"] == list("abcd")
+    assert steps[-1].extras["neighbors"] == ["1", "2", "3"]
+    assert all("Hall" not in step.label for step in steps[:-1])

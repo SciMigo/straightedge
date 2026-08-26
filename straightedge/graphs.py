@@ -1688,18 +1688,35 @@ def matching_steps(graph: Graph, left: list[str]) -> tuple[list[Step], dict[str,
             nodes = {x: "visited" for pair in edges for x in pair}
             steps.append(Step(f"Augment from {u}", f"Augmenting path from {u} grows the matching",
                               nodes, edges, panel=(f"matching size = {len(match_r)}",)))
+    if len(match_r) < len(left):
+        z = alternating_reach(graph, left, match_r)
+        left_set = set(left)
+        s = [vertex for vertex in left if vertex in z]
+        neighbors = [vertex for vertex in graph.ids if vertex not in left_set and vertex in z]
+        matching_edges = {graph.key(proposer, receiver): "tree"
+                          for receiver, proposer in match_r.items()}
+        nodes = {vertex: "current" for vertex in s}
+        nodes.update({vertex: "frontier" for vertex in neighbors})
+        steps.append(Step(
+            "Hall violator",
+            f"Failed augmentation reaches S={{{', '.join(s)}}} and "
+            f"N(S)={{{', '.join(neighbors)}}}; {len(neighbors)} < {len(s)}",
+            nodes, matching_edges,
+            panel=("S = {" + ", ".join(s) + "}",
+                   "N(S) = {" + ", ".join(neighbors) +
+                   f"}} · {len(neighbors)} < {len(s)}"),
+            extras={"Z": [vertex for vertex in graph.ids if vertex in z],
+                    "S": s, "neighbors": neighbors},
+        ))
     return steps, match_r
 
 
-def konig_cover(graph: Graph, left: list[str], match_r: dict[str, str]) -> list[str]:
-    """A minimum vertex cover from a maximum matching (König's theorem).
-
-    Alternating paths from the unmatched left vertices reach a set ``Z``; the
-    cover is ``(L − Z) ∪ (R ∩ Z)``, and it has exactly the matching's size.
-    """
+def alternating_reach(graph: Graph, left: list[str], match_r: dict[str, str]) -> set[str]:
+    """Vertices reached by alternating paths from unmatched left vertices."""
     matched_left = set(match_r.values())
-    z = {u for u in left if u not in matched_left}
-    queue = list(z)
+    roots = [u for u in left if u not in matched_left]
+    z = set(roots)
+    queue = list(roots)
     while queue:
         u = queue.pop(0)
         for v in graph.neighbors(u):
@@ -1710,6 +1727,16 @@ def konig_cover(graph: Graph, left: list[str], match_r: dict[str, str]) -> list[
             if partner is not None and partner not in z:
                 z.add(partner)
                 queue.append(partner)
+    return z
+
+
+def konig_cover(graph: Graph, left: list[str], match_r: dict[str, str]) -> list[str]:
+    """A minimum vertex cover from a maximum matching (König's theorem).
+
+    Alternating paths from the unmatched left vertices reach a set ``Z``; the
+    cover is ``(L − Z) ∪ (R ∩ Z)``, and it has exactly the matching's size.
+    """
+    z = alternating_reach(graph, left, match_r)
     cover = [u for u in left if u not in z] + [v for v in graph.ids if v not in left and v in z]
     return cover
 

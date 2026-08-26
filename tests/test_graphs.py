@@ -472,6 +472,18 @@ def test_konig_cover_has_the_size_of_the_maximum_matching():
     assert vertex_cover_steps(g, ["u1", "u2", "u3"])[-1].label == "Vertex cover"
 
 
+def test_failed_matching_reveals_the_course_hall_violator_only_at_the_end():
+    graph = _graph([("a", "1"), ("a", "2"), ("b", "1"), ("b", "2"),
+                    ("c", "2"), ("c", "3"), ("d", "1"), ("d", "3"),
+                    ("e", "4"), ("e", "5")])
+    steps, matching = matching_steps(graph, list("abcde"))
+    assert len(matching) == 4 and steps[-1].label == "Hall violator"
+    assert steps[-1].extras["S"] == list("abcd")
+    assert steps[-1].extras["neighbors"] == ["1", "2", "3"]
+    assert all(step.label != "Hall violator" for step in steps[:-1])
+    assert "3 < 4" in steps[-1].panel[1]
+
+
 # ------------------------------------------------------------------ Euler
 
 

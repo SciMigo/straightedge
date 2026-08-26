@@ -83,7 +83,7 @@ interview track.
 - [x] 11 `degeneracy_ordering`
 - [x] 12 `topological_sort` tie-break
 - [x] 13 `scc` finish-order and condensation
-- [ ] 14 `bipartite_matching` Hall violator
+- [x] 14 `bipartite_matching` Hall violator
 
 ### 1. ✅ `prufer_encode` / `prufer_decode` — module 08
 
@@ -246,7 +246,7 @@ interview track.
   condensation DAG as a final frame (hierarchical layout).
 - **Instance.** `S₈` (A..H, 10 arcs) → components `ABC`, `DEF`, `GH`.
 
-### 14. `bipartite_matching` final panel: the Hall violator — modules 10, 11, i10
+### 14. ✅ `bipartite_matching` final panel: the Hall violator — modules 10, 11, i10
 
 - **Change.** When the last augmentation search fails, highlight the
   alternating reach `Z` from the unsaturated vertex, `S = X ∩ Z` and
