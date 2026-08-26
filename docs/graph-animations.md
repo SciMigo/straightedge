@@ -117,6 +117,12 @@ the responsible vertex and reconstructed negative cycle. The graph/table
 side-by-side composition remains part of the separately tracked composite-panel
 work.
 
+`mycielski` accepts an undirected base graph and constructs all three layers of
+`M(G)` itself. The coloring frames are computed, as are the exact chromatic
+numbers for the small accepted graphs and the triangle-free check. Since the
+output must fit the figure lane, `2|V(G)|+1` may not exceed 11; in particular,
+`M(C₅)` is the 11-vertex, 20-edge Grötzsch graph with chromatic number four.
+
 ## Building a lab on this
 
 The pattern the `examples/` directory argues for applies: **compute, assert,

@@ -877,6 +877,101 @@ def floyd_warshall_steps(graph: Graph) -> list[Step]:
     return steps
 
 
+# ---------------------------------------------------------- Mycielski graph
+
+
+def chromatic_number(graph: Graph) -> int:
+    """Exact chromatic number for the small graphs accepted by figure templates."""
+    order = sorted(graph.ids, key=lambda vertex: (-graph.degree(vertex), graph.ids.index(vertex)))
+
+    def colorable(limit: int) -> bool:
+        colors: dict[str, int] = {}
+
+        def assign(index: int) -> bool:
+            if index == len(order):
+                return True
+            vertex = order[index]
+            forbidden = {colors[neighbor] for neighbor in graph.neighbors(vertex)
+                         if neighbor in colors}
+            for color in range(1, limit + 1):
+                if color not in forbidden:
+                    colors[vertex] = color
+                    if assign(index + 1):
+                        return True
+                    del colors[vertex]
+            return False
+
+        return assign(0)
+
+    return next(limit for limit in range(1, len(graph.ids) + 1) if colorable(limit))
+
+
+def _has_triangle(graph: Graph) -> bool:
+    for i, first in enumerate(graph.ids):
+        for j in range(i + 1, len(graph.ids)):
+            second = graph.ids[j]
+            if not graph.has_edge(first, second):
+                continue
+            for third in graph.ids[j + 1:]:
+                if graph.has_edge(first, third) and graph.has_edge(second, third):
+                    return True
+    return False
+
+
+def mycielski_graph(base: Graph) -> Graph:
+    """Construct M(G), with ids ``u0..``, ``v0..``, and hub ``w``."""
+    if base.directed:
+        raise GraphError("Mycielski construction needs an undirected base graph")
+    output_size = 2 * len(base.ids) + 1
+    if output_size > 11:
+        raise GraphError(f"M(G) has {output_size} vertices; at most 11 fit",
+                         witness=(len(base.ids), output_size))
+    u = [f"u{i}" for i in range(len(base.ids))]
+    v = [f"v{i}" for i in range(len(base.ids))]
+    index = {vertex: i for i, vertex in enumerate(base.ids)}
+    edges: list[Edge] = []
+    for edge in base.edges:
+        i, j = index[edge.source], index[edge.target]
+        edges.extend((Edge(u[i], u[j]), Edge(v[i], u[j]), Edge(v[j], u[i])))
+    edges.extend(Edge("w", shadow) for shadow in v)
+    ids = tuple(u + v + ["w"])
+    return Graph(ids, {vertex: vertex for vertex in ids}, tuple(edges))
+
+
+def mycielski_steps(base: Graph) -> list[Step]:
+    """Show the three-layer construction, then a deterministic greedy coloring."""
+    graph = mycielski_graph(base)
+    n = len(base.ids)
+    base_chi = chromatic_number(base)
+    result_chi = chromatic_number(graph)
+    base_triangle_free = not _has_triangle(base)
+    result_triangle_free = not _has_triangle(graph)
+    steps = [Step(
+        "Three layers", "Copy G as u, add shadow vertices v, then join hub w to every v",
+        {**{f"u{i}": "visited" for i in range(n)},
+         **{f"v{i}": "frontier" for i in range(n)}, "w": "target"},
+        panel=(f"|V(M(G))| = {len(graph.ids)}", f"|E(M(G))| = {len(graph.edges)}"),
+        extras={"graph": graph, "base_chi": base_chi, "result_chi": result_chi,
+                "triangle_free": result_triangle_free},
+    )]
+    colors: dict[str, int] = {}
+    for vertex in graph.ids:
+        used = {colors[neighbor] for neighbor in graph.neighbors(vertex) if neighbor in colors}
+        colors[vertex] = next(color for color in range(1, len(graph.ids) + 1)
+                              if color not in used)
+        final = vertex == graph.ids[-1]
+        panel = ((f"χ(G) = {base_chi} · χ(M(G)) = {result_chi}",
+                  "triangle-free: " + ("yes" if base_triangle_free and result_triangle_free else "no"))
+                 if final else (f"colors used: {max(colors.values())}",))
+        steps.append(Step(
+            f"Color {vertex}", f"Assign {vertex} the smallest available color {colors[vertex]}",
+            {name: f"color-{color}" for name, color in colors.items()}, panel=panel,
+            extras={"graph": graph, "colors": dict(colors), "base_chi": base_chi,
+                    "result_chi": result_chi, "triangle_free": result_triangle_free},
+        ))
+    return steps
+
+
 # ---------------------------------------------------------------- traversal
 
 

@@ -15,7 +15,7 @@ from straightedge.graphs import (
     GraphError, bellman_ford_steps, bipartition, coerce_graph, dijkstra_steps,
     connectivity_analysis, connectivity_steps, euler_steps, greedy_coloring_steps, konig_cover, kruskal_steps,
     ear_decomposition_steps, hamiltonian_search_steps, havel_hakimi_steps,
-    floyd_warshall_steps, matching_steps, max_flow_steps,
+    floyd_warshall_steps, matching_steps, max_flow_steps, mycielski_graph, mycielski_steps,
     prim_steps, scc_steps, stable_matching_steps, steps_for,
     prufer_decode_graph, prufer_decode_steps, prufer_encode_steps,
     topological_sort_steps, traversal_steps, tree_center_steps, vertex_cover_steps,
@@ -295,6 +295,27 @@ def test_floyd_warshall_refuses_a_negative_cycle_with_the_cycle_witness():
     with pytest.raises(GraphError, match="diagonal entry") as refused:
         floyd_warshall_steps(graph)
     assert set(refused.value.witness) == {"A", "B", "C"}
+
+
+# ---------------------------------------------------------- Mycielski graph
+
+
+def test_mycielski_of_c5_is_the_triangle_free_grotzsch_graph():
+    cycle = _graph([("0", "1"), ("1", "2"), ("2", "3"), ("3", "4"), ("4", "0")])
+    graph = mycielski_graph(cycle)
+    assert len(graph.ids) == 11 and len(graph.edges) == 20
+    steps = mycielski_steps(cycle)
+    assert steps[-1].extras["base_chi"] == 3
+    assert steps[-1].extras["result_chi"] == 4
+    assert steps[-1].extras["triangle_free"] is True
+    assert max(steps[-1].extras["colors"].values()) == 4
+
+
+def test_mycielski_refuses_a_base_whose_output_exceeds_the_cap():
+    base = _graph([(str(i), str((i + 1) % 6)) for i in range(6)])
+    with pytest.raises(GraphError, match="13 vertices") as refused:
+        mycielski_graph(base)
+    assert refused.value.witness == (6, 13)
 
 
 # ---------------------------------------------------------- DAGs and SCCs

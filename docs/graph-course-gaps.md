@@ -78,7 +78,7 @@ interview track.
 - [x] 6 `hamiltonian_search`
 - [ ] 7 `turan(n, r)`
 - [x] 8 `floyd_warshall`
-- [ ] 9 `mycielski`
+- [x] 9 `mycielski`
 - [ ] 10 `edge_coloring`
 - [ ] 11 `degeneracy_ordering`
 - [ ] 12 `topological_sort` tie-break
@@ -192,7 +192,7 @@ interview track.
   edge order (i07's other gap); the negative cycle wants an edge role
   `cycle` for the highlight.
 
-### 9. `mycielski` construction — module 21
+### 9. ✅ `mycielski` construction — module 21
 
 - **Shows.** Three layers: the original ring `u₀..u₄`, the shadow ring
   `v₀..v₄` joined to each `uᵢ`'s neighbours, the hub `w` joined to all `vᵢ`;

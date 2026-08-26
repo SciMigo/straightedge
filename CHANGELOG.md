@@ -8,6 +8,11 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Checked Mycielski constructions.** The new `mycielski` template builds the
+  original, shadow, and hub layers from the supplied base graph, then computes
+  a coloring, exact small-graph chromatic numbers, and triangle-freeness. The
+  11-vertex figure cap is enforced on the constructed graph.
+
 - **Floyd–Warshall DP-table sequences.** The new `floyd_warshall` template
   highlights every distance improved by each intermediate vertex and renders
   infinity explicitly. A negative diagonal refuses the trace with the vertex
