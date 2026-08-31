@@ -554,6 +554,37 @@ class TestUnitCircleLabelsClearEachOther:
             if b.kind == "text" and b.label.startswith("("):
                 assert b.x0 >= 0 and b.x1 <= 400, f"readout at x {b.x0:.0f}..{b.x1:.0f}"
 
+    @pytest.mark.parametrize("angle", range(0, 360, 3))
+    def test_every_angle_is_clean(self, angle):
+        """The static positions were only ever checked at the review angles:
+        `x` moved above the axis cleared the tick and landed on the `sin=`
+        readout for 8°..27°, `y` moved right landed on the 90° coordinate
+        readout, and the readout's edge flip at 355° landed on `cos=1.00`.
+        Each fix traded one collision for another until the labels started
+        dodging what is actually drawn — which only a sweep can hold."""
+        assert not self._errors(angle=angle), (
+            [f.message for f in self._errors(angle=angle)])
+
+    @pytest.mark.parametrize("angle", [90, 96, 262, 278, 354])
+    def test_a_tick_is_not_under_the_travelling_point(self, angle):
+        """The `1` moved inward sat exactly where the point passes just after
+        90° — 100% covered, warn severity, invisible to the error sweep."""
+        svg = render_diagram({"type": "unit_circle", "params": {**self.FULL, "angle": angle}})
+        assert not [f for f in check_figure(svg)
+                    if f.check == "text_obscured" and "uc-point" in f.message]
+
+    def test_the_shown_angle_keeps_its_label_when_nothing_else_names_it(self):
+        """Suppressing the common-angle label is justified by the readout or
+        arc label on the same ray; with both off it deleted the only label the
+        taught angle had — a figure teaching π/4 marked every common angle
+        except π/4."""
+        svg = render_diagram({"type": "unit_circle", "params": {
+            "angle": 45, "show_common_angles": True,
+            "show_coordinates": False, "show_arc": False}})
+        labels = [b.label for b in boxes_from_svg(svg) if b.kind == "text"]
+        assert "π/4" in labels
+        assert "π/6" in labels
+
 
 class TestMatrixTransformKeepsItsGuidesInThePanel:
     """The second piece of evidence in issue #14.
@@ -604,6 +635,50 @@ class TestMatrixTransformKeepsItsGuidesInThePanel:
         sits outside the clipped group for that reason."""
         assert not [f for f in check_figure(self._svg())
                     if f.check == "text_clipped"]
+
+    @pytest.mark.parametrize("matrix", [[[2, 0], [0, 3]], [[1, 0], [0, 1]],
+                                        [[-2, 0], [0, 3]], [[3, 0], [0, 1]]])
+    def test_the_eigenvalue_label_clears_the_basis_labels(self, matrix):
+        """An eigenvector parallel to a basis image — any diagonal matrix —
+        put λ at the same tip with the same (+4, -4) offset as Ae1, two 10px
+        labels drawn on top of each other. The ray's other end is empty."""
+        assert not [f for f in check_figure(self._svg(matrix=matrix))
+                    if f.check == "text_overlap"]
+
+    def test_the_clip_id_names_its_geometry(self):
+        """Fragment ids resolve across the whole page, first match wins, so
+        two figures inlined into one document share the namespace. An id
+        minted from the full clip geometry makes a collision harmless by
+        construction: two clipPaths with the same id cut the same rectangle,
+        and it stops mattering whose definition the browser picks."""
+        import re
+
+        clips = re.findall(
+            r'<clipPath id="([^"]+)"><rect x="([^"]+)" y="([^"]+)" '
+            r'width="([^"]+)" height="([^"]+)"', self._svg())
+        assert clips, "no panel clip found"
+        for cid, x, y, w, h in clips:
+            assert cid == (f"mt-clip-{float(x):.0f}-{float(y):.0f}"
+                           f"-{float(w):.0f}x{float(h):.0f}"), (
+                f"{cid!r} does not pin the geometry it clips")
+
+
+class TestRiemannGridStaysInsideThePlot:
+    """`int()` truncates toward zero, so on a domain that does not straddle
+    zero the gridline loop still ran to an integer outside the plot: a=-3,
+    b=-1 has x_max=-0.5, `int()` makes that 0, and the 0-gridline landed 8px
+    past the right edge of the data area — the exact defect the `+ 1` fix
+    claimed to close, surviving for every all-negative or all-positive domain.
+    The corpus figure uses a=0, b=2 and never saw it."""
+
+    @pytest.mark.parametrize("a,b", [(-3, -1), (1, 3), (0, 2), (-2.5, 2.5),
+                                     (0.5, 3.5)])
+    def test_no_gridline_leaves_the_figure(self, a, b):
+        svg = render_diagram({"type": "riemann_sum", "params": {
+            "expression": "x^2", "a": a, "b": b, "n": 4}})
+        errors = [f for f in check_figure(svg)
+                  if f.check == "out_of_frame" and f.severity == "error"]
+        assert not errors, [f.message for f in errors]
 
 
 class TestTheShownAngleIsMatchedCircularly:

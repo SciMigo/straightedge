@@ -117,6 +117,26 @@ class UnitCircleTemplate:
             elements.append(rect(0, 0, svg_width, svg_height, fill=theme.background,
                                  **{"class": "uc-background"}))
 
+        # The extents of every label placed so far, so a later label can dodge
+        # them. 0.8em above the baseline and 0.25em below covers ascent and
+        # descenders the way the legibility parser estimates them.
+        placed_boxes: List[tuple[float, float, float, float]] = []
+
+        def label_box(x: float, y: float, s: str, px: float,
+                      anchor: str = "start") -> tuple[float, float, float, float]:
+            w = text_width(s, px, safe=True)
+            x0 = x - w if anchor == "end" else x - w / 2 if anchor == "middle" else x
+            return (x0, x0 + w, y - 0.8 * px, y + 0.25 * px)
+
+        def place(x: float, y: float, s: str, px: float,
+                  anchor: str = "start") -> None:
+            placed_boxes.append(label_box(x, y, s, px, anchor))
+
+        def collides(box: tuple[float, float, float, float]) -> bool:
+            return any(box[0] < b[1] and b[0] < box[1]
+                       and box[2] < b[3] and b[2] < box[3]
+                       for b in placed_boxes)
+
         # Draw axes
         axes_elements = [
             # X-axis
@@ -136,19 +156,57 @@ class UnitCircleTemplate:
 
         # Axis labels
         if show_labels:
-            # An axis name goes clear of the tick label nearest it, and clear
-            # of the common-angle label that sits just past the arrow. `x` was
-            # five pixels from its own `1` and `y` was ten from its own, so
-            # each name was drawn straight through a tick; lifting `x` only as
-            # far as the axis line then put it through the `0` at 1.15r.
-            label_elements = [
-                text(svg_width - padding + 5, center_y - 20, "x", **{"class": "uc-axis-label"}),
-                text(center_x + 14, padding - 2, "y", **{"class": "uc-axis-label"}),
-                text(center_x + radius - 3, center_y + 16, "1", **{"class": "uc-label"}),
-                text(center_x - radius - 5, center_y + 16, "-1", **{"class": "uc-label"}),
-                text(center_x - 16, center_y - radius + 4, "1", **{"class": "uc-label"}),
-                text(center_x - 20, center_y + radius + 4, "-1", **{"class": "uc-label"}),
+            # No spot near a circle-axis crossing can be static: the point
+            # rides the circle, the readouts ride the point, and the tangent
+            # line stands on the crossing itself — so a fixed name or tick is
+            # covered at whichever angle brings the moving parts past it (`1`
+            # sat exactly where the point passes just after 90°). Each name
+            # and tick takes the side of its axis the traffic is not on for
+            # this render; the sides are chosen against the readout, point and
+            # tangent geometry, and the boxes are recorded so the coordinate
+            # readout below dodges them too.
+            x_below = sin_val >= 0     # the point is above the x-axis → go below
+            y_left = cos_val >= 0      # the point is right of the y-axis → go left
+            # The right `1` shares its column with the tangent line whenever
+            # the point is on the left half (from where the point itself can
+            # never reach this tick), so there it dodges by the tangent's side
+            # instead.
+            if show_tan and cos_val < -0.01:
+                one_below = (sin_val / cos_val) >= 0
+            else:
+                one_below = x_below
+            tick_specs = [
+                (center_x + radius - 3,
+                 center_y + 18 if one_below else center_y - 10, "1"),
+                (center_x - radius - 5,
+                 center_y + 18 if x_below else center_y - 10, "-1"),
+                # The top and bottom ticks cross the axis away from the point
+                # when the point is in their corner.
+                (center_x + 8 if (not y_left and sin_val >= 0) else center_x - 16,
+                 center_y - radius + 4, "1"),
+                (center_x + 8 if (not y_left and sin_val < 0) else center_x - 20,
+                 center_y + radius + 4, "-1"),
             ]
+            label_elements = []
+            for lbl_x, lbl_y, lbl in tick_specs:
+                label_elements.append(text(lbl_x, lbl_y, lbl, **{"class": "uc-label"}))
+                place(lbl_x, lbl_y, lbl, 11)
+            # The names go after the ticks so they can *measure* their way
+            # clear of them: on a small canvas the arrow and the circle-axis
+            # crossing close ranks, and no fixed offset clears both the tick
+            # and the moving parts at every size. Preferred side first, then
+            # the other side, then one label-height further out.
+            x_steps = (18, -20, 32, -34) if x_below else (-20, 18, -34, 32)
+            y_steps = (-20, 14, -34, 28) if y_left else (14, -20, 28, -34)
+            for name, cands in (
+                ("x", [(svg_width - padding + 5, center_y + s) for s in x_steps]),
+                ("y", [(center_x + s, padding - 2) for s in y_steps]),
+            ):
+                nx, ny = next((c for c in cands
+                               if not collides(label_box(c[0], c[1], name, 14))),
+                              cands[0])
+                label_elements.append(text(nx, ny, name, **{"class": "uc-axis-label"}))
+                place(nx, ny, name, 14)
             elements.append(group("\n".join(label_elements)))
 
         # Draw unit circle
@@ -160,16 +218,19 @@ class UnitCircleTemplate:
             for deg, label in COMMON_ANGLES.items():
                 if deg == 360:
                     continue
-                # Not at the angle being shown. That point already carries its
-                # own marker and, with `show_coordinates`, its own readout, so
-                # labelling it again put two labels on one ray overlapping by
-                # half — at every angle that happens to be a common one. The
-                # reader loses both, and one of them is what they asked for.
+                # Not at the angle being shown — when that ray already carries
+                # its own text. With `show_coordinates` or `show_arc`, the
+                # readout or the arc label sits on the ray, so labelling it
+                # again put two labels on top of each other and the reader
+                # lost both. With *neither* on, suppressing here deleted the
+                # only label the shown angle had: a figure asked to teach π/4
+                # marked every common angle except π/4.
                 # Circular distance, not a bare modulus: `%` is non-negative,
                 # so `(45 - 45.2) % 360` is 359.8 and a figure drawn at 45.2°
                 # kept the 45° label sitting on the same ray. Wrong by a fifth
                 # of a degree, and only on one side.
-                if abs((deg - angle_deg + 180) % 360 - 180) < 0.5:
+                if ((show_coordinates or show_arc)
+                        and abs((deg - angle_deg + 180) % 360 - 180) < 0.5):
                     continue
                 rad = math.radians(deg)
                 px, py = to_svg(math.cos(rad), math.sin(rad))
@@ -178,6 +239,7 @@ class UnitCircleTemplate:
                 label_dist = 1.15
                 lx, ly = to_svg(math.cos(rad) * label_dist, math.sin(rad) * label_dist)
                 angle_elements.append(text(lx, ly, label, **{"class": "uc-angle-label", "text_anchor": "middle"}))
+                place(lx, ly, label, 9, "middle")
             elements.append(group("\n".join(angle_elements)))
 
         # Reference triangle
@@ -199,10 +261,18 @@ class UnitCircleTemplate:
             sin_elements = [
                 line(px, center_y, px, py, stroke=sin_colour, stroke_width="3"),
             ]
-            # Label
-            label_x = px + 10
+            # Label — flipped to the inner side of the sin segment when the
+            # natural side runs off the canvas, which it did for every shallow
+            # angle: at 355° it started at x=349 and lost its last 5px.
+            sin_text = f"sin={sin_val:.2f}"
+            label_x, sin_anchor = px + 10, "start"
+            if label_x + text_width(sin_text, 11, safe=True) > svg_width - 4:
+                label_x, sin_anchor = px - 10, "end"
             label_y = center_y + (py - center_y) / 2
-            sin_elements.append(text(label_x, label_y, f"sin={sin_val:.2f}", **{"class": "uc-value-label", "fill": sin_colour}))
+            sin_elements.append(text(label_x, label_y, sin_text,
+                                     **{"class": "uc-value-label", "fill": sin_colour,
+                                        "text_anchor": sin_anchor}))
+            place(label_x, label_y, sin_text, 11, sin_anchor)
             elements.append(group("\n".join(sin_elements)))
 
         # Highlight cos (horizontal)
@@ -211,10 +281,18 @@ class UnitCircleTemplate:
             cos_elements = [
                 line(center_x, center_y + 3, px, center_y + 3, stroke=cos_colour, stroke_width="3"),
             ]
-            # Label
+            # Label — one step further from the axis when the spot under the
+            # leg is taken, which it is whenever the sin readout sits low on
+            # the same side (every shallow angle just past 180°).
+            cos_text = f"cos={cos_val:.2f}"
             label_x = center_x + (px - center_x) / 2
             label_y = center_y + 20
-            cos_elements.append(text(label_x, label_y, f"cos={cos_val:.2f}", **{"class": "uc-value-label", "fill": cos_colour, "text_anchor": "middle"}))
+            for step in (20, 33, 46):
+                if not collides(label_box(label_x, center_y + step, cos_text, 11, "middle")):
+                    label_y = center_y + step
+                    break
+            cos_elements.append(text(label_x, label_y, cos_text, **{"class": "uc-value-label", "fill": cos_colour, "text_anchor": "middle"}))
+            place(label_x, label_y, cos_text, 11, "middle")
             elements.append(group("\n".join(cos_elements)))
 
         # Tangent line (if enabled)
@@ -250,6 +328,13 @@ class UnitCircleTemplate:
             ly = center_y - label_dist * math.sin(label_angle)
             angle_text = f"{angle_deg}°"
             elements.append(text(lx, ly, angle_text, **{"class": "uc-angle-text", "text_anchor": "middle"}))
+            place(lx, ly, angle_text, 12, "middle")
+
+        # Title — placed (and recorded) before the coordinate readout so a
+        # readout near the top edge dodges it rather than landing on it.
+        if title:
+            elements.append(text(svg_width / 2, 25, title, **{"class": "uc-title", "text_anchor": "middle"}))
+            place(svg_width / 2, 25, str(title), 14, "middle")
 
         # Point on circle
         px, py = to_svg(cos_val, sin_val)
@@ -258,29 +343,41 @@ class UnitCircleTemplate:
         # Coordinates label
         if show_coordinates:
             coord_text = f"({cos_val:.2f}, {sin_val:.2f})"
-            offset_x = 15 if cos_val >= 0 else -15
-            offset_y = -15 if sin_val >= 0 else 15
-            anchor = "start" if cos_val >= 0 else "end"
-            # Away from the circle is the natural side and, near the edges, off
-            # the canvas: at 0° the readout starts at x=355 and is 67px wide on
-            # a 400px figure, so a third of it was never painted. Turned back
-            # inward when the natural side does not fit — on the wrong side
-            # beats not drawn.
-            width = text_width(coord_text, 11, safe=True)
-            left = px + offset_x - (width if anchor == "end" else 0)
-            if left + width > svg_width - 4:
-                offset_x, anchor = -15, "end"
-            elif left < 4:
-                offset_x, anchor = 15, "start"
-            if py + offset_y - 11 < 4:
-                offset_y = 15
-            elif py + offset_y + 4 > svg_height - 4:
-                offset_y = -15
+            # Away from the circle is the natural corner and, near the edges,
+            # off the canvas. But the flipped spot is not automatically free
+            # either: at 355° flipping inward landed the readout on `cos=1.00`,
+            # and the old if/elif never rechecked (nor could it catch a flip
+            # that undershot the opposite margin). So: candidates, nearest
+            # first, and the first that fits the canvas *and* clears every
+            # label placed so far wins — stepping one label-height further out
+            # before giving up.
+            h_options = [(15, "start"), (-15, "end")]
+            if cos_val < 0:
+                h_options.reverse()
+            v = -15 if sin_val >= 0 else 15
+            chosen = None
+            fallback = None
+            for offset_y in (v, -v, 2 * v, -2 * v):
+                for offset_x, anchor in h_options:
+                    box = label_box(px + offset_x, py + offset_y, coord_text, 11, anchor)
+                    on_canvas = (box[0] >= 4 and box[1] <= svg_width - 4
+                                 and box[2] >= 4 and box[3] <= svg_height - 4)
+                    if not on_canvas:
+                        continue
+                    if fallback is None:
+                        fallback = (offset_x, offset_y, anchor)
+                    if not collides(box):
+                        chosen = (offset_x, offset_y, anchor)
+                        break
+                if chosen:
+                    break
+            # Nothing is both on-canvas and clean: take the nearest on-canvas
+            # spot — on the wrong side beats not drawn — or the natural corner
+            # when even that fails.
+            offset_x, offset_y, anchor = (chosen or fallback
+                                          or (h_options[0][0], v, h_options[0][1]))
+            place(px + offset_x, py + offset_y, coord_text, 11, anchor)
             elements.append(text(px + offset_x, py + offset_y, coord_text, **{"class": "uc-coord-label", "text_anchor": anchor}))
-
-        # Title
-        if title:
-            elements.append(text(svg_width / 2, 25, title, **{"class": "uc-title", "text_anchor": "middle"}))
 
         return svg_document("\n".join(elements), svg_width, svg_height)
 

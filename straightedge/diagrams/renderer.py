@@ -98,6 +98,18 @@ def group(content: str, **attrs: Any) -> str:
     return f'<g>{content}</g>'
 
 
+def titled_group(name: str, elements: List[str], **attrs: Any) -> str:
+    """A group whose accessible name is ``name``.
+
+    A ``<title>`` names its *parent*, so it must be the first child of the
+    group it describes. Emitted as a sibling of the shapes instead, it becomes
+    a child of the root ``<svg>`` — naming the whole document, and ignored
+    after the first. This helper holds that invariant so a caller cannot
+    re-derive the join and get the nesting wrong.
+    """
+    return group("\n".join([title(name), *elements]), **attrs)
+
+
 def defs(content: str) -> str:
     """Create an SVG defs element for reusable definitions."""
     return f'<defs>{content}</defs>'
@@ -305,3 +317,22 @@ def fit_text(
         out += ch
         used += w
     return (out.rstrip() + ELLIPSIS) if out.strip() else ELLIPSIS
+
+
+def fit_lines(value: str, max_px: float, font_px: float, max_lines: int = 2,
+              bold: bool = False) -> List[str]:
+    """Wrap ``value`` into at most ``max_lines`` lines, each fitting ``max_px``.
+
+    :func:`wrap_units` picks the breaks and :func:`fit_text` guarantees the
+    width, and the two do not measure alike: the wrapper counts Latin at a flat
+    half-em while ``fit_text`` uses the per-character table with
+    :data:`WIDTH_SAFETY` — the measure the legibility check applies. Fed the
+    raw pixel budget, the wrapper over-fills a line the fitter then cuts, so
+    "Session Cache (Redis)" came back as one ellipsised line with its second
+    line empty. Dividing the wrap budget by the safety margin keeps the two in
+    agreement: a line the wrapper emits is a line the fitter (and the checker)
+    accepts, and the ellipsis is reserved for text that truly cannot fit.
+    """
+    units = max_px / (font_px * WIDTH_SAFETY)
+    return [fit_text(part, max_px, font_px, bold)
+            for part in wrap_units(value, units, max_lines=max_lines)]

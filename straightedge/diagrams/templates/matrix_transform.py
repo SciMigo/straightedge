@@ -238,10 +238,18 @@ class MatrixTransformTemplate:
         # purpose, and needs the panel to cut it off; the eigenvector rays did
         # not have one to reach for, so they crossed the gutter, the other panel
         # and the edge of the figure.
-        clip_ref = f"url(#clip-{ox:.0f})"
+        #
+        # The id is a fragment identifier, which the browser resolves across
+        # the whole page, first match wins — two figures inlined into one
+        # document share the namespace. Minting it from the full clip geometry
+        # (not just `ox`) makes any collision harmless by construction: two
+        # clipPaths with this id cut the same rectangle, so it no longer
+        # matters whose definition wins. The same rect() the visible panel uses
+        # keeps clip and panel from silently desyncing.
+        clip_id = f"mt-clip-{ox:.0f}-{oy:.0f}-{pw:.0f}x{ph:.0f}"
+        clip_ref = f"url(#{clip_id})"
         elements.append(
-            f'<clipPath id="clip-{ox:.0f}"><rect x="{ox}" y="{oy}" '
-            f'width="{pw}" height="{ph}" rx="4"/></clipPath>'
+            f'<clipPath id="{clip_id}">{rect(ox, oy, pw, ph, rx="4")}</clipPath>'
         )
 
         # Coordinate transforms
@@ -321,6 +329,7 @@ class MatrixTransformTemplate:
                 )
 
         # Basis vectors
+        basis_tips: List[Tuple[float, float]] = []
         if show_basis:
             for bv, lbl in _basis_vectors():
                 if matrix is not None:
@@ -329,6 +338,7 @@ class MatrixTransformTemplate:
                     tv = bv
                 origin = to_svg((0, 0))
                 tip = to_svg(tv)
+                basis_tips.append(tip)
                 bcolor = self.COLOR_E1 if lbl == "e1" else self.COLOR_E2
                 elements.append(
                     line(
@@ -374,10 +384,27 @@ class MatrixTransformTemplate:
                 # it overruns on purpose; a label that overruns is just a label
                 # the reader cannot finish, and clipping it silently is what the
                 # legibility check now calls out.
-                tip = to_svg((eigenvec[0] * x_range * 0.7, eigenvec[1] * x_range * 0.7))
+                # The ray has two ends, and the basis-image labels sit at the
+                # same (+4, -4) offset from *their* tips — so whenever an
+                # eigenvector is parallel to a basis image (any diagonal or
+                # axis-aligned matrix) a fixed end drew the eigenvalue straight
+                # over Ae1. The ray reads the same from either end; the basis
+                # label has only one home. Take the end farther from every
+                # basis tip.
+                ends = [to_svg((eigenvec[0] * x_range * s, eigenvec[1] * x_range * s))
+                        for s in (0.7, -0.7)]
+
+                def _clearance(pt: Tuple[float, float]) -> float:
+                    return min((math.hypot(pt[0] - bx, pt[1] - by)
+                                for bx, by in basis_tips), default=float("inf"))
+
+                tip = max(ends, key=_clearance)
+                # Both ends crowded (both basis images on this ray): drop the
+                # label under the ray instead — the basis label sits above it.
+                label_dy = -4 if _clearance(tip) >= 28 else 12
                 eigen_labels.append(
                     text(
-                        tip[0] + 4, tip[1] - 4,
+                        tip[0] + 4, tip[1] + label_dy,
                         f"\u03bb={eigenval:.1f}",
                         **{"class": "mt-eigen-label"},
                     )

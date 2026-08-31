@@ -10,16 +10,14 @@ from typing import Any, Dict, List, Optional, Tuple
 from ..registry import register
 from ..renderer import (
     defs,
-    fit_text,
-    wrap_units,
-    group,
+    fit_lines,
     line,
     path,
     rect,
     style,
     svg_document,
-    title as svg_title,
     text,
+    titled_group,
 )
 
 # Component fill colours by kind/type
@@ -278,12 +276,10 @@ def _render_component(
         center = (cx + w / 2, cy + h / 2)
         elements.extend(_label_lines(label, center[0], center[1] + 4))
 
-    # One group per component, with the title inside it. A `<title>` names its
-    # *parent*, so emitting these as siblings of the shapes made seven of them
-    # children of the root `<svg>` — every one naming the whole document, and
-    # all but the first ignored. Grouped, each names the component it belongs
-    # to, which is what makes it the tooltip and the accessible name.
-    return group("\n".join([svg_title(label), *elements])), center
+    # One group per component, named by its title. Emitted as siblings of the
+    # shapes, seven titles were children of the root `<svg>` — every one naming
+    # the whole document, and all but the first ignored.
+    return titled_group(label, elements), center
 
 
 # ---------------------------------------------------------------------------
@@ -333,16 +329,7 @@ def _label_lines(label: str, cx: float, cy: float) -> List[str]:
     Two lines fit comfortably in 44px of box, so wrap rather than truncate --
     the text is the diagram's content, and there is room for it.
     """
-    # `wrap_units` picks the break, `fit_text` guarantees the width. They do not
-    # measure the same way: the wrapper counts Latin at a flat half-em, which
-    # under-reads a real string — "Session Cache (Redis)" fits its budget by
-    # that count and measures 145px against a 140px box. `fit_text` uses the
-    # per-character table with the font-substitution headroom, which is the
-    # measure the legibility check applies, so a line that survives it is a line
-    # the checker agrees fits.
-    room = _BOX_W - 12
-    lines = [fit_text(part, room, _LABEL_PX)
-             for part in wrap_units(label, room / _LABEL_PX, max_lines=2)]
+    lines = fit_lines(label, _BOX_W - 12, _LABEL_PX)
     top = cy - _LABEL_LINE * (len(lines) - 1) / 2
     return [text(cx, top + _LABEL_LINE * i, part,
                  text_anchor="middle",
@@ -432,12 +419,14 @@ class ArchitectureDiagramTemplate:
         # was simply not in the document. Whatever the lines cannot hold is
         # still the group's accessible name.
         note_room = svg_w - _PADDING * 2
-        notes = [(str(a["text"]),
-                  [fit_text(part, note_room, 10)
-                   for part in wrap_units(str(a["text"]), note_room / 10, max_lines=2)])
+        notes = [(str(a["text"]), fit_lines(str(a["text"]), note_room, 10))
                  for a in loose]
-        svg_h += _NOTE_LINE * sum(len(lines) for _, lines in notes)
-        svg_h += _NOTE_PAD if loose else 0
+        # One number for the stack's height, used both to reserve it here and
+        # to place it later — two independent copies of this sum drifted apart
+        # is exactly the out-of-frame failure the reservation exists to prevent.
+        notes_h = _NOTE_LINE * sum(len(lines) for _, lines in notes)
+        notes_h += _NOTE_PAD if loose else 0
+        svg_h += notes_h
 
         # Reserve space for caption
         if caption:
@@ -467,7 +456,13 @@ class ArchitectureDiagramTemplate:
         for conn in connections:
             elements.append(_render_connection(conn, center_map, kind_map))
 
-        # Annotations that point at something, drawn where they point.
+        # Annotations that point at something, drawn where they point — with
+        # the same care the loose stack gets. Drawn raw they had every defect
+        # the stack was rewritten to fix: unwrapped and unmeasured, so a long
+        # note overhung the frame with no <title> holding the lost text, and
+        # every note on one component was placed at the same single spot, so
+        # two of them overlapped by 100% and the reader saw neither.
+        anchored_lines_placed: Dict[str, int] = {}
         for ann in annotations:
             ann_text = ann.get("text", "")
             near_id = ann.get("near", "")
@@ -475,21 +470,23 @@ class ArchitectureDiagramTemplate:
                 continue
             ax, ay = center_map[near_id]
             ay += (_CYLINDER_H if kind_map.get(near_id) in ("database", "datastore") else _BOX_H) / 2 + 16
-            elements.append(text(
-                ax, ay, ann_text,
+            start = anchored_lines_placed.get(near_id, 0)
+            lines = fit_lines(ann_text, _BOX_W, 10)
+            drawn = [text(
+                ax, ay + _NOTE_LINE * (start + i), part,
                 text_anchor="middle",
                 font_size="10px",
                 font_style="italic",
                 font_family="sans-serif",
                 fill="#888",
-            ))
+            ) for i, part in enumerate(lines)]
+            anchored_lines_placed[near_id] = start + len(lines)
+            elements.append(titled_group(ann_text, drawn))
 
         # The rest go in a stack along the bottom, left-aligned. Centring a
         # 300px note on the left margin put most of it off the canvas, and every
         # one used to be placed at the same single spot, drawn over each other.
-        note_top = (svg_h - (30 if caption else 0)
-                    - _NOTE_LINE * sum(len(lines) for _, lines in notes)
-                    - (_NOTE_PAD if loose else 0))
+        note_top = svg_h - (30 if caption else 0) - notes_h
         placed = 0
         for full, lines in notes:
             drawn = [text(_PADDING, note_top + _NOTE_LINE * (placed + i) + _NOTE_LINE,
@@ -501,7 +498,7 @@ class ArchitectureDiagramTemplate:
                           fill="#888")
                      for i, part in enumerate(lines)]
             placed += len(lines)
-            elements.append(group("\n".join([svg_title(full), *drawn])))
+            elements.append(titled_group(full, drawn))
 
         # Caption
         if caption:

@@ -160,7 +160,11 @@ def _check_empty(boxes: Sequence[Box]) -> list[Finding]:
     ticks, a title — and no curve, because the curve spec used a key the
     template did not read. Several kilobytes of chrome and no content.
     """
-    drawn = [b for b in boxes if b.area > 1e-9]
+    # Extent, not area: a level or plumb stroke is zero-area however long it
+    # is, and a number line or a bare grid of such strokes is a drawn scene.
+    # Same reasoning as the frame check below, which stopped skipping on area
+    # for exactly this shape of mark.
+    drawn = [b for b in boxes if b.width > 1e-9 or b.height > 1e-9]
     if not drawn:
         return [Finding("empty", "error",
                         "nothing with any extent was drawn"
@@ -355,7 +359,10 @@ def _check_overlaps(boxes: Sequence[Box], tolerance: float) -> list[Finding]:
     hiding it, and a caller wanting per-pair detail should read the boxes.
     """
     seen: dict[tuple[str, str, str, bool], _Occurrence] = {}
-    real = [b for b in boxes if b.area > 1e-9]
+    # Extent, not area — the same filter as the empty and frame checks. On
+    # area, every axis-aligned stroke was dropped before the pairing, so a
+    # zero-height rule drawn straight through a label could never be reported.
+    real = [b for b in boxes if b.width > 1e-9 or b.height > 1e-9]
 
     def entry_for(check: str, severity: str, subject: str, other: str,
                   crossed: bool, subject_box: Box) -> _Occurrence:
@@ -373,6 +380,20 @@ def _check_overlaps(boxes: Sequence[Box], tolerance: float) -> list[Finding]:
         for b in real[i + 1:]:
             if a.kind != "text" and b.kind != "text":
                 continue        # two strokes crossing is a graph, not a defect
+            if a.kind != b.kind:
+                text, other = (a, b) if a.kind == "text" else (b, a)
+                if other.area <= 1e-9:
+                    # A level or plumb stroke: the degenerate box *is* the ink,
+                    # so ask the segment test directly. The rectangle pathway
+                    # below cannot see it — a zero-area box intersects nothing
+                    # and covers 0% of anything.
+                    hit = (_path_crosses(other, text) if other.path else
+                           _segment_hits_rect((other.x0, other.y0),
+                                              (other.x1, other.y1), text))
+                    if hit:
+                        entry_for("text_obscured", "warn", text.label,
+                                  other.label, True, text)
+                    continue
             rect = a.intersection(b)
             if rect is None:
                 continue
