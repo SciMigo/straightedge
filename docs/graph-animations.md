@@ -86,17 +86,51 @@ accepts everything the video does and more:
 | `bellman_ford` | weights, `start` | the negative cycle |
 | `kruskal` | undirected, weights | — (rejected edges are drawn dashed) |
 | `prim` | undirected, weights, `start` | — |
-| `topological_sort` | directed | the cycle, when the graph is not a DAG |
-| `scc` | directed | — (components are coloured, finish times badged) |
+| `topological_sort` | directed; `tie_break` is `"input"` (default: earliest ready vertex in node order), `"fifo"`, or `"min"` | the cycle, or an unknown tie-break policy |
+| `scc` | directed; `condensation` (default true) appends the condensation DAG, yielding it when that one panel would overflow a storyboard | — (Kosaraju finish order, reverse DFS trees, and condensation DAG) |
 | `max_flow` | directed, capacities, `source`, `sink` | source = sink, an uncapacitated edge |
 | `greedy_coloring` | optional `vertex_order` | — |
-| `bipartite_matching` | `partitions.left/right` | an edge inside one side |
+| `bipartite_matching` | `partitions.left/right` | an edge inside one side; a failed search ends on its Hall violator |
 | `vertex_cover` | `partitions.left/right` | — (König's cover from the maximum matching) |
 | `euler` | undirected, connected edges | the odd-degree vertices, when there are not 0 or 2 |
 | `low_link` | undirected | — (bridges, articulation vertices and blocks are computed together) |
+| `prufer_encode` | a tree; optional `expect` | a cycle, disconnected components, or first mismatching code position |
+| `prufer_decode` | `code` on vertices `1..len(code)+2` | the first code entry outside that range |
+| `tree_center` | a tree; optional `show_eccentricities` | a cycle or disconnected components |
+| `ear_decomposition` | a 2-connected graph; optional `start_cycle` | an articulation vertex, disconnected components, or more ears than the 11 colours can tell apart |
+| `stable_matching` | complete `proposers` / `receivers` preference objects; optional `check` | a malformed preference list or the first blocking pair |
+| `hamiltonian_search` | `start`, optional `max_frames` and `expect` | a false expected cycle/non-cycle claim, with the cycle or exhausted-state count |
+| `edge_coloring` | optional authored `classes` and `expect` | adjacent same-class edges, omitted edges, an impossible expectation below Δ, or an exhausted exact-search budget (supply verified `classes`) |
+| `degeneracy_ordering` | an undirected graph | the shared 11-vertex trace cap |
 
 A storyboard holds 12 panels and an animation 24 frames; a longer trace is
 refused as unreadable rather than truncated.
+
+`havel_hakimi` is a separate array-first storyboard. Pass `sequence` and it
+sorts and reduces the degrees one panel at a time; `realize: true` appends the
+computed graph as the recursive reductions unwind. It refuses an odd sum, a
+degree at least `n`, or the first negative reduction and includes that failing
+sequence as the witness.
+
+`floyd_warshall` is a table-first storyboard: it emits the initial distance
+matrix and one `dp_table` after each permitted intermediate vertex, highlighting
+exactly the entries that improved. A negative diagonal refuses the figure with
+the responsible vertex and reconstructed negative cycle. The graph/table
+side-by-side composition remains part of the separately tracked composite-panel
+work.
+
+`mycielski` accepts an undirected base graph and constructs all three layers of
+`M(G)` itself. The coloring frames are computed, as are the exact chromatic
+numbers for the small accepted graphs and the triangle-free check. Since the
+output must fit the figure lane, `2|V(G)|+1` may not exceed 11; in particular,
+`M(C₅)` is the 11-vertex, 20-edge Grötzsch graph with chromatic number four.
+
+`turan` accepts `n` and `r` and computes the balanced complete `r`-partite
+graph `T(n,r)`. Its fixed layout gives each part a column and a numbered color,
+and its caption reports the computed part sizes, edge count, and absence of
+`K_(r+1)`. It refuses `r < 1`, `r > n`, non-integer parameters, and figures
+over the shared 11-vertex cap. Thus the course instances render with 9 edges
+for `T(6,2)`, 12 for `T(6,3)`, and 16 for `T(7,3)`.
 
 ## Building a lab on this
 

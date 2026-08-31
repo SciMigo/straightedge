@@ -6,6 +6,89 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **Balanced Turán graph figures.** The new `turan` template computes
+  `T(n,r)` from two integers, draws its N-way parts as colored columns, and
+  reports the verified edge count and clique-free claim. Invalid part counts
+  and figures over the 11-vertex cap are refused with witnesses before the
+  quadratic edge set is materialized.
+
+- **Hall witnesses for deficient bipartite matchings.** A failed final
+  augmentation now ends on the alternating reach, highlights deterministic
+  `S` and `N(S)`, and states the strict Hall inequality. Matching and König
+  cover share the same alternating-reach computation, but the Hall panel
+  itself belongs to `bipartite_matching` — `vertex_cover` keeps exactly its
+  documented panels.
+
+- **Complete Kosaraju SCC storyboards.** `scc` now names the algorithm, exposes
+  the first-pass finish order, grows actual reverse-pass DFS trees one
+  component at a time, and finishes on a computed hierarchical condensation
+  DAG rather than merely recoloring the original graph. The condensation is a
+  summary panel (`condensation: false` drops it), and when appending it is
+  exactly what would overflow a storyboard's panel budget it yields, so every
+  trace that rendered before it existed still renders.
+
+- **Explicit topological-sort tie-breaking.** Kahn traces accept
+  `tie_break: "input" | "fifo" | "min"`; the ready frontier and resulting
+  lecture order follow the named policy, and unknown policies are refused.
+  The default stays `input` — the earliest ready vertex in node order, the
+  only behaviour the trace ever had — so published figures keep their order
+  on regeneration.
+
+- **Smallest-last degeneracy orderings.** `degeneracy_ordering` deletes a
+  deterministic minimum-degree vertex per frame, tracks the maximum such
+  degree, and finishes with a checked reverse-order greedy coloring using at
+  most `d+1` colors.
+
+- **Exact small-graph edge coloring.** `edge_coloring` computes a proper
+  coloring with Δ or Δ+1 colors, draws each class with a numbered edge role,
+  and validates authored `classes`. Shared endpoints and false `expect`
+  values are refused with concrete witnesses. The exact class-1 search has a
+  deterministic state budget; hard instances refuse with a request for
+  verified authored classes instead of running without bound.
+
+- **Checked Mycielski constructions.** The new `mycielski` template builds the
+  original, shadow, and hub layers from the supplied base graph, then computes
+  a coloring, exact small-graph chromatic numbers, and triangle-freeness. The
+  11-vertex figure cap is enforced on the constructed graph.
+
+- **Floyd–Warshall DP-table sequences.** The new `floyd_warshall` template
+  highlights every distance improved by each intermediate vertex and renders
+  infinity explicitly. A negative diagonal refuses the trace with the vertex
+  and reconstructed negative-cycle witness.
+
+- **Bounded Hamiltonian backtracking traces.** `hamiltonian_search` explores
+  the full state space while emitting at most `max_frames`, shows partial paths
+  and backtracks, and reports the explored-state count. A false `expect` is
+  refused with the found cycle or exhausted-search witness.
+
+- **Gale–Shapley proposal traces and stability checks.** `stable_matching`
+  shows each proposal, held offer, rejection, and the final matching. Complete
+  strict preferences are checked as permutations, and an authored `check`
+  matching is refused with its first blocking pair.
+
+- **Open-ear decompositions with numbered edge colors.** `graph_algorithm`
+  computes one ear per frame, can honor a checked starting cycle, and refuses
+  a graph with its articulation-vertex witness. The shared `graph` renderer
+  now supports eleven deterministic `color-N` edge roles.
+
+- **Jordan tree centers by leaf stripping.** `graph_algorithm` now removes all
+  leaves in simultaneous rounds, reveals the one or two centers only when the
+  terminal round proves them, and can badge the computed eccentricities. It
+  refuses a non-tree with its cycle or disconnected components.
+
+- **Checked Havel–Hakimi reductions.** The new `havel_hakimi` template shows
+  every degree-sequence reduction as an array and can unwind those reductions
+  into a computed graph realization. It refuses odd sums, degrees at least
+  `n`, and negative intermediate entries with the failing sequence attached.
+
+- **Prüfer encoding and decoding storyboards.** `graph_algorithm` now deletes
+  the smallest leaf to compute a tree's code or grows the uniquely decoded
+  tree one edge at a time. Non-trees, out-of-range entries, and authored
+  `expect` codes are refused with the cycle, components, or first differing
+  position as a witness.
+
 ## [0.7.0] - 2026-08-26
 
 A minor release about graph theory, and about every state on screen being

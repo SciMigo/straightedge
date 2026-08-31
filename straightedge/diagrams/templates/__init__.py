@@ -16,6 +16,10 @@ from . import algorithm_trace  # noqa: F401
 from . import animated_trace  # noqa: F401
 from . import graph_traversal  # noqa: F401
 from . import graph_algorithm  # noqa: F401
+from . import havel_hakimi  # noqa: F401
+from . import floyd_warshall  # noqa: F401
+from . import mycielski  # noqa: F401
+from . import turan  # noqa: F401
 from . import disjoint_set  # noqa: F401
 from . import priority_queue  # noqa: F401
 from . import block_cut_tree  # noqa: F401
@@ -67,6 +71,10 @@ __all__ = [
     "animated_trace",
     "graph_traversal",
     "graph_algorithm",
+    "havel_hakimi",
+    "floyd_warshall",
+    "mycielski",
+    "turan",
     "disjoint_set",
     "priority_queue",
     "block_cut_tree",

@@ -47,12 +47,26 @@ class GraphError(ValueError):
     student can check, not merely that a check failed.
     """
 
-    def __init__(self, message: str, witness: Any = None) -> None:
+    def __init__(self, message: str, witness: Any = None, *,
+                 kind: str | None = None,
+                 witness_kind: str | None = None) -> None:
         super().__init__(message)
         self.witness = witness
+        # Optional structured metadata for adapters that need stable refusal
+        # ids and human-readable witnesses. Older errors deliberately keep the
+        # message classifier as a fallback while new surfaces can be explicit.
+        self.kind = kind
+        self.witness_kind = witness_kind
 
 
 EdgeKey = tuple[str, str]
+
+#: How many distinct ``color-N`` roles the graph template can actually draw —
+#: its stylesheet defines ``.graph-…-color-1`` through ``-11`` and its
+#: normaliser drops anything past that, *silently*. A producer of unbounded
+#: colour roles (ears, colourings) must refuse past this rather than emit
+#: roles that render as plain gray under captions claiming otherwise.
+COLOR_ROLES = 11
 
 
 @dataclass(frozen=True)
@@ -236,6 +250,977 @@ def _fmt(value: float) -> str:
 
 def _edge_text(u: str, v: str, directed: bool) -> str:
     return f"{u}→{v}" if directed else f"{u}–{v}"
+
+
+def require_tree(graph: Graph) -> None:
+    """Refuse a directed, cyclic, or disconnected graph with a checkable witness."""
+    if graph.directed:
+        raise GraphError("a tree must be undirected")
+    parent: dict[str, str | None] = {}
+
+    def visit(vertex: str, previous: str | None, path: list[str]) -> list[str] | None:
+        parent[vertex] = previous
+        for neighbor in graph.neighbors(vertex):
+            if neighbor == previous:
+                continue
+            if neighbor in parent:
+                start = path.index(neighbor) if neighbor in path else 0
+                return path[start:] + [neighbor]
+            found = visit(neighbor, vertex, path + [neighbor])
+            if found:
+                return found
+        return None
+
+    cycle = visit(graph.ids[0], None, [graph.ids[0]])
+    if cycle:
+        raise GraphError("the graph has a cycle, so it is not a tree", witness=cycle)
+    if len(parent) != len(graph.ids):
+        first = list(parent)
+        other = next(v for v in graph.ids if v not in parent)
+        second: list[str] = []
+        queue = [other]
+        seen = {other}
+        while queue:
+            vertex = queue.pop(0)
+            second.append(vertex)
+            for neighbor in graph.neighbors(vertex):
+                if neighbor not in seen:
+                    seen.add(neighbor)
+                    queue.append(neighbor)
+        raise GraphError("the graph is disconnected, so it is not a tree",
+                         witness=(tuple(first), tuple(second)))
+
+
+# --------------------------------------------------------------- Prüfer code
+
+
+def _vertex_sort_key(vertex: str) -> tuple[int, int | str]:
+    """Numeric labels sort numerically; all other labels sort lexically."""
+    try:
+        return (0, int(vertex))
+    except ValueError:
+        return (1, vertex)
+
+
+def prufer_encode_steps(graph: Graph, expect: list[Any] | None = None) -> list[Step]:
+    """Delete the smallest leaf repeatedly and expose the resulting Prüfer code."""
+    require_tree(graph)
+    if len(graph.ids) < 2:
+        raise GraphError("Prüfer encoding needs at least two vertices")
+    adjacency = {v: list(graph.neighbors(v)) for v in graph.ids}
+    remaining = set(graph.ids)
+    code: list[str] = []
+    removed: list[str] = []
+    steps = [Step("Start", "Repeatedly delete the smallest leaf",
+                  panel=("code: ()",), extras={"code": []})]
+    while len(remaining) > 2:
+        leaf = min((v for v in remaining
+                    if sum(n in remaining for n in adjacency[v]) == 1),
+                   key=_vertex_sort_key)
+        neighbor = next(n for n in adjacency[leaf] if n in remaining)
+        code.append(neighbor)
+        removed.append(leaf)
+        remaining.remove(leaf)
+        nodes = {v: "rejected" for v in removed}
+        nodes[leaf] = "current"
+        steps.append(Step(
+            f"Delete {leaf}",
+            f"Delete smallest leaf {leaf}; append its neighbour {neighbor}",
+            nodes, {graph.key(leaf, neighbor): "rejected"},
+            panel=("code: (" + ", ".join(code) + ")",),
+            extras={"code": list(code), "leaf": leaf, "neighbor": neighbor},
+        ))
+    if expect is not None:
+        wanted = [str(value) for value in expect]
+        for index in range(max(len(code), len(wanted))):
+            actual = code[index] if index < len(code) else None
+            claimed = wanted[index] if index < len(wanted) else None
+            if actual != claimed:
+                raise GraphError(
+                    f"expected Prüfer code first differs at position {index + 1}: "
+                    f"computed {actual!r}, expected {claimed!r}",
+                    witness=(index + 1, actual, claimed),
+                )
+    return steps
+
+
+def prufer_decode_graph(code: list[Any]) -> Graph:
+    """Build the labelled tree on ``1..len(code)+2`` represented by ``code``."""
+    if not isinstance(code, list):
+        raise GraphError("code must be an array")
+    n = len(code) + 2
+    parsed: list[int] = []
+    for index, value in enumerate(code):
+        if isinstance(value, bool):
+            value = -1
+        try:
+            entry = int(value)
+        except (TypeError, ValueError):
+            entry = -1
+        if entry < 1 or entry > n or str(entry) != str(value):
+            raise GraphError(f"code entry {value!r} at position {index + 1} is outside 1..{n}",
+                             witness=(index + 1, value), kind="code",
+                             witness_kind="list")
+        parsed.append(entry)
+    degree = {vertex: 1 for vertex in range(1, n + 1)}
+    for vertex in parsed:
+        degree[vertex] += 1
+    edges: list[Edge] = []
+    for vertex in parsed:
+        leaf = min(v for v in degree if degree[v] == 1)
+        edges.append(Edge(str(leaf), str(vertex)))
+        degree[leaf] -= 1
+        degree[vertex] -= 1
+    last = [v for v in degree if degree[v] == 1]
+    edges.append(Edge(str(last[0]), str(last[1])))
+    ids = tuple(str(v) for v in range(1, n + 1))
+    return Graph(ids, {v: v for v in ids}, tuple(edges))
+
+
+def prufer_decode_steps(code: list[Any]) -> list[Step]:
+    """Reveal the deterministic smallest-leaf decoding, one edge per step."""
+    graph = prufer_decode_graph(code)
+    parsed = [str(value) for value in code]
+    steps = [Step("Start", f"Decode ({', '.join(parsed)}) on vertices 1..{len(parsed) + 2}",
+                  panel=("remaining code: (" + ", ".join(parsed) + ")",),
+                  extras={"visible_edges": []})]
+    visible: list[EdgeKey] = []
+    for index, edge in enumerate(graph.edges):
+        key = graph.key(edge.source, edge.target)
+        visible.append(key)
+        remaining = parsed[index + 1:] if index < len(parsed) else []
+        pointer = f"read {parsed[index]}" if index < len(parsed) else "join final leaves"
+        steps.append(Step(
+            f"Add {edge.source}–{edge.target}",
+            f"{pointer}; add edge {edge.source}–{edge.target}",
+            {edge.source: "current", edge.target: "frontier"},
+            {candidate: "tree" for candidate in visible},
+            panel=("remaining code: (" + ", ".join(remaining) + ")",),
+            extras={"visible_edges": list(visible)},
+        ))
+    return steps
+
+
+# ------------------------------------------------------------ Havel–Hakimi
+
+
+def havel_hakimi_steps(sequence: list[Any], realize: bool = False) -> list[Step]:
+    """Reduce a degree sequence and optionally unwind a labelled realization."""
+    if not isinstance(sequence, list) or not sequence:
+        raise GraphError("sequence must be a non-empty array")
+    degrees: list[int] = []
+    for index, value in enumerate(sequence):
+        if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+            raise GraphError(f"sequence entry {value!r} at position {index + 1} must be nonnegative",
+                             witness=(index + 1, value))
+        if value >= len(sequence):
+            raise GraphError(f"degree {value} at position {index + 1} is at least n={len(sequence)}",
+                             witness=(index + 1, value))
+        degrees.append(value)
+    if sum(degrees) % 2:
+        raise GraphError(f"degree sum {sum(degrees)} is odd", witness=tuple(degrees))
+
+    items = [(degree, str(index + 1)) for index, degree in enumerate(degrees)]
+    items.sort(key=lambda item: (-item[0], _vertex_sort_key(item[1])))
+    steps = [Step("Start", "Sort the degree sequence in non-increasing order",
+                  panel=("sequence: (" + ", ".join(str(d) for d, _ in items) + ")",),
+                  extras={"values": [d for d, _ in items], "highlights": {}})]
+    batches: list[tuple[str, list[str]]] = []
+    while items and items[0][0] > 0:
+        degree, vertex = items.pop(0)
+        if degree > len(items):
+            witness = tuple([degree] + [d for d, _ in items])
+            raise GraphError(f"reduction cannot connect degree {degree} to only {len(items)} entries",
+                             witness=witness)
+        neighbors = [name for _, name in items[:degree]]
+        reduced = [(d - 1 if index < degree else d, name)
+                   for index, (d, name) in enumerate(items)]
+        raw = tuple(d for d, _ in reduced)
+        if any(d < 0 for d in raw):
+            raise GraphError("Havel–Hakimi reduction produced a negative entry: "
+                             + str(raw), witness=raw)
+        batches.append((vertex, neighbors))
+        reduced.sort(key=lambda item: (-item[0], _vertex_sort_key(item[1])))
+        displayed = [d for d, _ in reduced]
+        # Highlight the entries that were decremented, found by identity after
+        # the re-sort. Highlighting the first `degree` positions of the sorted
+        # row marked whatever happened to sort there: on (3,3,2,2,2) the
+        # untouched 2 was lit and a decremented 1 was not — the teaching figure
+        # marking the wrong entries.
+        decremented = set(neighbors)
+        highlights = {str(index): "comparison"
+                      for index, (_, name) in enumerate(reduced) if name in decremented}
+        steps.append(Step(
+            f"Remove {degree}",
+            f"Remove {degree}; decrement the next {degree} entries",
+            panel=("sequence: (" + ", ".join(str(d) for d in displayed) + ")",),
+            extras={"values": displayed, "highlights": highlights,
+                    "removed": degree, "vertex": vertex},
+        ))
+        items = reduced
+    if items and any(degree for degree, _ in items):
+        witness = tuple(degree for degree, _ in items)
+        raise GraphError("sequence does not reduce to zero", witness=witness)
+    if not realize:
+        return steps
+
+    all_edges = [(vertex, neighbor) for vertex, neighbors in batches for neighbor in neighbors]
+    visible: list[EdgeKey] = []
+    for vertex, neighbors in reversed(batches):
+        for neighbor in neighbors:
+            visible.append((min(vertex, neighbor), max(vertex, neighbor)))
+        steps.append(Step(
+            f"Join {vertex}",
+            f"Restore vertex {vertex} and join it to {', '.join(neighbors)}",
+            {vertex: "current", **{neighbor: "frontier" for neighbor in neighbors}},
+            {edge: "tree" for edge in visible},
+            panel=(f"realized edges: {len(visible)} of {len(all_edges)}",),
+            extras={"graph_nodes": [str(i) for i in range(1, len(degrees) + 1)],
+                    "graph_edges": list(all_edges), "visible_edges": list(visible)},
+        ))
+    return steps
+
+
+# ------------------------------------------------------------- tree centres
+
+
+def tree_center_steps(graph: Graph, show_eccentricities: bool = False) -> list[Step]:
+    """Strip all leaves by rounds until Jordan's one or two centres remain."""
+    require_tree(graph)
+    if len(graph.ids) == 1:
+        return [Step("Center", f"{graph.ids[0]} is the center", {graph.ids[0]: "target"},
+                     badges={graph.ids[0]: "ε=0"} if show_eccentricities else {},
+                     panel=(f"center: {{{graph.ids[0]}}}", "radius = diameter = 0"),
+                     extras={"centers": [graph.ids[0]], "radius": 0, "diameter": 0})]
+
+    def distances(source: str) -> dict[str, int]:
+        distance = {source: 0}
+        queue = [source]
+        while queue:
+            vertex = queue.pop(0)
+            for neighbor in graph.neighbors(vertex):
+                if neighbor not in distance:
+                    distance[neighbor] = distance[vertex] + 1
+                    queue.append(neighbor)
+        return distance
+
+    eccentricity = {vertex: max(distances(vertex).values()) for vertex in graph.ids}
+    diameter = max(eccentricity.values())
+    radius = min(eccentricity.values())
+    remaining = set(graph.ids)
+    removed: list[str] = []
+    round_number = 0
+    initial_leaves = [v for v in graph.ids if graph.degree(v) <= 1]
+    steps = [Step("Start", "Strip every leaf in simultaneous rounds",
+                  {v: "frontier" for v in initial_leaves},
+                  badges=({v: f"ε={eccentricity[v]}" for v in graph.ids}
+                          if show_eccentricities else {}),
+                  panel=("leaves: " + ", ".join(initial_leaves),))]
+    while len(remaining) > 2:
+        leaves = [v for v in graph.ids if v in remaining and
+                  sum(neighbor in remaining for neighbor in graph.neighbors(v)) <= 1]
+        round_number += 1
+        remaining.difference_update(leaves)
+        removed.extend(leaves)
+        next_leaves = [v for v in graph.ids if v in remaining and
+                       sum(neighbor in remaining for neighbor in graph.neighbors(v)) <= 1]
+        nodes = {v: "rejected" for v in removed}
+        nodes.update({v: "frontier" for v in next_leaves})
+        steps.append(Step(
+            f"Strip round {round_number}",
+            f"Remove leaves {{{', '.join(leaves)}}}", nodes,
+            badges=({v: f"ε={eccentricity[v]}" for v in graph.ids if v in remaining}
+                    if show_eccentricities else {}),
+            panel=("remaining: {" + ", ".join(v for v in graph.ids if v in remaining) + "}",),
+            extras={"removed": list(leaves), "remaining": [v for v in graph.ids if v in remaining]},
+        ))
+    centers = [v for v in graph.ids if v in remaining]
+    nodes = {v: "rejected" for v in removed}
+    nodes.update({v: "target" for v in centers})
+    steps.append(Step(
+        "Center" if len(centers) == 1 else "Centers",
+        "Jordan center" + ("" if len(centers) == 1 else "s") + ": {" + ", ".join(centers) + "}",
+        nodes,
+        badges=({v: f"ε={eccentricity[v]}" for v in centers}
+                if show_eccentricities else {}),
+        panel=("center: {" + ", ".join(centers) + "}",
+               f"radius = {radius} · diameter = {diameter}"),
+        extras={"centers": centers, "radius": radius, "diameter": diameter},
+    ))
+    return steps
+
+
+# --------------------------------------------------------- ear decomposition
+
+
+def ear_decomposition_steps(graph: Graph, start_cycle: list[Any] | None = None) -> list[Step]:
+    """Compute an open-ear decomposition of a 2-connected graph."""
+    if graph.directed:
+        raise GraphError("ear decomposition needs an undirected graph")
+    if len(graph.ids) < 3:
+        raise GraphError("a 2-connected graph needs at least three vertices", witness=graph.ids)
+    analysis = connectivity_analysis(graph)
+    if analysis.articulations:
+        cut = analysis.articulations[0]
+        raise GraphError(f"the graph is not 2-connected; {cut} is an articulation vertex",
+                         witness=cut, kind="connectivity")
+    reach = {graph.ids[0]}
+    queue = [graph.ids[0]]
+    while queue:
+        vertex = queue.pop(0)
+        for neighbor in graph.neighbors(vertex):
+            if neighbor not in reach:
+                reach.add(neighbor)
+                queue.append(neighbor)
+    if len(reach) != len(graph.ids):
+        other = next(vertex for vertex in graph.ids if vertex not in reach)
+        raise GraphError("the graph is disconnected, so it is not 2-connected",
+                         witness=(graph.ids[0], other), kind="connectivity",
+                         witness_kind="list")
+
+    if start_cycle is not None:
+        if not isinstance(start_cycle, list) or len(start_cycle) < 4:
+            raise GraphError("start_cycle must be a closed cycle with at least three vertices",
+                             kind="input")
+        cycle = [require_vertex(graph, vertex, "start_cycle entry") for vertex in start_cycle]
+        if cycle[0] != cycle[-1] or len(set(cycle[:-1])) != len(cycle) - 1:
+            raise GraphError("start_cycle must close once without repeating an internal vertex",
+                             witness=cycle, kind="cycle", witness_kind="walk")
+        missing = next(((u, v) for u, v in zip(cycle, cycle[1:])
+                        if not graph.has_edge(u, v)), None)
+        if missing:
+            raise GraphError(f"start_cycle uses missing edge {missing[0]}–{missing[1]}",
+                             witness=missing, kind="edges", witness_kind="edge")
+    else:
+        # _find_cycle is the directed finder topological_sort uses; on an
+        # undirected graph it returns the back-edge to the DFS parent as a
+        # two-vertex "cycle", so every 2-connected input was refused unless
+        # the caller authored start_cycle.
+        found = _find_undirected_cycle(graph)
+        if len(found) < 3:
+            raise GraphError("the graph has no cycle, so it is not 2-connected")
+        cycle = found + [found[0]]
+
+    ears: list[list[str]] = [cycle]
+    introduced = set(cycle[:-1])
+    used: set[EdgeKey] = {graph.key(u, v) for u, v in zip(cycle, cycle[1:])}
+    all_edges = [graph.key(edge.source, edge.target) for edge in graph.edges]
+
+    def new_vertex_ear() -> list[str] | None:
+        def extend(start: str, vertex: str, path: list[str]) -> list[str] | None:
+            for neighbor in graph.neighbors(vertex):
+                key = graph.key(vertex, neighbor)
+                if key not in used and neighbor in introduced and neighbor != start:
+                    return path + [neighbor]
+            for neighbor in graph.neighbors(vertex):
+                key = graph.key(vertex, neighbor)
+                if key in used or neighbor in path:
+                    continue
+                if neighbor in introduced:
+                    continue
+                found_path = extend(start, neighbor, path + [neighbor])
+                if found_path:
+                    return found_path
+            return None
+
+        for start in graph.ids:
+            if start not in introduced:
+                continue
+            for neighbor in graph.neighbors(start):
+                if neighbor in introduced or graph.key(start, neighbor) in used:
+                    continue
+                found_path = extend(start, neighbor, [start, neighbor])
+                if found_path:
+                    return found_path
+        return None
+
+    while len(used) < len(all_edges):
+        ear = new_vertex_ear()
+        if ear is None:
+            key = next((edge for edge in all_edges if edge not in used
+                        and edge[0] in introduced and edge[1] in introduced), None)
+            if key is None:
+                remaining = next(edge for edge in all_edges if edge not in used)
+                raise GraphError("could not extend an ear through the remaining edge",
+                                 witness=remaining)
+            ear = [key[0], key[1]]
+        ears.append(ear)
+        introduced.update(ear)
+        used.update(graph.key(u, v) for u, v in zip(ear, ear[1:]))
+
+    if len(ears) > COLOR_ROLES:
+        raise GraphError(
+            f"the decomposition has {len(ears)} ears; only {COLOR_ROLES} colours "
+            "can tell them apart", witness=len(ears))
+
+    steps: list[Step] = []
+    colored: dict[EdgeKey, str] = {}
+    visible_nodes: set[str] = set()
+    for index, ear in enumerate(ears):
+        role = f"color-{index + 1}"
+        new_edges = [graph.key(u, v) for u, v in zip(ear, ear[1:])]
+        colored.update({edge: role for edge in new_edges})
+        visible_nodes.update(ear)
+        notation = "–".join(ear)
+        steps.append(Step(
+            f"P{index}", f"P{index} = {notation}",
+            {vertex: "visited" for vertex in graph.ids if vertex in visible_nodes},
+            dict(colored), panel=(f"P{index}: {notation}",),
+            extras={"ears": [list(value) for value in ears[:index + 1]]},
+        ))
+    return steps
+
+
+# ---------------------------------------------------------- stable matching
+
+
+def stable_matching_graph(proposers: Any, receivers: Any) -> Graph:
+    """Validate complete strict preferences and return their bipartite graph."""
+    if not isinstance(proposers, dict) or not proposers:
+        raise GraphError("proposers must be a non-empty object of preference arrays")
+    if not isinstance(receivers, dict) or not receivers:
+        raise GraphError("receivers must be a non-empty object of preference arrays")
+    left = [str(value) for value in proposers]
+    right = [str(value) for value in receivers]
+    if set(left) & set(right):
+        raise GraphError("proposer and receiver names must be disjoint")
+    if len(left) != len(right):
+        raise GraphError("stable matching needs equally sized sides",
+                         witness=(len(left), len(right)))
+    for raw_name, preferences in proposers.items():
+        name = str(raw_name)
+        values = [str(value) for value in preferences] if isinstance(preferences, list) else []
+        if len(values) != len(right) or set(values) != set(right):
+            raise GraphError(f"preferences for proposer {name} must be a permutation of receivers",
+                             witness=name)
+    for raw_name, preferences in receivers.items():
+        name = str(raw_name)
+        values = [str(value) for value in preferences] if isinstance(preferences, list) else []
+        if len(values) != len(left) or set(values) != set(left):
+            raise GraphError(f"preferences for receiver {name} must be a permutation of proposers",
+                             witness=name)
+    ids = tuple(left + right)
+    edges = tuple(Edge(proposer, receiver) for proposer in left for receiver in right)
+    return Graph(ids, {vertex: vertex for vertex in ids}, edges)
+
+
+def stable_matching_steps(proposers: Any, receivers: Any,
+                          check: Any = None) -> list[Step]:
+    """Proposer-optimal Gale–Shapley, one proposal per step."""
+    graph = stable_matching_graph(proposers, receivers)
+    left = [str(value) for value in proposers]
+    right = [str(value) for value in receivers]
+    proposer_preferences = {str(name): [str(value) for value in values]
+                            for name, values in proposers.items()}
+    receiver_rank = {str(name): {str(value): index for index, value in enumerate(values)}
+                     for name, values in receivers.items()}
+
+    if check is not None:
+        if not isinstance(check, dict):
+            raise GraphError("check must map every proposer to one receiver")
+        authored = {str(name): str(value) for name, value in check.items()}
+        if set(authored) != set(left) or len(set(authored.values())) != len(right) \
+                or set(authored.values()) != set(right):
+            raise GraphError("check must be a one-to-one matching of both sides")
+        partner = {receiver: proposer for proposer, receiver in authored.items()}
+        for proposer in left:
+            own = authored[proposer]
+            for receiver in proposer_preferences[proposer]:
+                if receiver == own:
+                    break
+                if receiver_rank[receiver][proposer] < receiver_rank[receiver][partner[receiver]]:
+                    raise GraphError(
+                        f"authored matching is unstable: ({proposer}, {receiver}) is a blocking pair",
+                        witness=(proposer, receiver))
+
+    held: dict[str, str] = {}
+    next_choice = {proposer: 0 for proposer in left}
+    free = list(left)
+    steps = [Step("Start", "Every proposer is free", panel=("held offers: —",),
+                  extras={"proposals": 0})]
+    proposals = 0
+    while free:
+        proposer = free.pop(0)
+        if next_choice[proposer] >= len(right):
+            raise GraphError(f"proposer {proposer} exhausted every preference", witness=proposer)
+        receiver = proposer_preferences[proposer][next_choice[proposer]]
+        next_choice[proposer] += 1
+        proposals += 1
+        previous = held.get(receiver)
+        rejected: str | None = None
+        if previous is None or receiver_rank[receiver][proposer] < receiver_rank[receiver][previous]:
+            held[receiver] = proposer
+            if previous is not None:
+                rejected = previous
+                free.append(previous)
+        else:
+            rejected = proposer
+            free.append(proposer)
+        held_edges = {graph.key(value, key): "tree" for key, value in held.items()}
+        if rejected is not None:
+            held_edges[graph.key(rejected, receiver)] = "rejected"
+        nodes = {value: "visited" for pair in held_edges for value in pair}
+        nodes[proposer] = "current"
+        nodes[receiver] = "frontier"
+        held_text = ", ".join(f"{value}–{key}" for key, value in held.items())
+        outcome = (f"{receiver} holds {held[receiver]}"
+                   if rejected is None else f"{receiver} rejects {rejected}; holds {held[receiver]}")
+        steps.append(Step(
+            f"{proposer} proposes to {receiver}", outcome, nodes, held_edges,
+            panel=("held: " + held_text,), extras={"proposals": proposals, "held": dict(held)},
+        ))
+    matching = {proposer: receiver for receiver, proposer in held.items()}
+    final_edges = {graph.key(proposer, receiver): "path"
+                   for proposer, receiver in matching.items()}
+    steps.append(Step(
+        "Stable matching", f"No proposer is free after {proposals} proposals",
+        {vertex: "visited" for vertex in graph.ids}, final_edges,
+        panel=("matching: " + ", ".join(f"{p}–{matching[p]}" for p in left),
+               f"proposals = {proposals}"),
+        extras={"matching": matching, "proposals": proposals},
+    ))
+    return steps
+
+
+# ------------------------------------------------------ Hamiltonian search
+
+
+def hamiltonian_search_steps(graph: Graph, start: Any = None, max_frames: int = 20,
+                             expect: str | None = None) -> list[Step]:
+    """Backtrack over simple paths, bounding only the rendered trace, not the search."""
+    start_vertex = require_vertex(graph, graph.ids[0] if start is None else start, "start")
+    if not isinstance(max_frames, int) or isinstance(max_frames, bool) or not 2 <= max_frames <= 24:
+        raise GraphError("max_frames must be an integer from 2 to 24")
+    if expect is not None and (not isinstance(expect, str)
+                               or expect not in {"cycle", "none"}):
+        raise GraphError("expect must be cycle or none", kind="input")
+    path = [start_vertex]
+    found: list[str] | None = None
+    explored = 1
+    events: list[tuple[str, str, list[str], str | None]] = []
+
+    # An undirected "cycle" on two vertices would traverse its one edge twice
+    # — has_edge(B, A) is true for the same edge that got there — so closing
+    # needs three vertices unless the graph is directed, where the return arc
+    # is a different edge.
+    closable = len(graph.ids) >= 3 or graph.directed
+
+    def search(vertex: str) -> bool:
+        nonlocal explored, found
+        if len(path) == len(graph.ids):
+            if closable and graph.has_edge(path[-1], start_vertex):
+                found = list(path) + [start_vertex]
+                return True
+            return False
+        for neighbor in graph.neighbors(vertex):
+            if neighbor in path:
+                continue
+            path.append(neighbor)
+            explored += 1
+            # Only the first max_frames states are ever rendered, and the
+            # search is exponential: keeping every state made an 11-vertex
+            # no-cycle graph copy ~986k paths (665MB) to draw 10 frames.
+            if len(events) < max_frames:
+                events.append((f"Try {neighbor}", f"Extend the partial path to {neighbor}",
+                               list(path), None))
+            if search(neighbor):
+                return True
+            rejected = path.pop()
+            if len(events) < max_frames:
+                events.append((f"Backtrack {rejected}",
+                               f"No Hamiltonian cycle extends through {rejected}; backtrack",
+                               list(path), rejected))
+        return False
+
+    search(start_vertex)
+    if expect == "cycle" and found is None:
+        raise GraphError(f"no Hamiltonian cycle exists; exhausted {explored} search states",
+                         witness=("exhausted", explored))
+    if expect == "none" and found is not None:
+        raise GraphError("a Hamiltonian cycle exists: " + " → ".join(found), witness=found)
+
+    def state(label: str, caption: str, current_path: list[str], rejected: str | None) -> Step:
+        nodes = {vertex: "visited" for vertex in current_path}
+        nodes[current_path[-1]] = "current"
+        if rejected is not None:
+            nodes[rejected] = "rejected"
+        edges = {graph.key(u, v): "path" for u, v in zip(current_path, current_path[1:])}
+        return Step(label, caption, nodes, edges,
+                    panel=("path: " + " → ".join(current_path),),
+                    extras={"path": list(current_path), "explored": explored})
+
+    steps = [state("Start", f"Start backtracking at {start_vertex}", [start_vertex], None)]
+    for event in events[:max(0, max_frames - 2)]:
+        steps.append(state(*event))
+    if found is not None:
+        nodes = {vertex: "visited" for vertex in graph.ids}
+        nodes[start_vertex] = "current"
+        edges = {graph.key(u, v): "path" for u, v in zip(found, found[1:])}
+        steps.append(Step("Hamiltonian cycle", "Found a cycle through every vertex exactly once",
+                          nodes, edges,
+                          panel=("cycle: " + " → ".join(found), f"explored states = {explored}"),
+                          extras={"cycle": found, "explored": explored}))
+    else:
+        steps.append(Step("Exhausted search",
+                          f"All {explored} partial-path states are exhausted; no cycle exists",
+                          {start_vertex: "current"}, {},
+                          panel=("Hamiltonian cycle: none", f"explored states = {explored}"),
+                          extras={"cycle": None, "explored": explored}))
+    return steps
+
+
+# --------------------------------------------------------- Floyd–Warshall
+
+
+def floyd_warshall_steps(graph: Graph) -> list[Step]:
+    """All-pairs shortest paths, exposing the table after each intermediate."""
+    if not graph.directed:
+        raise GraphError("Floyd–Warshall here needs a directed graph")
+    require_weights(graph)
+    n = len(graph.ids)
+    index = {vertex: i for i, vertex in enumerate(graph.ids)}
+    distance = [[math.inf] * n for _ in range(n)]
+    for i in range(n):
+        distance[i][i] = 0.0
+    for edge in graph.edges:
+        i, j = index[edge.source], index[edge.target]
+        distance[i][j] = min(distance[i][j], float(edge.weight))
+
+    def values() -> list[list[str]]:
+        return [[_fmt(value) for value in row] for row in distance]
+
+    steps = [Step("D(0)", "Direct-edge distances before intermediate vertices",
+                  extras={"values": values(), "changed": [], "k": None,
+                          "labels": list(graph.ids)})]
+    for k, intermediate in enumerate(graph.ids):
+        changed: list[tuple[int, int]] = []
+        before = [list(row) for row in distance]
+        for i in range(n):
+            for j in range(n):
+                candidate = before[i][k] + before[k][j]
+                if candidate < distance[i][j]:
+                    distance[i][j] = candidate
+                    changed.append((i, j))
+        negative = next((graph.ids[i] for i in range(n) if distance[i][i] < 0), None)
+        if negative is not None:
+            witness: Any = negative
+            try:
+                bellman_ford_steps(graph, negative)
+            except GraphError as exc:
+                if "negative cycle" in str(exc):
+                    witness = exc.witness
+            raise GraphError(
+                f"negative cycle detected: diagonal entry D[{negative},{negative}] became negative",
+                witness=witness)
+        steps.append(Step(
+            f"Via {intermediate}",
+            f"Allow {intermediate} as an intermediate vertex; {len(changed)} entries improve",
+            panel=(f"k = {intermediate}", f"changed entries = {len(changed)}"),
+            extras={"values": values(), "changed": changed, "k": intermediate,
+                    "labels": list(graph.ids)},
+        ))
+    return steps
+
+
+# ---------------------------------------------------------- Mycielski graph
+
+
+def chromatic_number(graph: Graph) -> int:
+    """Exact chromatic number for the small graphs accepted by figure templates."""
+    order = sorted(graph.ids, key=lambda vertex: (-graph.degree(vertex), graph.ids.index(vertex)))
+
+    def colorable(limit: int) -> bool:
+        colors: dict[str, int] = {}
+
+        def assign(index: int) -> bool:
+            if index == len(order):
+                return True
+            vertex = order[index]
+            forbidden = {colors[neighbor] for neighbor in graph.neighbors(vertex)
+                         if neighbor in colors}
+            for color in range(1, limit + 1):
+                if color not in forbidden:
+                    colors[vertex] = color
+                    if assign(index + 1):
+                        return True
+                    del colors[vertex]
+            return False
+
+        return assign(0)
+
+    return next(limit for limit in range(1, len(graph.ids) + 1) if colorable(limit))
+
+
+def _has_triangle(graph: Graph) -> bool:
+    for i, first in enumerate(graph.ids):
+        for j in range(i + 1, len(graph.ids)):
+            second = graph.ids[j]
+            if not graph.has_edge(first, second):
+                continue
+            for third in graph.ids[j + 1:]:
+                if graph.has_edge(first, third) and graph.has_edge(second, third):
+                    return True
+    return False
+
+
+def mycielski_graph(base: Graph) -> Graph:
+    """Construct M(G), with ids ``u0..``, ``v0..``, and hub ``w``."""
+    if base.directed:
+        raise GraphError("Mycielski construction needs an undirected base graph")
+    output_size = 2 * len(base.ids) + 1
+    if output_size > 11:
+        raise GraphError(f"M(G) has {output_size} vertices; at most 11 fit",
+                         witness=(len(base.ids), output_size))
+    u = [f"u{i}" for i in range(len(base.ids))]
+    v = [f"v{i}" for i in range(len(base.ids))]
+    index = {vertex: i for i, vertex in enumerate(base.ids)}
+    edges: list[Edge] = []
+    for edge in base.edges:
+        i, j = index[edge.source], index[edge.target]
+        edges.extend((Edge(u[i], u[j]), Edge(v[i], u[j]), Edge(v[j], u[i])))
+    edges.extend(Edge("w", shadow) for shadow in v)
+    ids = tuple(u + v + ["w"])
+    return Graph(ids, {vertex: vertex for vertex in ids}, tuple(edges))
+
+
+def mycielski_steps(base: Graph) -> list[Step]:
+    """Show the three-layer construction, then a deterministic greedy coloring."""
+    graph = mycielski_graph(base)
+    n = len(base.ids)
+    base_chi = chromatic_number(base)
+    result_chi = chromatic_number(graph)
+    base_triangle_free = not _has_triangle(base)
+    result_triangle_free = not _has_triangle(graph)
+    steps = [Step(
+        "Three layers", "Copy G as u, add shadow vertices v, then join hub w to every v",
+        {**{f"u{i}": "visited" for i in range(n)},
+         **{f"v{i}": "frontier" for i in range(n)}, "w": "target"},
+        panel=(f"|V(M(G))| = {len(graph.ids)}", f"|E(M(G))| = {len(graph.edges)}"),
+        extras={"graph": graph, "base_chi": base_chi, "result_chi": result_chi,
+                "triangle_free": result_triangle_free},
+    )]
+    colors: dict[str, int] = {}
+    for vertex in graph.ids:
+        used = {colors[neighbor] for neighbor in graph.neighbors(vertex) if neighbor in colors}
+        colors[vertex] = next(color for color in range(1, len(graph.ids) + 1)
+                              if color not in used)
+        final = vertex == graph.ids[-1]
+        panel = ((f"χ(G) = {base_chi} · χ(M(G)) = {result_chi}",
+                  "triangle-free: " + ("yes" if base_triangle_free and result_triangle_free else "no"))
+                 if final else (f"colors used: {max(colors.values())}",))
+        steps.append(Step(
+            f"Color {vertex}", f"Assign {vertex} the smallest available color {colors[vertex]}",
+            {name: f"color-{color}" for name, color in colors.items()}, panel=panel,
+            extras={"graph": graph, "colors": dict(colors), "base_chi": base_chi,
+                    "result_chi": result_chi, "triangle_free": result_triangle_free},
+        ))
+    return steps
+
+
+# ------------------------------------------------------------ edge coloring
+
+
+EDGE_COLORING_SEARCH_STATES = 50_000
+
+
+def _edge_coloring_with_k(
+    graph: Graph,
+    limit: int,
+    *,
+    max_states: int = EDGE_COLORING_SEARCH_STATES,
+) -> dict[EdgeKey, int] | None:
+    """Find a ``limit``-edge-colouring within a deterministic search budget.
+
+    Deciding whether a graph is class 1 is NP-complete. The figure API accepts
+    eleven vertices, enough for a naive exhaustive search on a class-2 graph
+    to run effectively without bound. Refuse once the state budget is spent;
+    callers that already know a colouring can provide authored ``classes``.
+    """
+    edges = [graph.key(edge.source, edge.target) for edge in graph.edges]
+    adjacent = {edge: {other for other in edges if other != edge and set(edge) & set(other)}
+                for edge in edges}
+    order = sorted(edges, key=lambda edge: (-len(adjacent[edge]), edges.index(edge)))
+    colors: dict[EdgeKey, int] = {}
+    states = 0
+
+    def assign(index: int) -> bool:
+        nonlocal states
+        states += 1
+        if states > max_states:
+            raise GraphError(
+                f"edge coloring search budget of {max_states} states was exhausted; "
+                "provide verified classes for this graph",
+                witness=max_states, kind="complexity",
+            )
+        if index == len(order):
+            return True
+        edge = order[index]
+        forbidden = {colors[other] for other in adjacent[edge] if other in colors}
+        highest = max(colors.values(), default=0)
+        for color in range(1, min(limit, highest + 1) + 1):
+            if color not in forbidden:
+                colors[edge] = color
+                if assign(index + 1):
+                    return True
+                del colors[edge]
+        return False
+
+    return dict(colors) if assign(0) else None
+
+
+def edge_coloring_steps(graph: Graph, classes: Any = None,
+                        expect: Any = None) -> list[Step]:
+    """Compute or verify a proper edge coloring of a simple undirected graph."""
+    if graph.directed:
+        raise GraphError("edge coloring here needs an undirected graph")
+    delta = max((graph.degree(vertex) for vertex in graph.ids), default=0)
+    if expect is not None:
+        if not isinstance(expect, int) or isinstance(expect, bool) or expect < 0:
+            raise GraphError("expect must be a nonnegative integer")
+        if expect < delta:
+            raise GraphError(f"expect {expect} is below maximum degree Δ={delta}", witness=delta)
+
+    colors: dict[EdgeKey, int]
+    if classes is not None:
+        if not isinstance(classes, list) or not classes:
+            raise GraphError("classes must be a non-empty array of edge arrays")
+        colors = {}
+        for color, edge_class in enumerate(classes, 1):
+            if not isinstance(edge_class, list):
+                raise GraphError(f"class {color} must be an array")
+            used_vertices: set[str] = set()
+            for raw in edge_class:
+                if isinstance(raw, dict):
+                    raw = [raw.get("from"), raw.get("to")]
+                if not isinstance(raw, (list, tuple)) or len(raw) != 2:
+                    raise GraphError(f"class {color} contains an invalid edge")
+                u, v = str(raw[0]), str(raw[1])
+                if not graph.has_edge(u, v):
+                    raise GraphError(f"class {color} contains non-edge {u}–{v}", witness=(u, v))
+                shared = next((vertex for vertex in (u, v) if vertex in used_vertices), None)
+                if shared is not None:
+                    raise GraphError(f"two edges in class {color} share vertex {shared}", witness=shared)
+                key = graph.key(u, v)
+                if key in colors:
+                    raise GraphError(f"edge {u}–{v} occurs in more than one class", witness=key)
+                colors[key] = color
+                used_vertices.update((u, v))
+        missing = [graph.key(edge.source, edge.target) for edge in graph.edges
+                   if graph.key(edge.source, edge.target) not in colors]
+        if missing:
+            raise GraphError("classes omit edge " + f"{missing[0][0]}–{missing[0][1]}",
+                             witness=missing[0])
+    else:
+        colors = {}
+        for limit in range(delta, delta + 2):
+            found = _edge_coloring_with_k(graph, limit)
+            if found is not None:
+                colors = found
+                break
+        if graph.edges and not colors:  # Vizing guarantees this cannot happen for a simple graph.
+            raise GraphError("could not compute an edge coloring")
+    chromatic_index = max(colors.values(), default=0)
+    if expect is not None and expect != chromatic_index:
+        raise GraphError(f"expected edge chromatic number {expect}, computed {chromatic_index}",
+                         witness=(expect, chromatic_index))
+
+    steps = [Step("Start", f"Maximum degree Δ={delta}", panel=(f"Δ = {delta}",))]
+    revealed: dict[EdgeKey, str] = {}
+    for color in range(1, chromatic_index + 1):
+        current = [edge for edge in colors if colors[edge] == color]
+        revealed.update({edge: f"color-{color}" for edge in current})
+        notation = ", ".join(f"{u}–{v}" for u, v in current)
+        steps.append(Step(
+            f"Color class {color}", f"Class {color}: {notation}", {}, dict(revealed),
+            panel=(f"class {color}: {notation}", f"colors used: {color}"),
+            extras={"classes": [[edge for edge in colors if colors[edge] == value]
+                                for value in range(1, color + 1)],
+                    "chromatic_index": chromatic_index, "delta": delta},
+        ))
+    return steps
+
+
+# -------------------------------------------------------------- degeneracy
+
+
+def degeneracy_ordering_steps(graph: Graph) -> list[Step]:
+    """Smallest-last deletion followed by greedy coloring in reverse order."""
+    if graph.directed:
+        raise GraphError("degeneracy ordering here needs an undirected graph")
+    remaining = set(graph.ids)
+    order: list[str] = []
+    removed: list[str] = []
+    degeneracy = 0
+    steps = [Step("Start", "Repeatedly delete a current minimum-degree vertex",
+                  panel=("degeneracy so far: 0",))]
+    while remaining:
+        degree = {vertex: sum(neighbor in remaining for neighbor in graph.neighbors(vertex))
+                  for vertex in graph.ids if vertex in remaining}
+        minimum = min(degree.values())
+        vertex = next(value for value in graph.ids
+                      if value in remaining and degree[value] == minimum)
+        degeneracy = max(degeneracy, minimum)
+        remaining.remove(vertex)
+        order.append(vertex)
+        removed.append(vertex)
+        nodes = {value: "rejected" for value in removed}
+        nodes[vertex] = "current"
+        steps.append(Step(
+            f"Delete {vertex}", f"Delete minimum-degree vertex {vertex} (degree {minimum})",
+            nodes, badges={value: f"deg {degree[value]}" for value in degree},
+            panel=("order: " + ", ".join(order), f"degeneracy so far: {degeneracy}"),
+            extras={"order": list(order), "degree": minimum, "degeneracy": degeneracy},
+        ))
+    colors: dict[str, int] = {}
+    for vertex in reversed(order):
+        used = {colors[neighbor] for neighbor in graph.neighbors(vertex) if neighbor in colors}
+        colors[vertex] = next(color for color in range(1, degeneracy + 2)
+                              if color not in used)
+    classes = [[vertex for vertex in graph.ids if colors[vertex] == color]
+               for color in range(1, max(colors.values(), default=0) + 1)]
+    steps.append(Step(
+        "Reverse greedy coloring",
+        f"Color in reverse deletion order using {len(classes)} ≤ {degeneracy + 1} colors",
+        {vertex: f"color-{colors[vertex]}" for vertex in graph.ids},
+        panel=(f"degeneracy = {degeneracy}",
+               "classes: " + " | ".join("{" + ",".join(group) + "}" for group in classes)),
+        extras={"order": order, "degeneracy": degeneracy, "colors": colors,
+                "classes": classes},
+    ))
+    return steps
+
+
+# ------------------------------------------------------------ Turán graphs
+
+
+def validate_turan_parameters(n: Any, r: Any) -> tuple[int, int]:
+    """Validate and return the two integer parameters of ``T(n,r)``."""
+    if not isinstance(n, int) or isinstance(n, bool) or n < 1:
+        raise GraphError("n must be a positive integer")
+    if not isinstance(r, int) or isinstance(r, bool):
+        raise GraphError("r must be an integer")
+    if r < 1:
+        raise GraphError("r must be at least 1", witness=r)
+    if r > n:
+        raise GraphError(f"r={r} cannot exceed n={n}", witness=(n, r))
+    return n, r
+
+
+def turan_graph(n: Any, r: Any) -> tuple[Graph, list[list[str]]]:
+    """Build the complete balanced ``r``-partite graph ``T(n,r)``."""
+    n, r = validate_turan_parameters(n, r)
+    quotient, larger = divmod(n, r)
+    ids = [str(vertex) for vertex in range(n)]
+    parts: list[list[str]] = []
+    cursor = 0
+    for index in range(r):
+        size = quotient + (1 if index < larger else 0)
+        parts.append(ids[cursor:cursor + size])
+        cursor += size
+    part_of = {vertex: index for index, part in enumerate(parts) for vertex in part}
+    edges = tuple(Edge(left, right) for i, left in enumerate(ids)
+                  for right in ids[i + 1:] if part_of[left] != part_of[right])
+    return Graph(tuple(ids), {vertex: vertex for vertex in ids}, edges), parts
 
 
 # ---------------------------------------------------------------- traversal
@@ -488,6 +1473,44 @@ def prim_steps(graph: Graph, start: str) -> list[Step]:
 # --------------------------------------------------------------- DAG / SCC
 
 
+def _find_undirected_cycle(graph: Graph) -> list[str]:
+    """A simple cycle of an undirected graph, in DFS order, or ``[]``.
+
+    A depth-first walk that remembers the edge it arrived by: a neighbour
+    already on the stack that is not that edge's other end closes a cycle,
+    and the stack from that neighbour onward is the cycle. Vertex and
+    neighbour order follow the graph, so the same input yields the same
+    cycle on every run.
+    """
+    on_stack: dict[str, int] = {}
+    done: set[str] = set()
+    stack: list[str] = []
+
+    def visit(v: str, parent: str | None) -> list[str] | None:
+        on_stack[v] = len(stack)
+        stack.append(v)
+        for w in graph.neighbors(v):
+            if w == parent:
+                continue
+            if w in on_stack:
+                return stack[on_stack[w]:]
+            if w not in done:
+                found = visit(w, v)
+                if found:
+                    return found
+        stack.pop()
+        del on_stack[v]
+        done.add(v)
+        return None
+
+    for v in graph.ids:
+        if v not in done:
+            found = visit(v, None)
+            if found:
+                return found
+    return []
+
+
 def _find_cycle(graph: Graph, among: Iterable[str]) -> list[str]:
     """A directed cycle inside ``among``, by DFS colouring."""
     allowed = set(among)
@@ -518,10 +1541,19 @@ def _find_cycle(graph: Graph, among: Iterable[str]) -> list[str]:
     return []
 
 
-def topological_sort_steps(graph: Graph) -> list[Step]:
-    """Kahn's algorithm: repeatedly remove a vertex with no incoming edge."""
+def topological_sort_steps(graph: Graph, tie_break: str = "input") -> list[Step]:
+    """Kahn's algorithm: repeatedly remove a vertex with no incoming edge.
+
+    ``input`` — the default, and the only behaviour this function ever had
+    before tie-breaks became selectable — takes the earliest ready vertex in
+    the caller's node order, so published figures keep their order on
+    regeneration. ``fifo`` takes them in the order they became ready; ``min``
+    by vertex name.
+    """
     if not graph.directed:
         raise GraphError("topological order needs a directed graph")
+    if tie_break not in {"input", "min", "fifo"}:
+        raise GraphError("tie_break must be input, min, or fifo")
     indegree = {v: 0 for v in graph.ids}
     for edge in graph.edges:
         indegree[edge.target] += 1
@@ -531,24 +1563,32 @@ def topological_sort_steps(graph: Graph) -> list[Step]:
                   {v: "frontier" for v in graph.ids if indegree[v] == 0}, {},
                   {v: f"in {d}" for v, d in indegree.items()},
                   panel=("order: ∅",))]
-    while True:
-        ready = [v for v in graph.ids if v not in order and indegree[v] == 0]
-        if not ready:
-            break
-        current = ready[0]
+    input_position = {v: i for i, v in enumerate(graph.ids)}
+    ready = [v for v in graph.ids if indegree[v] == 0]
+    while ready:
+        if tie_break == "min":
+            current = min(ready, key=_vertex_sort_key)
+            ready.remove(current)
+        elif tie_break == "input":
+            current = min(ready, key=input_position.__getitem__)
+            ready.remove(current)
+        else:
+            current = ready.pop(0)
         order.append(current)
         for w in graph.neighbors(current):
             indegree[w] -= 1
             removed.add((current, w))
+            if indegree[w] == 0:
+                ready.append(w)
         nodes = {v: "visited" for v in order}
-        nodes.update({v: "frontier" for v in graph.ids
-                      if v not in order and indegree[v] == 0})
+        nodes.update({v: "frontier" for v in ready})
         nodes[current] = "current"
         steps.append(Step(f"Remove {current}",
                           f"Take {current} (no incoming edges left); position {len(order)}",
                           nodes, {k: "tree" for k in removed},
                           {v: f"in {d}" for v, d in indegree.items()},
-                          panel=("order: " + ", ".join(order),)))
+                          panel=("order: " + ", ".join(order),),
+                          extras={"tie_break": tie_break, "ready": list(ready)}))
     if len(order) != len(graph.ids):
         cycle = _find_cycle(graph, [v for v in graph.ids if v not in order])
         raise GraphError("the graph has a cycle, so it has no topological order: "
@@ -556,8 +1596,13 @@ def topological_sort_steps(graph: Graph) -> list[Step]:
     return steps
 
 
-def scc_steps(graph: Graph) -> list[Step]:
-    """Kosaraju: finish order on G, then components peeled off the reverse."""
+def scc_steps(graph: Graph, condensation: bool = True) -> list[Step]:
+    """Kosaraju: finish order on G, then components peeled off the reverse.
+
+    ``condensation`` appends the condensation-DAG summary panel. It is a
+    summary, not part of the trace, which is why a caller with a panel budget
+    can drop it rather than refuse the whole figure.
+    """
     if not graph.directed:
         raise GraphError("strongly connected components need a directed graph")
     finished: list[str] = []
@@ -573,35 +1618,67 @@ def scc_steps(graph: Graph) -> list[Step]:
     for v in graph.ids:
         if v not in seen:
             visit(v)
-    steps = [Step("Finish order", "Depth-first search finishes vertices in this order",
+    steps = [Step("Kosaraju: finish order",
+                  "Kosaraju first pass: depth-first search records finish order",
                   {}, {}, {v: f"f={i + 1}" for i, v in enumerate(finished)},
-                  panel=("finish order: " + ", ".join(finished),))]
+                  panel=("finish order: " + ", ".join(finished),),
+                  extras={"algorithm": "Kosaraju", "finish_order": list(finished)})]
     reverse = {v: [] for v in graph.ids}
     for edge in graph.edges:
         reverse[edge.target].append(edge.source)
     assigned: dict[str, int] = {}
     components: list[list[str]] = []
+    forest: list[EdgeKey] = []
     for v in reversed(finished):
         if v in assigned:
             continue
-        component, stack = [], [v]
-        assigned[v] = len(components) + 1
-        while stack:
-            x = stack.pop()
+        component: list[str] = []
+        number = len(components) + 1
+
+        def reverse_visit(x: str) -> None:
+            assigned[x] = number
             component.append(x)
             for w in reverse[x]:
                 if w not in assigned:
-                    assigned[w] = len(components) + 1
-                    stack.append(w)
+                    forest.append((w, x))  # the corresponding edge as drawn in G
+                    reverse_visit(w)
+
+        reverse_visit(v)
         components.append(component)
         nodes = {x: f"color-{c}" for x, c in assigned.items()}
-        edges = {graph.key(e.source, e.target): "tree" for e in graph.edges
-                 if assigned.get(e.source) == assigned.get(e.target)}
+        edges = {edge: "tree" for edge in forest}
         steps.append(Step(f"Component {len(components)}",
-                          f"From {v} on the reversed graph: {{{', '.join(component)}}}",
+                          f"Kosaraju second pass from {v} on Gᵀ: {{{', '.join(component)}}}",
                           nodes, edges, {x: f"f={i + 1}" for i, x in enumerate(finished)},
                           panel=tuple(f"C{i + 1} = {{{', '.join(c)}}}"
-                                      for i, c in enumerate(components))))
+                                      for i, c in enumerate(components)),
+                          extras={"algorithm": "Kosaraju", "components":
+                                  [list(component_) for component_ in components],
+                                  "finish_order": list(finished)}))
+    if not condensation:
+        return steps
+    condensation_edges: list[EdgeKey] = []
+    for edge in graph.edges:
+        source = f"C{assigned[edge.source]}"
+        target = f"C{assigned[edge.target]}"
+        if source != target and (source, target) not in condensation_edges:
+            condensation_edges.append((source, target))
+    condensation_nodes = [
+        {"id": f"C{index + 1}", "label": f"C{index + 1}: {''.join(component)}"}
+        for index, component in enumerate(components)]
+    component_panel = tuple(f"C{i + 1} = {{{', '.join(component)}}}"
+                            for i, component in enumerate(components))
+    steps.append(Step(
+        "Condensation DAG", "Kosaraju components contracted to the condensation DAG",
+        {f"C{index + 1}": f"color-{index + 1}" for index in range(len(components))},
+        {edge: "tree" for edge in condensation_edges}, panel=component_panel,
+        extras={"algorithm": "Kosaraju", "components": components,
+                "finish_order": list(finished),
+                "graph_override": {"nodes": condensation_nodes,
+                                   "edges": [{"from": u, "to": v}
+                                             for u, v in condensation_edges],
+                                   "directed": True, "layout": "hierarchical"}},
+    ))
     return steps
 
 
@@ -746,9 +1823,15 @@ def greedy_coloring_steps(graph: Graph, order: list[str] | None = None) -> list[
     return steps
 
 
-def matching_steps(graph: Graph, left: list[str]) -> tuple[list[Step], dict[str, str]]:
+def matching_steps(graph: Graph, left: list[str],
+                   hall_panel: bool = True) -> tuple[list[Step], dict[str, str]]:
     """Kuhn's augmenting paths; returns the steps and the final matching
-    keyed by the right-hand vertex."""
+    keyed by the right-hand vertex.
+
+    ``hall_panel`` appends the Hall-violator certificate when the matching is
+    deficient. It belongs to the matching story; a caller telling a different
+    one on the same machinery (König's cover) turns it off rather than gaining
+    an undocumented panel."""
     left = [require_vertex(graph, v, "left vertex") for v in left]
     match_r: dict[str, str] = {}
     steps = [Step("Empty matching", "No edges matched", panel=("matching size = 0",))]
@@ -769,18 +1852,35 @@ def matching_steps(graph: Graph, left: list[str]) -> tuple[list[Step], dict[str,
             nodes = {x: "visited" for pair in edges for x in pair}
             steps.append(Step(f"Augment from {u}", f"Augmenting path from {u} grows the matching",
                               nodes, edges, panel=(f"matching size = {len(match_r)}",)))
+    if hall_panel and len(match_r) < len(left):
+        z = alternating_reach(graph, left, match_r)
+        left_set = set(left)
+        s = [vertex for vertex in left if vertex in z]
+        neighbors = [vertex for vertex in graph.ids if vertex not in left_set and vertex in z]
+        matching_edges = {graph.key(proposer, receiver): "tree"
+                          for receiver, proposer in match_r.items()}
+        nodes = {vertex: "current" for vertex in s}
+        nodes.update({vertex: "frontier" for vertex in neighbors})
+        steps.append(Step(
+            "Hall violator",
+            f"Failed augmentation reaches S={{{', '.join(s)}}} and "
+            f"N(S)={{{', '.join(neighbors)}}}; {len(neighbors)} < {len(s)}",
+            nodes, matching_edges,
+            panel=("S = {" + ", ".join(s) + "}",
+                   "N(S) = {" + ", ".join(neighbors) +
+                   f"}} · {len(neighbors)} < {len(s)}"),
+            extras={"Z": [vertex for vertex in graph.ids if vertex in z],
+                    "S": s, "neighbors": neighbors},
+        ))
     return steps, match_r
 
 
-def konig_cover(graph: Graph, left: list[str], match_r: dict[str, str]) -> list[str]:
-    """A minimum vertex cover from a maximum matching (König's theorem).
-
-    Alternating paths from the unmatched left vertices reach a set ``Z``; the
-    cover is ``(L − Z) ∪ (R ∩ Z)``, and it has exactly the matching's size.
-    """
+def alternating_reach(graph: Graph, left: list[str], match_r: dict[str, str]) -> set[str]:
+    """Vertices reached by alternating paths from unmatched left vertices."""
     matched_left = set(match_r.values())
-    z = {u for u in left if u not in matched_left}
-    queue = list(z)
+    roots = [u for u in left if u not in matched_left]
+    z = set(roots)
+    queue = list(roots)
     while queue:
         u = queue.pop(0)
         for v in graph.neighbors(u):
@@ -791,12 +1891,22 @@ def konig_cover(graph: Graph, left: list[str], match_r: dict[str, str]) -> list[
             if partner is not None and partner not in z:
                 z.add(partner)
                 queue.append(partner)
+    return z
+
+
+def konig_cover(graph: Graph, left: list[str], match_r: dict[str, str]) -> list[str]:
+    """A minimum vertex cover from a maximum matching (König's theorem).
+
+    Alternating paths from the unmatched left vertices reach a set ``Z``; the
+    cover is ``(L − Z) ∪ (R ∩ Z)``, and it has exactly the matching's size.
+    """
+    z = alternating_reach(graph, left, match_r)
     cover = [u for u in left if u not in z] + [v for v in graph.ids if v not in left and v in z]
     return cover
 
 
 def vertex_cover_steps(graph: Graph, left: list[str]) -> list[Step]:
-    steps, match_r = matching_steps(graph, left)
+    steps, match_r = matching_steps(graph, left, hall_panel=False)
     cover = konig_cover(graph, left, match_r)
     nodes = {v: "current" for v in cover}
     edges = {graph.key(l, r): "tree" for r, l in match_r.items()}

@@ -6,6 +6,7 @@ import hashlib
 import math
 from typing import Any, Dict, List, Tuple
 
+from ...graphs import COLOR_ROLES
 from ...qc import Finding
 from ..registry import register
 from ..renderer import (
@@ -60,6 +61,28 @@ def _normalize_highlight_edges(highlights: Any) -> List[Tuple[str, str]]:
         if not isinstance(edge, (list, tuple)) or len(edge) != 2:
             continue
         result.append((str(edge[0]), str(edge[1])))
+    return result
+
+
+def _normalize_color_edges(highlights: Any) -> Dict[Tuple[str, str], str]:
+    if not isinstance(highlights, dict) or not isinstance(highlights.get("color_edges"), dict):
+        return {}
+    result: Dict[Tuple[str, str], str] = {}
+    for role, raw_edges in highlights["color_edges"].items():
+        if not isinstance(role, str) or not role.startswith("color-"):
+            continue
+        try:
+            number = int(role.split("-", 1)[1])
+        except ValueError:
+            continue
+        # COLOR_ROLES is the stylesheet's palette size; a producer of colour
+        # roles (ear_decomposition_steps) refuses past the same constant, so a
+        # role dropped here is malformed input, never a silently gray ear.
+        if not 1 <= number <= COLOR_ROLES or not isinstance(raw_edges, list):
+            continue
+        for edge in raw_edges:
+            if isinstance(edge, (list, tuple)) and len(edge) == 2:
+                result[(str(edge[0]), str(edge[1]))] = role
     return result
 
 
@@ -199,9 +222,25 @@ def _bipartition(
         if not isinstance(declared, dict):
             return {}, findings + [Finding(
                 "bipartition", "error",
-                "partitions must be an object with left and right vertex arrays",
+                "partitions must be an object with exactly two vertex arrays",
             )]
-        for side, key in enumerate(("left", "right")):
+        keys = list(declared)
+        if "left" in declared and "right" in declared:
+            keys = ["left", "right"]
+        elif "left" in declared or "right" in declared:
+            # Half-named sides fell through to dict order, so an array
+            # literally named "right" beside any other key could be drawn as
+            # the left column.
+            return {}, findings + [Finding(
+                "bipartition", "error",
+                "partitions naming one of left/right must name both",
+            )]
+        elif len(keys) != 2:
+            return {}, findings + [Finding(
+                "bipartition", "error",
+                "bipartite partitions must contain exactly two named arrays",
+            )]
+        for side, key in enumerate(keys):
             members = declared.get(key, [])
             if not isinstance(members, list):
                 findings.append(Finding(
@@ -409,6 +448,7 @@ class GraphTemplate:
         cut_edges = set(_normalize_highlight_edges(
             {"edges": (params.get("highlights") or {}).get("cut_edges", [])}
             if isinstance(params.get("highlights"), dict) else {}))
+        color_edges = _normalize_color_edges(params.get("highlights", {}))
         path_edges = set(zip(path_nodes, path_nodes[1:]))
 
         # Ordered endpoint pairs, so an edge can tell whether its opposite
@@ -521,11 +561,16 @@ class GraphTemplate:
                 not directed and (target, source) in rejected_edges)
             is_cut = (source, target) in cut_edges or (
                 not directed and (target, source) in cut_edges)
+            color_role = color_edges.get((source, target))
+            if not directed and color_role is None:
+                color_role = color_edges.get((target, source))
             edge_class = "graph-edge"
             if is_path_edge:
                 edge_class = "graph-edge graph-edge-path"
             elif is_cut:
                 edge_class = "graph-edge graph-edge-cut"
+            elif color_role is not None:
+                edge_class = f"graph-edge graph-edge-{color_role}"
             elif is_highlighted:
                 edge_class = "graph-edge graph-edge-highlight"
             elif is_rejected:
@@ -746,6 +791,17 @@ class GraphTemplate:
 .graph-edge-path { stroke: #9C27B0; stroke-width: 3; }
 .graph-edge-rejected { stroke: #DC2626; stroke-width: 2; stroke-dasharray: 6 4; opacity: 0.75; }
 .graph-edge-cut { stroke: #B91C1C; stroke-width: 4; }
+.graph-edge-color-1 { stroke: #2563EB; stroke-width: 3; }
+.graph-edge-color-2 { stroke: #DC2626; stroke-width: 3; }
+.graph-edge-color-3 { stroke: #16A34A; stroke-width: 3; }
+.graph-edge-color-4 { stroke: #D97706; stroke-width: 3; }
+.graph-edge-color-5 { stroke: #9333EA; stroke-width: 3; }
+.graph-edge-color-6 { stroke: #0891B2; stroke-width: 3; }
+.graph-edge-color-7 { stroke: #DB2777; stroke-width: 3; }
+.graph-edge-color-8 { stroke: #475569; stroke-width: 3; }
+.graph-edge-color-9 { stroke: #EA580C; stroke-width: 3; }
+.graph-edge-color-10 { stroke: #65A30D; stroke-width: 3; }
+.graph-edge-color-11 { stroke: #4F46E5; stroke-width: 3; }
 .graph-edge-weight { font-size: 11px; font-family: sans-serif; fill: #495057; }
 .graph-distance-label { font-size: 11px; font-family: sans-serif; fill: #495057; }
 .graph-degree-label { font-size: 11px; font-family: sans-serif; fill: #495057; }

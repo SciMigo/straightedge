@@ -12,11 +12,17 @@ from __future__ import annotations
 import pytest
 
 from straightedge.graphs import (
-    GraphError, bellman_ford_steps, bipartition, coerce_graph, dijkstra_steps,
+    GraphError, bellman_ford_steps, bipartition, coerce_graph, degeneracy_ordering_steps,
+    dijkstra_steps,
     connectivity_analysis, connectivity_steps, euler_steps, greedy_coloring_steps, konig_cover, kruskal_steps,
-    matching_steps, max_flow_steps, prim_steps, scc_steps, steps_for,
-    topological_sort_steps, traversal_steps, vertex_cover_steps,
+    ear_decomposition_steps, edge_coloring_steps, hamiltonian_search_steps,
+    havel_hakimi_steps,
+    floyd_warshall_steps, matching_steps, max_flow_steps, mycielski_graph, mycielski_steps,
+    prim_steps, scc_steps, stable_matching_steps, steps_for,
+    prufer_decode_graph, prufer_decode_steps, prufer_encode_steps,
+    topological_sort_steps, traversal_steps, tree_center_steps, vertex_cover_steps,
 )
+from straightedge.graphs import _edge_coloring_with_k
 
 
 def _graph(edges, directed=False, **node_kwargs):
@@ -124,6 +130,268 @@ def test_spanning_trees_need_an_undirected_graph():
         kruskal_steps(_graph([("A", "B", 1)], directed=True))
 
 
+# ----------------------------------------------------------- Prüfer codes
+
+
+def test_prufer_code_round_trip_uses_the_course_tree():
+    tree = _graph([("1", "3"), ("2", "3"), ("3", "4"), ("4", "5"), ("4", "6")])
+    encoded = prufer_encode_steps(tree, [3, 3, 4, 4])
+    assert encoded[-1].extras["code"] == ["3", "3", "4", "4"]
+    decoded = prufer_decode_graph([3, 3, 4, 4])
+    assert {decoded.key(edge.source, edge.target) for edge in decoded.edges} == {
+        tree.key(edge.source, edge.target) for edge in tree.edges}
+    assert len(prufer_decode_steps([3, 3, 4, 4])) == 6
+
+
+def test_prufer_refuses_a_non_tree_bad_entry_and_wrong_expectation():
+    with pytest.raises(GraphError, match="cycle") as cyclic:
+        prufer_encode_steps(_graph([("1", "2"), ("2", "3"), ("3", "1")]))
+    assert set(cyclic.value.witness[:-1]) == {"1", "2", "3"}
+    with pytest.raises(GraphError, match="outside 1..4") as bad_code:
+        prufer_decode_graph([3, 5])
+    assert bad_code.value.witness == (2, 5)
+    tree = _graph([("1", "3"), ("2", "3"), ("3", "4")])
+    with pytest.raises(GraphError, match="position 2") as mismatch:
+        prufer_encode_steps(tree, [3, 4])
+    assert mismatch.value.witness == (2, "3", "4")
+
+
+# -------------------------------------------------------- Havel–Hakimi
+
+
+def test_havel_hakimi_reduces_and_realizes_the_course_sequence():
+    reduced = havel_hakimi_steps([3, 3, 2, 2, 2])
+    assert [step.extras["values"] for step in reduced] == [
+        [3, 3, 2, 2, 2], [2, 2, 1, 1], [1, 1, 0], [0, 0]]
+    realized = havel_hakimi_steps([3, 3, 2, 2, 2], realize=True)
+    final = realized[-1]
+    counts = {str(i): 0 for i in range(1, 6)}
+    for left, right in final.extras["graph_edges"]:
+        counts[left] += 1
+        counts[right] += 1
+    assert sorted(counts.values(), reverse=True) == [3, 3, 2, 2, 2]
+
+
+def test_havel_hakimi_refuses_odd_sum_and_negative_reduction_with_witness():
+    with pytest.raises(GraphError, match="odd") as odd:
+        havel_hakimi_steps([2, 2, 1])
+    assert odd.value.witness == (2, 2, 1)
+    with pytest.raises(GraphError, match="negative") as negative:
+        havel_hakimi_steps([3, 3, 3, 1])
+    assert negative.value.witness == (1, -1)
+
+
+# ------------------------------------------------------------ tree centres
+
+
+def test_tree_center_strips_the_course_tree_and_computes_eccentricities():
+    tree = _graph([("1", "2"), ("2", "3"), ("3", "4"), ("4", "5"),
+                   ("5", "6"), ("3", "7"), ("4", "8")])
+    steps = tree_center_steps(tree, show_eccentricities=True)
+    assert steps[-1].extras == {"centers": ["3", "4"], "radius": 3, "diameter": 5}
+    assert steps[-1].node_states["3"] == steps[-1].node_states["4"] == "target"
+    assert steps[-2].node_states.get("3") != "target"
+    assert steps[-1].badges == {"3": "ε=3", "4": "ε=3"}
+
+
+def test_tree_center_refuses_a_cycle_with_its_witness():
+    with pytest.raises(GraphError, match="cycle") as refused:
+        tree_center_steps(_graph([("1", "2"), ("2", "3"), ("3", "1")]))
+    assert set(refused.value.witness[:-1]) == {"1", "2", "3"}
+
+
+# -------------------------------------------------------- ear decomposition
+
+
+def test_ear_decomposition_matches_the_course_prism():
+    prism = _graph([("0", "1"), ("1", "2"), ("2", "0"),
+                    ("3", "4"), ("4", "5"), ("5", "3"),
+                    ("0", "3"), ("1", "4"), ("2", "5")])
+    steps = ear_decomposition_steps(prism, [2, 1, 0, 2])
+    assert [step.extras["ears"][-1] for step in steps] == [
+        ["2", "1", "0", "2"], ["0", "3", "4", "1"],
+        ["2", "5", "4"], ["3", "5"]]
+    assert set(steps[-1].edge_states.values()) == {
+        "color-1", "color-2", "color-3", "color-4"}
+
+
+def test_ear_decomposition_finds_its_own_first_ear():
+    """Without start_cycle the first ear is computed; the directed cycle
+    finder returned the DFS parent edge as a two-vertex cycle and refused
+    every 2-connected graph."""
+    prism = _graph([("0", "1"), ("1", "2"), ("2", "0"),
+                    ("3", "4"), ("4", "5"), ("5", "3"),
+                    ("0", "3"), ("1", "4"), ("2", "5")])
+    steps = ear_decomposition_steps(prism)
+    first = steps[0].extras["ears"][0]
+    assert first[0] == first[-1] and len(first) >= 4
+    assert all(prism.has_edge(u, v) for u, v in zip(first, first[1:]))
+    covered = {key for step in steps for key in step.edge_states}
+    assert covered == {prism.key(e.source, e.target) for e in prism.edges}
+    for edges in ([("0", "1"), ("1", "2"), ("2", "3"), ("3", "0")],
+                  [(a, b) for a in "0123" for b in "0123" if a < b]):
+        assert ear_decomposition_steps(_graph(edges))[0].extras["ears"][0][0] is not None
+
+
+def test_ear_decomposition_refuses_an_articulation_vertex():
+    bowtie = _graph([("A", "B"), ("B", "C"), ("C", "A"),
+                     ("C", "D"), ("D", "E"), ("E", "C")])
+    with pytest.raises(GraphError, match="articulation") as refused:
+        ear_decomposition_steps(bowtie)
+    assert refused.value.witness == "C"
+
+
+# ---------------------------------------------------------- stable matching
+
+
+STABLE_PROPOSERS = {
+    "A": ["4", "3", "1", "2"], "B": ["3", "4", "2", "1"],
+    "C": ["1", "2", "4", "3"], "D": ["1", "4", "3", "2"],
+}
+STABLE_RECEIVERS = {
+    "1": ["B", "A", "C", "D"], "2": ["A", "B", "D", "C"],
+    "3": ["D", "A", "B", "C"], "4": ["C", "B", "A", "D"],
+}
+
+
+def test_gale_shapley_course_outcome_takes_ten_proposals():
+    steps = stable_matching_steps(STABLE_PROPOSERS, STABLE_RECEIVERS)
+    assert steps[-1].extras["matching"] == {"A": "1", "B": "4", "C": "2", "D": "3"}
+    assert steps[-1].extras["proposals"] == 10
+    assert len([step for step in steps if "proposes to" in step.label]) == 10
+
+
+def test_stable_matching_refuses_bad_preferences_and_names_a_blocking_pair():
+    with pytest.raises(GraphError, match="permutation") as preferences:
+        stable_matching_steps({**STABLE_PROPOSERS, "A": ["1"]}, STABLE_RECEIVERS)
+    assert preferences.value.witness == "A"
+    with pytest.raises(GraphError, match="blocking pair") as unstable:
+        stable_matching_steps(STABLE_PROPOSERS, STABLE_RECEIVERS,
+                              {"A": "4", "B": "3", "C": "1", "D": "2"})
+    assert unstable.value.witness == ("D", "3")
+
+
+# ------------------------------------------------------ Hamiltonian search
+
+
+def test_hamiltonian_search_finds_an_octahedron_cycle_with_bounded_frames():
+    octahedron = _graph([(str(a), str(b)) for a in range(6) for b in range(a + 1, 6)
+                         if {a, b} not in ({0, 1}, {2, 3}, {4, 5})])
+    steps = hamiltonian_search_steps(octahedron, "0", max_frames=8, expect="cycle")
+    assert len(steps) <= 8 and steps[-1].label == "Hamiltonian cycle"
+    cycle = steps[-1].extras["cycle"]
+    assert cycle[0] == cycle[-1] == "0" and len(set(cycle[:-1])) == 6
+
+
+def test_hamiltonian_search_exhausts_petersen_and_refuses_false_expectation():
+    petersen = _graph([(str(a), str(b)) for a, b in
+                       [(0, 1), (1, 2), (2, 3), (3, 4), (4, 0),
+                        (0, 5), (1, 6), (2, 7), (3, 8), (4, 9),
+                        (5, 7), (7, 9), (9, 6), (6, 8), (8, 5)]])
+    steps = hamiltonian_search_steps(petersen, "0", max_frames=10, expect="none")
+    assert len(steps) <= 10 and steps[-1].extras["cycle"] is None
+    assert steps[-1].extras["explored"] > 10
+    with pytest.raises(GraphError, match="exhausted") as refused:
+        hamiltonian_search_steps(petersen, "0", expect="cycle")
+    assert refused.value.witness[0] == "exhausted"
+
+
+# --------------------------------------------------------- Floyd–Warshall
+
+
+def test_floyd_warshall_updates_one_checked_table_per_intermediate():
+    graph = _graph([("A", "B", 3), ("B", "C", -2), ("A", "C", 5),
+                    ("C", "D", 1), ("D", "B", 4), ("A", "D", 10)], directed=True)
+    steps = floyd_warshall_steps(graph)
+    assert len(steps) == 5
+    assert steps[-1].extras["values"] == [
+        ["0", "3", "1", "2"], ["∞", "0", "-2", "-1"],
+        ["∞", "5", "0", "1"], ["∞", "4", "2", "0"]]
+    assert steps[1].extras["k"] == "A"
+
+
+def test_floyd_warshall_refuses_a_negative_cycle_with_the_cycle_witness():
+    graph = _graph([("A", "B", 1), ("B", "C", -3), ("C", "A", 1)], directed=True)
+    with pytest.raises(GraphError, match="diagonal entry") as refused:
+        floyd_warshall_steps(graph)
+    assert set(refused.value.witness) == {"A", "B", "C"}
+
+
+# ---------------------------------------------------------- Mycielski graph
+
+
+def test_mycielski_of_c5_is_the_triangle_free_grotzsch_graph():
+    cycle = _graph([("0", "1"), ("1", "2"), ("2", "3"), ("3", "4"), ("4", "0")])
+    graph = mycielski_graph(cycle)
+    assert len(graph.ids) == 11 and len(graph.edges) == 20
+    steps = mycielski_steps(cycle)
+    assert steps[-1].extras["base_chi"] == 3
+    assert steps[-1].extras["result_chi"] == 4
+    assert steps[-1].extras["triangle_free"] is True
+    assert max(steps[-1].extras["colors"].values()) == 4
+
+
+def test_mycielski_refuses_a_base_whose_output_exceeds_the_cap():
+    base = _graph([(str(i), str((i + 1) % 6)) for i in range(6)])
+    with pytest.raises(GraphError, match="13 vertices") as refused:
+        mycielski_graph(base)
+    assert refused.value.witness == (6, 13)
+
+
+# ------------------------------------------------------------ edge coloring
+
+
+def test_edge_coloring_computes_k6_and_odd_cycle_chromatic_indices():
+    k6 = _graph([(str(a), str(b)) for a in range(6) for b in range(a + 1, 6)])
+    assert edge_coloring_steps(k6, expect=5)[-1].extras["chromatic_index"] == 5
+    c5 = _graph([(str(i), str((i + 1) % 5)) for i in range(5)])
+    assert edge_coloring_steps(c5, expect=3)[-1].extras["chromatic_index"] == 3
+
+
+def test_edge_coloring_verifies_authored_classes_and_refuses_shared_vertex():
+    k4 = _graph([(str(a), str(b)) for a in range(4) for b in range(a + 1, 4)])
+    classes = [[["0", "1"], ["2", "3"]],
+               [["0", "2"], ["1", "3"]],
+               [["0", "3"], ["1", "2"]]]
+    assert edge_coloring_steps(k4, classes, expect=3)[-1].extras["chromatic_index"] == 3
+    with pytest.raises(GraphError, match="share vertex") as refused:
+        edge_coloring_steps(k4, [[["0", "1"], ["0", "2"]]])
+    assert refused.value.witness == "0"
+    with pytest.raises(GraphError, match="below maximum degree") as too_few:
+        edge_coloring_steps(k4, expect=2)
+    assert too_few.value.witness == 3
+
+
+def test_edge_coloring_refuses_when_exact_search_exhausts_its_budget():
+    """Class-2 graphs can make the attempted Delta-colouring exponential.
+
+    The figure lane must return a checked refusal rather than pinning a CPU;
+    authored colour classes remain the escape hatch for a known colouring.
+    """
+    ids = [str(index) for index in range(9)]
+    k9 = _graph([(left, right) for left in ids for right in ids if left < right])
+    with pytest.raises(GraphError, match="search budget") as refused:
+        _edge_coloring_with_k(k9, 8, max_states=100)
+    assert refused.value.kind == "complexity"
+
+
+# -------------------------------------------------------------- degeneracy
+
+
+def test_degeneracy_ordering_colors_petersen_in_twelve_panels():
+    petersen = _graph([(str(a), str(b)) for a, b in
+                       [(0, 1), (1, 2), (2, 3), (3, 4), (4, 0),
+                        (0, 5), (1, 6), (2, 7), (3, 8), (4, 9),
+                        (5, 7), (7, 9), (9, 6), (6, 8), (8, 5)]])
+    steps = degeneracy_ordering_steps(petersen)
+    assert len(steps) == 12 and steps[-1].extras["degeneracy"] == 3
+    assert len(steps[-1].extras["classes"]) == 3
+    colors = steps[-1].extras["colors"]
+    assert all(colors[edge.source] != colors[edge.target] for edge in petersen.edges)
+    assert all("color-" not in role for step in steps[:-1]
+               for role in step.node_states.values())
+
+
 # ---------------------------------------------------------- DAGs and SCCs
 
 
@@ -137,12 +405,36 @@ def test_topological_sort_orders_a_dag_and_names_a_cycle():
     assert set(info.value.witness) == {"A", "B", "C"}
 
 
+def test_topological_sort_supports_fifo_and_minimum_tie_breaks():
+    dag = coerce_graph({"directed": True, "nodes": [{"id": x} for x in "ABCD"],
+                        "edges": [{"from": "A", "to": "D"},
+                                  {"from": "B", "to": "C"}]})
+    assert topological_sort_steps(dag, "fifo")[-1].panel == ("order: A, B, D, C",)
+    assert topological_sort_steps(dag, "min")[-1].panel == ("order: A, B, C, D",)
+    with pytest.raises(GraphError, match="tie_break"):
+        topological_sort_steps(dag, "random")
+
+
 def test_scc_finds_the_components():
     g = _graph([("A", "B"), ("B", "C"), ("C", "A"), ("C", "D"), ("D", "E"), ("E", "D")],
                directed=True)
     steps = scc_steps(g)
     components = [set(p.split("= {")[1].rstrip("}").split(", ")) for p in steps[-1].panel]
     assert {frozenset(c) for c in components} == {frozenset("ABC"), frozenset("DE")}
+
+
+def test_scc_names_kosaraju_and_finishes_with_the_condensation_dag():
+    graph = _graph([("A", "B"), ("B", "C"), ("C", "A"), ("B", "D"),
+                    ("D", "E"), ("E", "F"), ("F", "D"), ("G", "F"),
+                    ("G", "H"), ("H", "G")], directed=True)
+    steps = scc_steps(graph)
+    assert steps[0].label == "Kosaraju: finish order"
+    assert steps[0].extras["finish_order"] == list("CFEDBAHG")
+    assert [step.label for step in steps[1:-1]] == ["Component 1", "Component 2", "Component 3"]
+    assert len(steps[-2].edge_states) == 5  # three DFS trees: 2 + 2 + 1 edges
+    override = steps[-1].extras["graph_override"]
+    assert steps[-1].label == "Condensation DAG" and override["layout"] == "hierarchical"
+    assert len(override["nodes"]) == 3 and len(override["edges"]) == 2
 
 
 # ----------------------------------------------------------------- flows
@@ -209,6 +501,18 @@ def test_konig_cover_has_the_size_of_the_maximum_matching():
     for edge in g.edges:
         assert edge.source in cover or edge.target in cover
     assert vertex_cover_steps(g, ["u1", "u2", "u3"])[-1].label == "Vertex cover"
+
+
+def test_failed_matching_reveals_the_course_hall_violator_only_at_the_end():
+    graph = _graph([("a", "1"), ("a", "2"), ("b", "1"), ("b", "2"),
+                    ("c", "1"), ("c", "2"), ("c", "3"), ("d", "3"),
+                    ("e", "3"), ("e", "4"), ("e", "5")])
+    steps, matching = matching_steps(graph, list("abcde"))
+    assert len(matching) == 4 and steps[-1].label == "Hall violator"
+    assert steps[-1].extras["S"] == list("abcd")
+    assert steps[-1].extras["neighbors"] == ["1", "2", "3"]
+    assert all(step.label != "Hall violator" for step in steps[:-1])
+    assert "3 < 4" in steps[-1].panel[1]
 
 
 # ------------------------------------------------------------------ Euler
@@ -300,3 +604,93 @@ def test_connectivity_honours_start_and_refuses_a_stranger():
     assert connectivity_steps(graph, start="D")[1].label != connectivity_steps(graph)[1].label
     with pytest.raises(GraphError, match="start 'Z' is not a vertex"):
         steps_for("graph/connectivity", {"nodes": [{"id": "A"}], "edges": [], "start": "Z"})
+
+
+# ------------------------------------------------- post-review regressions
+
+
+def test_a_two_vertex_graph_has_no_undirected_hamiltonian_cycle():
+    """A → B → A traverses the one edge twice; a cycle needs three distinct
+    edges. `has_edge(B, A)` is true for the very edge that got there, so the
+    closing check used to report a cycle — and refuse expect="none" with it."""
+    g = _graph([("A", "B")])
+    steps = hamiltonian_search_steps(g, "A", expect="none")
+    assert steps[-1].label == "Exhausted search"
+    assert steps[-1].extras["cycle"] is None
+
+
+def test_a_directed_two_cycle_still_closes_on_its_second_arc():
+    """Directed graphs return on a different edge, so A ⇄ B is a real cycle."""
+    g = _graph([("A", "B"), ("B", "A")], directed=True)
+    steps = hamiltonian_search_steps(g, "A", expect="cycle")
+    assert steps[-1].extras["cycle"] == ["A", "B", "A"]
+
+
+def test_hamiltonian_search_trace_memory_is_bounded_by_max_frames():
+    """Only the first `max_frames` states are ever drawn, and the search is
+    exponential: keeping a path copy for every explored state made an
+    11-vertex no-cycle input allocate hundreds of megabytes to render ten
+    frames."""
+    import tracemalloc
+
+    ids = [str(i) for i in range(8)]
+    edges = [(a, b) for a in ids for b in ids if a < b] + [("7", "8")]
+    g = _graph(edges)
+    tracemalloc.start()
+    try:
+        steps = hamiltonian_search_steps(g, "0", max_frames=10)
+        _, peak = tracemalloc.get_traced_memory()
+    finally:
+        tracemalloc.stop()
+    assert steps[-1].extras["cycle"] is None
+    assert steps[-1].extras["explored"] > 10_000     # the search still ran
+    assert peak < 1_000_000, f"trace kept the whole search: peak {peak} bytes"
+
+
+def test_havel_hakimi_highlights_the_decremented_entries():
+    """On (3,3,2,2,2), removing the 3 decrements one 3 and two 2s; the sorted
+    row is (2,2,1,1) with one *untouched* 2. Highlighting the first `degree`
+    positions lit that untouched 2 and missed a decremented 1 — the fix
+    follows the entries through the re-sort by identity."""
+    step = havel_hakimi_steps([3, 3, 2, 2, 2])[1]
+    assert step.extras["values"] == [2, 2, 1, 1]
+    assert sorted(step.extras["highlights"]) == ["0", "2", "3"]
+
+
+def test_ear_decomposition_refuses_more_ears_than_colours():
+    """K7 has 15 ears and the graph template's palette has 11 colours; roles
+    past color-11 rendered as plain gray under captions numbering every ear."""
+    ids = [str(i) for i in range(7)]
+    g = _graph([(a, b) for a in ids for b in ids if a < b])
+    with pytest.raises(GraphError, match="11 colours") as refused:
+        ear_decomposition_steps(g)
+    assert refused.value.witness == 15
+
+
+def test_scc_condensation_panel_is_optional():
+    """The condensation DAG is a summary, not part of the trace, so a caller
+    with a panel budget can drop it instead of refusing the whole figure."""
+    g = _graph([("A", "B"), ("B", "C"), ("C", "A"), ("C", "D")], directed=True)
+    with_summary = scc_steps(g)
+    without = scc_steps(g, condensation=False)
+    assert with_summary[-1].label == "Condensation DAG"
+    assert without == with_summary[:-1]
+
+
+def test_vertex_cover_keeps_its_documented_panels():
+    """The Hall-violator panel belongs to the matching story; shared machinery
+    leaked it into König cover storyboards, which document no such panel."""
+    g = _graph([("a", "x"), ("b", "x")])
+    labels = [s.label for s in vertex_cover_steps(g, ["a", "b"])]
+    assert "Hall violator" not in labels
+    assert labels[-1] == "Vertex cover"
+
+
+def test_topological_sort_default_keeps_the_input_order_tie_break():
+    """The pre-tie-break algorithm took the earliest ready vertex in node
+    order; published figures regenerate with their order intact only if that
+    stays the default (fifo reordered B, A, C into B, C, A)."""
+    g = coerce_graph({"directed": True, "nodes": [{"id": x} for x in "ABC"],
+                      "edges": [{"from": "B", "to": "A"}]})
+    assert topological_sort_steps(g)[-1].panel == ("order: B, A, C",)
+    assert topological_sort_steps(g, "fifo")[-1].panel == ("order: B, C, A",)
