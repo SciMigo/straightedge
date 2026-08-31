@@ -119,12 +119,21 @@ def _grid_layout(
     width: int,
     height: int,
     padding: int,
+    requested_rows: int | None = None,
+    requested_columns: int | None = None,
 ) -> Dict[str, Tuple[float, float]]:
     count = len(node_ids)
     if count == 0:
         return {}
-    columns = max(1, math.ceil(math.sqrt(count)))
-    rows = math.ceil(count / columns)
+    if requested_columns and requested_columns > 0:
+        columns = requested_columns
+    elif requested_rows and requested_rows > 0:
+        columns = math.ceil(count / requested_rows)
+    else:
+        columns = max(1, math.ceil(math.sqrt(count)))
+    rows = requested_rows if requested_rows and requested_rows > 0 else math.ceil(count / columns)
+    if rows * columns < count:
+        rows = math.ceil(count / columns)
     x_step = (width - 2 * padding) / max(columns - 1, 1)
     y_step = (height - 2 * padding) / max(rows - 1, 1)
     positions: Dict[str, Tuple[float, float]] = {}
@@ -145,20 +154,25 @@ def _hierarchical_layout(
     height: int,
     padding: int,
     directed: bool,
+    orientation: str = "top-to-bottom",
 ) -> Dict[str, Tuple[float, float]]:
     if not node_ids:
         return {}
     adjacency: Dict[str, List[str]] = {node_id: [] for node_id in node_ids}
+    incoming: Dict[str, int] = {node_id: 0 for node_id in node_ids}
     for edge in edges:
         source = str(edge.get("from"))
         target = str(edge.get("to"))
         if source in adjacency and target in adjacency:
             adjacency[source].append(target)
+            incoming[target] += 1
             if not directed:
                 adjacency[target].append(source)
-    root = node_ids[0]
-    levels: Dict[str, int] = {root: 0}
-    queue = [root]
+    roots = [node for node in node_ids if directed and incoming[node] == 0]
+    if not roots:
+        roots = [node_ids[0]]
+    levels: Dict[str, int] = {root: 0 for root in roots}
+    queue = list(roots)
     while queue:
         current = queue.pop(0)
         for neighbor in adjacency.get(current, []):
@@ -168,22 +182,88 @@ def _hierarchical_layout(
     max_level = max(levels.values(), default=0)
     for node_id in node_ids:
         if node_id not in levels:
-            max_level += 1
-            levels[node_id] = max_level
+            levels[node_id] = max_level + 1
     grouped: Dict[int, List[str]] = {}
     for node_id, level in levels.items():
         grouped.setdefault(level, []).append(node_id)
+    # Stable barycentric ordering sharply reduces crossings in layered DAGs.
+    parents: Dict[str, List[str]] = {node_id: [] for node_id in node_ids}
+    for source, children in adjacency.items():
+        for child in children:
+            if levels.get(source, 0) < levels.get(child, 0):
+                parents[child].append(source)
+    for level in range(1, max(grouped, default=0) + 1):
+        previous = {node: idx for idx, node in enumerate(grouped.get(level - 1, []))}
+        grouped[level].sort(key=lambda node: (
+            sum(previous.get(parent, 0) for parent in parents[node]) / max(len(parents[node]), 1),
+            node_ids.index(node),
+        ))
+
     total_levels = max(grouped.keys()) + 1
     y_step = (height - 2 * padding) / max(total_levels - 1, 1)
+    raw_x: Dict[str, float] = {}
+    next_slot = 0.0
+    for level in reversed(range(total_levels)):
+        for node_id in grouped.get(level, []):
+            children = [child for child in adjacency[node_id]
+                        if levels.get(child) == level + 1 and child in raw_x]
+            if children:
+                raw_x[node_id] = sum(raw_x[child] for child in children) / len(children)
+            else:
+                raw_x[node_id] = next_slot
+                next_slot += 1.0
+        # Shared DAG descendants can give two parents the same barycentre.
+        # Nudge collisions while retaining parent/child grouping.
+        previous_x: float | None = None
+        for node_id in sorted(grouped.get(level, []), key=lambda item: raw_x[item]):
+            if previous_x is not None and raw_x[node_id] <= previous_x:
+                raw_x[node_id] = previous_x + 1.0
+            previous_x = raw_x[node_id]
+    raw_min, raw_max = min(raw_x.values()), max(raw_x.values())
+
     positions: Dict[str, Tuple[float, float]] = {}
     for level, level_nodes in grouped.items():
-        x_step = (width - 2 * padding) / max(len(level_nodes) - 1, 1)
-        for idx, node_id in enumerate(level_nodes):
-            positions[node_id] = (
-                padding + idx * x_step,
+        for node_id in level_nodes:
+            if raw_max == raw_min:
+                x = width / 2
+            else:
+                x = padding + (raw_x[node_id] - raw_min) * (width - 2 * padding) / (raw_max - raw_min)
+            point = (
+                x,
                 padding + level * y_step,
             )
+            positions[node_id] = point[::-1] if orientation == "left-to-right" else point
     return positions
+
+
+EDGE_STATE_KEYS = {
+    "tree_edges": "tree",
+    "back_edges": "back",
+    "forward_edges": "forward",
+    "cross_edges": "cross",
+    "accepted_edges": "accepted",
+    "rejected_edges": "rejected",
+    "relaxed_edges": "relaxed",
+    "tight_edges": "tight",
+    "frontier_edges": "frontier",
+}
+
+
+def _normalize_edge_states(highlights: Any) -> Dict[Tuple[str, str], str]:
+    if not isinstance(highlights, dict):
+        return {}
+    result: Dict[Tuple[str, str], str] = {}
+    for key, state in EDGE_STATE_KEYS.items():
+        for edge in highlights.get(key, []) if isinstance(highlights.get(key, []), list) else []:
+            if isinstance(edge, (list, tuple)) and len(edge) == 2:
+                result[(str(edge[0]), str(edge[1]))] = state
+    return result
+
+
+def _positive_number(value: Any, default: float) -> float:
+    return (float(value) if isinstance(value, (int, float))
+            and not isinstance(value, bool) and math.isfinite(value) and value > 0
+            else default)
 
 
 def _bipartition(
@@ -384,9 +464,17 @@ class GraphTemplate:
         weighted = bool(params.get("weighted", False))
         layout = str(params.get("layout", "force"))
         caption = params.get("caption")
+        label_size = _positive_number(params.get("label_size", params.get("font_size")), 13.0)
+        distance_size = _positive_number(params.get("distance_size"), 11.0)
+        caption_size = _positive_number(params.get("caption_size"), 13.0)
+        caption_spacing = _positive_number(params.get("caption_gap"), 30.0)
+        show_legend = bool(params.get("show_legend", False))
         distance_labels = params.get("distance_labels", {})
         if not isinstance(distance_labels, dict):
             distance_labels = {}
+        distance_states = params.get("distance_states", {})
+        if not isinstance(distance_states, dict):
+            distance_states = {}
         path_nodes = params.get("path", [])
         if not isinstance(path_nodes, list):
             path_nodes = []
@@ -401,6 +489,14 @@ class GraphTemplate:
             partition_labels = {}
 
         node_ids = [str(node.get("id")) for node in nodes if isinstance(node, dict)]
+        parent_edges = [
+            {"from": str(node.get("parent")), "to": str(node.get("id"))}
+            for node in nodes if isinstance(node, dict)
+            and node.get("parent") is not None and node.get("id") is not None
+        ]
+        layout_edges = parent_edges if parent_edges and layout in {
+            "tree", "hierarchical", "layered"
+        } else edges
 
         if self.refusal_findings(params):
             return ""
@@ -422,15 +518,22 @@ class GraphTemplate:
                     )
         if not positions:
             if layout == "grid":
-                positions = _grid_layout(node_ids, svg_width, svg_height, padding)
-            elif layout == "hierarchical":
+                positions = _grid_layout(
+                    node_ids, svg_width, svg_height, padding,
+                    params.get("rows") if isinstance(params.get("rows"), int) else None,
+                    (params.get("cols") if isinstance(params.get("cols"), int)
+                     else params.get("columns") if isinstance(params.get("columns"), int)
+                     else None),
+                )
+            elif layout in {"tree", "hierarchical", "layered"}:
                 positions = _hierarchical_layout(
                     node_ids,
-                    edges,
+                    layout_edges,
                     svg_width,
                     svg_height,
                     padding,
                     directed,
+                    str(params.get("orientation", "top-to-bottom")),
                 )
             elif layout == "bipartite":
                 colours, _ = _bipartition(node_ids, edges, params.get("partitions"))
@@ -449,6 +552,11 @@ class GraphTemplate:
             {"edges": (params.get("highlights") or {}).get("cut_edges", [])}
             if isinstance(params.get("highlights"), dict) else {}))
         color_edges = _normalize_color_edges(params.get("highlights", {}))
+        edge_states = _normalize_edge_states(params.get("highlights", {}))
+        if bool(params.get("show_traversal_tree", False)):
+            edge_states.update({
+                (edge["from"], edge["to"]): "tree" for edge in parent_edges
+            })
         path_edges = set(zip(path_nodes, path_nodes[1:]))
 
         # Ordered endpoint pairs, so an edge can tell whether its opposite
@@ -480,7 +588,9 @@ class GraphTemplate:
         ).hexdigest()[:10]
 
         elements: List[str] = []
-        elements.append(style(DEFAULT_STYLES + self._extra_styles()))
+        elements.append(style(DEFAULT_STYLES + self._extra_styles(
+            label_size, distance_size, caption_size
+        )))
         if directed:
             elements.append(defs(self._arrow_marker(marker_id)))
 
@@ -526,7 +636,8 @@ class GraphTemplate:
                     "class": (
                         "graph-edge graph-edge-highlight"
                         if (source, target) in highlight_edges
-                        else "graph-edge"
+                        else f"graph-edge graph-edge-{edge_states[(source, target)]}"
+                        if (source, target) in edge_states else "graph-edge"
                     ),
                     "fill": "none",
                 }
@@ -561,6 +672,9 @@ class GraphTemplate:
                 not directed and (target, source) in rejected_edges)
             is_cut = (source, target) in cut_edges or (
                 not directed and (target, source) in cut_edges)
+            semantic_state = edge_states.get((source, target))
+            if not directed and semantic_state is None:
+                semantic_state = edge_states.get((target, source))
             color_role = color_edges.get((source, target))
             if not directed and color_role is None:
                 color_role = color_edges.get((target, source))
@@ -571,6 +685,8 @@ class GraphTemplate:
                 edge_class = "graph-edge graph-edge-cut"
             elif color_role is not None:
                 edge_class = f"graph-edge graph-edge-{color_role}"
+            elif semantic_state is not None:
+                edge_class = f"graph-edge graph-edge-{semantic_state}"
             elif is_highlighted:
                 edge_class = "graph-edge graph-edge-highlight"
             elif is_rejected:
@@ -688,13 +804,14 @@ class GraphTemplate:
 
             distance = distance_labels.get(node_id)
             if distance is not None:
+                distance_state = str(distance_states.get(node_id, "default"))
                 elements.append(
                     text(
                         x,
                         y + node_radius + 16,
                         str(distance),
                         **{
-                            "class": "graph-distance-label",
+                            "class": f"graph-distance-label graph-distance-{distance_state}",
                             "text_anchor": "middle",
                         },
                     )
@@ -726,15 +843,42 @@ class GraphTemplate:
         else:
             min_x, min_y, max_x, max_y = 0.0, 0.0, float(svg_width), float(svg_height)
         if heading_y is not None:
-            min_y = min(min_y, heading_y - 13.0)  # the heading's 13px ascent
+            min_y = min(min_y, heading_y - label_size)
 
-        caption_gap = 30.0 if caption else 0.0
+        if show_legend:
+            node_states = sorted(set(highlight_nodes.values()))
+            semantic_edges = sorted(set(edge_states.values()))
+            legend_items = [("node", state) for state in node_states]
+            legend_items += [("edge", state) for state in semantic_edges]
+            if legend_items:
+                legend_y = max_y + 28.0
+                cursor_x = min_x
+                for kind, state_name in legend_items:
+                    if kind == "node":
+                        elements.append(circle(
+                            cursor_x + 7, legend_y - 4, 6,
+                            **{"class": f"graph-node graph-node-{state_name}"},
+                        ))
+                    else:
+                        elements.append(line(
+                            cursor_x, legend_y - 4, cursor_x + 16, legend_y - 4,
+                            **{"class": f"graph-edge graph-edge-{state_name}"},
+                        ))
+                    elements.append(text(
+                        cursor_x + 21, legend_y, state_name.replace("_", " "),
+                        **{"class": "graph-legend-label"},
+                    ))
+                    cursor_x += text_width(state_name.replace("_", " "), 11, safe=True) + 42
+                max_x = max(max_x, cursor_x)
+                max_y = legend_y + 6
+
+        caption_gap = caption_spacing if caption else 0.0
         if caption:
             # A caption can be wider than the drawing it sits under — a
             # four-vertex flow network with "flow value = 4 · cut capacity = 4"
             # — and the crop below is taken from the vertices alone. Widen it
             # symmetrically so the caption stays inside the frame.
-            caption_width = text_width(str(caption), 13, safe=True) + 16.0
+            caption_width = text_width(str(caption), caption_size, safe=True) + 16.0
             if caption_width > max_x - min_x:
                 centre = (min_x + max_x) / 2
                 min_x, max_x = centre - caption_width / 2, centre + caption_width / 2
@@ -745,7 +889,10 @@ class GraphTemplate:
                     (min_x + max_x) / 2,
                     max_y + caption_gap - 8,
                     str(caption),
-                    **{"class": "graph-caption", "text_anchor": "middle"},
+                    **{
+                        "class": "graph-caption", "text_anchor": "middle",
+                        "font_size": f"{caption_size:g}px",
+                    },
                 )
             )
 
@@ -762,11 +909,18 @@ class GraphTemplate:
         )
 
     @staticmethod
-    def _extra_styles() -> str:
+    def _extra_styles(
+        label_size: float = 13.0,
+        distance_size: float = 11.0,
+        caption_size: float = 13.0,
+    ) -> str:
         return """
 .graph-node { stroke: #343a40; stroke-width: 1.4; fill: #f8f9fa; }
 .graph-node-current { fill: #fff3cd; }
+.graph-node-unvisited { fill: #f8f9fa; stroke: #6c757d; }
+.graph-node-frontier { fill: #fff3cd; stroke: #B45309; stroke-width: 2.5; stroke-dasharray: 4 2; }
 .graph-node-visited { fill: #d1ecf1; }
+.graph-node-settled { fill: #d4edda; stroke: #166534; stroke-width: 3; }
 .graph-node-target { fill: #d4edda; }
 .graph-node-found { fill: #d4edda; }
 .graph-node-invalid { fill: #f8d7da; }
@@ -785,12 +939,20 @@ class GraphTemplate:
 .graph-node-color-9 { fill: #FFEDD5; stroke: #EA580C; stroke-width: 2.5; }
 .graph-node-color-10 { fill: #ECFCCB; stroke: #65A30D; stroke-width: 2.5; }
 .graph-node-color-11 { fill: #E0E7FF; stroke: #4F46E5; stroke-width: 2.5; }
-.graph-node-label { font-size: 13px; font-family: sans-serif; fill: #212529; }
+.graph-node-label { font-family: sans-serif; fill: #212529; }
 .graph-edge { stroke: #868e96; stroke-width: 2; }
 .graph-edge-highlight { stroke: #9C27B0; stroke-width: 2.5; }
 .graph-edge-path { stroke: #9C27B0; stroke-width: 3; }
 .graph-edge-rejected { stroke: #DC2626; stroke-width: 2; stroke-dasharray: 6 4; opacity: 0.75; }
 .graph-edge-cut { stroke: #B91C1C; stroke-width: 4; }
+.graph-edge-tree { stroke: #2563EB; stroke-width: 3; }
+.graph-edge-back { stroke: #DC2626; stroke-width: 2.5; stroke-dasharray: 7 4; }
+.graph-edge-forward { stroke: #2563EB; stroke-width: 2.5; stroke-dasharray: 3 3; }
+.graph-edge-cross { stroke: #475569; stroke-width: 2.5; stroke-dasharray: 2 4; }
+.graph-edge-accepted { stroke: #15803D; stroke-width: 3; }
+.graph-edge-relaxed { stroke: #D97706; stroke-width: 3.5; }
+.graph-edge-tight { stroke: #15803D; stroke-width: 3.5; stroke-dasharray: 8 2; }
+.graph-edge-frontier { stroke: #7E22CE; stroke-width: 3; stroke-dasharray: 2 3; }
 .graph-edge-color-1 { stroke: #2563EB; stroke-width: 3; }
 .graph-edge-color-2 { stroke: #DC2626; stroke-width: 3; }
 .graph-edge-color-3 { stroke: #16A34A; stroke-width: 3; }
@@ -803,10 +965,17 @@ class GraphTemplate:
 .graph-edge-color-10 { stroke: #65A30D; stroke-width: 3; }
 .graph-edge-color-11 { stroke: #4F46E5; stroke-width: 3; }
 .graph-edge-weight { font-size: 11px; font-family: sans-serif; fill: #495057; }
-.graph-distance-label { font-size: 11px; font-family: sans-serif; fill: #495057; }
+.graph-distance-label { font-family: sans-serif; fill: #495057; }
+.graph-distance-tentative { fill: #B45309; font-style: italic; }
+.graph-distance-final { fill: #166534; font-weight: 700; }
 .graph-degree-label { font-size: 11px; font-family: sans-serif; fill: #495057; }
 .graph-partition-label { font-size: 13px; font-weight: 600; font-family: sans-serif; fill: #333; }
-.graph-caption { font-size: 13px; font-family: sans-serif; fill: #333; }
+.graph-legend-label { font-size: 11px; font-family: sans-serif; fill: #333; }
+.graph-caption { font-family: sans-serif; fill: #333; }
+""" + f"""
+.graph-node-label {{ font-size: {label_size:g}px; }}
+.graph-distance-label {{ font-size: {distance_size:g}px; }}
+.graph-caption {{ font-size: {caption_size:g}px; }}
 """
 
     @staticmethod

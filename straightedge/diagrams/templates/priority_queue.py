@@ -114,15 +114,27 @@ class PriorityQueueTemplate:
         items, operations = params.get("items", []), params.get("operations", [])
         animate = bool(params.get("animate", True)); duration_s = float(params.get("duration_s", 1.2))
         loop = bool(params.get("loop", False)); title = params.get("title", "Min-priority queue")
-        columns = int(params.get("columns", 3)); _ = (items, operations)
+        columns = int(params.get("columns", 3)); view = str(params.get("view", "sorted"))
+        _ = (items, operations)
         if self.refusal_findings(params): return ""
         frames = []
         for state in _compute(params):
-            values = [f"{item_id}:{priority:g}" for priority, _, item_id in state["heap"]]
-            if state["heap"]:
+            ordered = sorted(state["heap"])
+            values = [f"({priority:g}, {item_id})" for priority, _, item_id in ordered]
+            if state["heap"] and view == "heap":
                 visual = {"type": "binary_tree", "params": {
                     "root": _tree(state["heap"]),
                     "caption": "heap array: [" + ", ".join(values) + "]"}}
+            elif state["heap"]:
+                current = state.get("current")
+                highlights = {
+                    str(index): ("current" if item_id == current else "found")
+                    for index, (_, _, item_id) in enumerate(ordered)
+                    if index == 0 or item_id == current
+                }
+                visual = {"type": "array_state", "params": {
+                    "values": values, "highlights": highlights,
+                    "pointers": [{"index": 0, "label": "min", "position": "above"}]}}
             else:
                 # One cell is 90px wide; the caption must fit inside it or
                 # the animated lane refuses the frame as clipped.

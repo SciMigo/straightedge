@@ -4,6 +4,7 @@ import re
 
 from straightedge.diagrams import render_diagram
 from straightedge.diagrams.registry import refusal_findings
+from straightedge.diagrams.templates.graph import _grid_layout, _hierarchical_layout
 
 
 def _vertices(*names):
@@ -148,3 +149,33 @@ def test_a_caption_wider_than_the_drawing_is_kept_inside_the_frame():
         "caption": "flow value = 4 · cut capacity = 4 · augmenting path: none",
     }})
     assert not [f for f in check_figure(svg) if f.check == "text_clipped"]
+
+
+def test_layered_tree_centres_parent_and_grid_honours_requested_shape():
+    nodes = ["root", "left", "right"]
+    edges = [{"from": "root", "to": "left"}, {"from": "root", "to": "right"}]
+    positions = _hierarchical_layout(nodes, edges, 500, 300, 40, True)
+    assert positions["root"][0] == (positions["left"][0] + positions["right"][0]) / 2
+    grid = _grid_layout(list("ABCDE"), 500, 300, 40,
+                        requested_rows=2, requested_columns=3)
+    assert len({y for _, y in grid.values()}) == 2
+    assert len({x for x, _ in grid.values()}) == 3
+
+
+def test_graph_semantic_states_legend_and_font_controls_render():
+    svg = render_diagram({"type": "graph", "params": {
+        "nodes": [{"id": "A"}, {"id": "B"}],
+        "edges": [{"from": "A", "to": "B"}],
+        "layout": "layered", "directed": True,
+        "highlights": {"nodes": {"A": "frontier", "B": "settled"},
+                       "tree_edges": [["A", "B"]]},
+        "distance_labels": {"A": 4, "B": 3},
+        "distance_states": {"A": "tentative", "B": "final"},
+        "show_legend": True, "label_size": 17,
+        "caption": "state", "caption_size": 10, "caption_gap": 18,
+    }})
+    assert "graph-node-frontier" in svg and "graph-node-settled" in svg
+    assert "graph-edge graph-edge-tree" in svg
+    assert "graph-distance-tentative" in svg and "graph-distance-final" in svg
+    assert "graph-legend-label" in svg
+    assert "font-size: 17px" in svg and "font-size: 10px" in svg

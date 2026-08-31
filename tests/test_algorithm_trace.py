@@ -10,7 +10,7 @@ import pytest
 from straightedge import cli, mcp_server
 from straightedge.catalog import list_templates
 from straightedge.diagrams import DIAGRAM_REGISTRY, render_diagram
-from straightedge.diagrams.legibility import check_figure
+from straightedge.diagrams.legibility import check_figure, smallest_font_px
 from straightedge.diagrams.registry import count_data_marks
 from straightedge.diagrams.templates.algorithm_trace import inspect_algorithm_trace
 
@@ -23,6 +23,28 @@ def array_step(values, label="state", **extra):
 def value_step(visual_type, values, label="state"):
     return {"label": label, "visual": {"type": visual_type,
                                          "params": {"values": values}}}
+
+
+def priority_step(items):
+    return {"visual": {"type": "priority_queue", "params": {
+        "items": items, "operations": [], "animate": False,
+    }}}
+
+
+def graph_visual(states):
+    return {"type": "graph", "params": {
+        "nodes": [{"id": node} for node in "ABC"],
+        "edges": [{"from": "A", "to": "B"}, {"from": "A", "to": "C"}],
+        "layout": "hierarchical",
+        "highlights": {"nodes": states},
+    }}
+
+
+def graph_queue_step(states, values, label="state"):
+    return {"label": label, "visual": [
+        graph_visual(states),
+        {"type": "queue", "params": {"values": values}},
+    ]}
 
 
 def test_it_is_registered_and_catalogued_with_a_working_example():
@@ -81,6 +103,78 @@ def test_an_operation_cannot_claim_the_wrong_data_structure():
     [finding] = inspect_algorithm_trace(params)
     assert finding["code"] == "STATE_TRANSITION_MISMATCH"
     assert "stack" in finding["message"]
+
+
+class TestGraphAndContainerTransitions:
+    def test_a_checked_bfs_trace_renders_composite_steps(self):
+        steps = [
+            graph_queue_step({"A": "frontier"}, ["A"], "Start"),
+            graph_queue_step({"A": "visited"}, [], "Visit A"),
+            graph_queue_step({"A": "visited", "B": "frontier"}, ["B"], "Discover B"),
+            graph_queue_step({"A": "visited", "B": "visited"}, [], "Visit B"),
+        ]
+        steps[0]["transition"] = {"type": "dequeue", "value": "A"}
+        steps[1]["transition"] = {"type": "enqueue", "value": "B"}
+        steps[2]["transition"] = {"type": "dequeue", "value": "B"}
+        params = {"steps": steps, "layout": "column", "panel_width": 1180}
+        assert inspect_algorithm_trace(params) == []
+        svg = render_diagram({"type": "algorithm_trace", "params": params})
+        assert count_data_marks(svg) > 0 and svg.count("<image") == len(steps)
+        assert smallest_font_px(svg, 1180) >= 11
+
+    def test_discover_checks_the_edge_and_frontier_state(self):
+        steps = [
+            {"visual": graph_visual({"A": "visited"}),
+             "transition": {"type": "discover", "node": "B", "from": "A"}},
+            {"visual": graph_visual({"A": "visited", "B": "frontier"})},
+        ]
+        assert inspect_algorithm_trace({"steps": steps}) == []
+        steps[1]["visual"]["params"]["highlights"]["nodes"]["B"] = "visited"
+        [finding] = inspect_algorithm_trace({"steps": steps})
+        assert finding["code"] == "STATE_TRANSITION_MISMATCH"
+        assert "frontier" in finding["message"]
+
+    def test_discover_respects_explicit_neighbor_order(self):
+        before = graph_visual({"A": "visited"})
+        before["params"]["neighbor_order"] = ["A", "C", "B"]
+        after = graph_visual({"A": "visited", "B": "frontier"})
+        steps = [{"visual": before,
+                  "transition": {"type": "discover", "node": "B", "from": "A"}},
+                 {"visual": after}]
+        [finding] = inspect_algorithm_trace({"steps": steps})
+        assert "expected 'C'" in finding["message"]
+
+    def test_a_visited_node_cannot_revert(self):
+        steps = [
+            {"visual": graph_visual({"A": "visited", "B": "frontier"}),
+             "transition": {"type": "settle", "node": "B"}},
+            {"visual": graph_visual({"A": "unvisited", "B": "settled"})},
+        ]
+        [finding] = inspect_algorithm_trace({"steps": steps})
+        assert "must stay visited" in finding["message"]
+
+    def test_a_wrong_dequeue_order_is_refused_across_both_children(self):
+        steps = [
+            graph_queue_step({"A": "frontier", "B": "frontier"}, ["A", "B"]),
+            graph_queue_step({"A": "frontier", "B": "visited"}, ["A"]),
+        ]
+        steps[0]["transition"] = {"type": "dequeue", "value": "B"}
+        [finding] = inspect_algorithm_trace({"steps": steps})
+        assert finding["code"] == "STATE_TRANSITION_MISMATCH"
+        assert "removes" in finding["message"]
+
+
+def test_priority_queue_transitions_are_checked_between_trace_steps():
+    before = priority_step([{"id": "A", "priority": 5}, {"id": "B", "priority": 2}])
+    changed = priority_step([{"id": "A", "priority": 1}, {"id": "B", "priority": 2}])
+    before["transition"] = {"type": "decrease_key", "id": "A", "priority": 1}
+    assert inspect_algorithm_trace({"steps": [before, changed]}) == []
+    changed["transition"] = {"type": "pop_min", "value": "A"}
+    after = priority_step([{"id": "B", "priority": 2}])
+    assert inspect_algorithm_trace({"steps": [changed, after]}) == []
+    changed["transition"]["value"] = "B"
+    [finding] = inspect_algorithm_trace({"steps": [changed, after]})
+    assert "not 'A'" in finding["message"]
 
 
 def test_a_blank_child_names_the_step_that_needs_repair():
@@ -281,12 +375,16 @@ class TestChildrenAreDrawnAsRenderDiagramWouldDrawThem:
         flat = render_diagram({"type": "algorithm_trace", "params": {"steps": steps}})
         assert count_data_marks(flat) == count_data_marks(nested) > 0
 
-    @pytest.mark.parametrize("visual_type", ["array_state", "stack", "queue", "linked_list"])
+    @pytest.mark.parametrize("visual_type", ["array_state", "linked_list"])
     def test_an_empty_child_is_blank_despite_its_arrowhead_marker(self, visual_type):
         """The marker <polygon> in <defs> is not a data mark."""
         [finding] = inspect_algorithm_trace(
             {"steps": [value_step(visual_type, [])]})
         assert finding["code"] == "BLANK_STEP"
+
+    @pytest.mark.parametrize("visual_type", ["stack", "queue"])
+    def test_an_empty_container_is_a_visible_algorithm_state(self, visual_type):
+        assert inspect_algorithm_trace({"steps": [value_step(visual_type, [])]}) == []
 
     def test_a_child_that_crashes_says_so_rather_than_check_its_params(self):
         [finding] = inspect_algorithm_trace(
@@ -344,6 +442,14 @@ class TestTheStoryboardIsAsLegibleAsItsChildren:
                                "params": {"steps": [array_step(list(range(9)))]}})
         widths = [int(re.search(r'width="(\d+)"', svg).group(1)) for svg in (small, wide)]
         assert widths[0] < widths[1]
+
+    def test_an_explicit_panel_width_is_not_clamped(self):
+        svg = render_diagram({"type": "algorithm_trace", "params": {
+            "layout": "column", "panel_width": 1180,
+            "steps": [array_step([1, 2, 3])],
+        }})
+        image_width = float(re.search(r'<image[^>]+width="([\d.]+)"', svg).group(1))
+        assert image_width == 1160
 
     def test_an_explicit_row_layout_is_not_overridden_by_columns(self):
         steps = [array_step([i]) for i in range(4)]

@@ -105,6 +105,14 @@ class QueueTemplate:
         elements.append(style(DEFAULT_STYLES + self._extra_styles()))
         elements.append(defs(self._arrow_marker()))
 
+        if count == 0:
+            elements.append(rect(queue_start_x, cell_y, cell_width, cell_height,
+                                 stroke_dasharray="4,3",
+                                 **{"class": "queue-cell queue-cell-default"}))
+            elements.append(text(queue_start_x + cell_width / 2,
+                                 cell_y + cell_height / 2 + 5, "∅",
+                                 **{"class": "queue-value", "text_anchor": "middle"}))
+
         for idx, value in enumerate(values):
             x = queue_start_x + idx * cell_width
             state = highlights.get(idx, "default")

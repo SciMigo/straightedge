@@ -116,6 +116,15 @@ class StackTemplate:
                 operation,
             )
 
+        if count == 0:
+            stack_x, stack_y = stack_origin
+            elements.append(rect(stack_x, stack_y, cell_width, cell_height,
+                                 stroke_dasharray="4,3",
+                                 **{"class": "stack-cell stack-cell-default"}))
+            elements.append(text(stack_x + cell_width / 2,
+                                 stack_y + cell_height / 2 + 5, "∅",
+                                 **{"class": "stack-value", "text_anchor": "middle"}))
+
         if caption:
             elements.append(
                 text(

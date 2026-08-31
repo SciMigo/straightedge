@@ -11,11 +11,23 @@ from ..registry import DIAGRAM_REGISTRY, register
 
 def _graph_panel(params: Dict[str, Any], graph: Graph) -> Dict[str, Any]:
     """The ``graph`` call for the first panel, shared with the refusal check."""
-    return {"nodes": params["nodes"], "edges": params.get("edges", []),
+    panel = {"nodes": params["nodes"], "edges": params.get("edges", []),
             "directed": graph.directed,
             "weighted": any(e.weight is not None for e in graph.edges),
             "layout": str(params.get("graph_layout", "circular")),
             "caption": "The source structure"}
+    highlighted = _highlight_edge(params.get("highlight"))
+    if highlighted:
+        panel["highlights"] = {"edges": [list(highlighted)]}
+    return panel
+
+
+def _highlight_edge(value: Any) -> tuple[str, str] | None:
+    if isinstance(value, (list, tuple)) and len(value) == 2:
+        return str(value[0]), str(value[1])
+    if isinstance(value, dict) and "from" in value and "to" in value:
+        return str(value["from"]), str(value["to"])
+    return None
 
 
 @register("graph_representation")
@@ -31,6 +43,21 @@ class GraphRepresentationTemplate:
                 raise GraphError("at most 6 vertices and 8 edges fit all four representations")
         except GraphError as exc:
             return [Finding("graph_representation_refused", "error", str(exc))]
+        highlighted = _highlight_edge(params.get("highlight"))
+        if params.get("highlight") is not None and highlighted is None:
+            return [Finding(
+                "graph_representation_highlight", "error",
+                "highlight must identify one edge as [from, to] or {from, to}",
+            )]
+        if highlighted and not any(
+            (edge.source, edge.target) == highlighted
+            or (not graph.directed and (edge.target, edge.source) == highlighted)
+            for edge in graph.edges
+        ):
+            return [Finding(
+                "graph_representation_highlight", "error",
+                f"highlight {highlighted[0]!r}–{highlighted[1]!r} is not an edge",
+            )]
         # The first panel forwards graph_layout; a layout the graph template
         # refuses (bipartite on an odd cycle) would otherwise come back as an
         # empty document with the reason lost.
@@ -42,6 +69,7 @@ class GraphRepresentationTemplate:
         columns = int(params.get("columns", 2))
         if self.refusal_findings(params): return ""
         graph = coerce_graph(params); ids = list(graph.ids)
+        highlighted = _highlight_edge(params.get("highlight"))
         weighted = any(e.weight is not None for e in graph.edges)
         # A weighted matrix marks absence with a dot: a 0 there would read as
         # a zero-weight edge, which the adjacency list would then contradict.
@@ -67,15 +95,37 @@ class GraphRepresentationTemplate:
                                 and (edge.source, edge.target) == (neighbor, vertex)))
                 entries.append(f"{neighbor} ({weight:g})" if edge.weight is not None else neighbor)
             adjacency_list.append([", ".join(entries) or "∅"])
+        adjacency_list_highlights: Dict[str, str] = {}
+        adjacency_matrix_highlights: Dict[str, str] = {}
+        incidence_highlights: Dict[str, str] = {}
+        if highlighted:
+            source, target = highlighted
+            matches = [
+                index for index, edge in enumerate(graph.edges)
+                if (edge.source, edge.target) == highlighted
+                or (not graph.directed and (edge.target, edge.source) == highlighted)
+            ]
+            if matches and source in ids and target in ids:
+                adjacency_list_highlights[f"{ids.index(source)},0"] = "current"
+                adjacency_matrix_highlights[f"{ids.index(source)},{ids.index(target)}"] = "current"
+                if not graph.directed:
+                    adjacency_list_highlights[f"{ids.index(target)},0"] = "current"
+                    adjacency_matrix_highlights[f"{ids.index(target)},{ids.index(source)}"] = "current"
+                edge_index = matches[0]
+                incidence_highlights[f"{ids.index(source)},{edge_index}"] = "current"
+                incidence_highlights[f"{ids.index(target)},{edge_index}"] = "current"
         steps: List[Dict[str, Any]] = [
             {"label": "Graph", "visual": {"type": "graph", "params": _graph_panel(params, graph)}},
             {"label": "Adjacency list", "visual": {"type": "matrix_state", "params": {
-                "values": adjacency_list, "row_labels": ids, "col_labels": ["neighbors"]}}},
+                "values": adjacency_list, "row_labels": ids, "col_labels": ["neighbors"],
+                "highlights": adjacency_list_highlights}}},
             {"label": "Adjacency matrix", "visual": {"type": "matrix_state", "params": {
-                "values": adjacency, "row_labels": ids, "col_labels": ids}}},
+                "values": adjacency, "row_labels": ids, "col_labels": ids,
+                "highlights": adjacency_matrix_highlights}}},
             {"label": "Incidence matrix", "visual": {"type": "matrix_state", "params": {
                 "values": incidence, "row_labels": ids,
-                "col_labels": [f"e{i + 1}" for i in range(len(graph.edges))]}}},
+                "col_labels": [f"e{i + 1}" for i in range(len(graph.edges))],
+                "highlights": incidence_highlights}}},
         ]
         return DIAGRAM_REGISTRY["algorithm_trace"].render({
             "title": str(title), "steps": steps, "columns": columns, "show_step_numbers": False})

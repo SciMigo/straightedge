@@ -40,7 +40,8 @@ from urllib.parse import unquote
 from ..qc import _EDGE_TOLERANCE, Box, Finding, check as check_boxes
 from .renderer import text_width
 
-__all__ = ["boxes_from_svg", "check_figure", "styles_from_svg", "unfilled_classes"]
+__all__ = ["boxes_from_svg", "check_figure", "smallest_font_px",
+           "styles_from_svg", "unfilled_classes"]
 
 _SVG = "{http://www.w3.org/2000/svg}"
 
@@ -674,7 +675,21 @@ def _length(value: str | None) -> float:
 _BACKGROUND = ("grid-paper", "background", "backdrop")
 
 
-def check_figure(svg: str, *, tolerance: float | None = None) -> list[Finding]:
+def smallest_font_px(svg: str, display_width: float) -> float | None:
+    """Smallest text size after the SVG is fitted to ``display_width`` pixels."""
+    if not math.isfinite(display_width) or display_width <= 0:
+        raise ValueError("display_width must be a positive finite number")
+    _, _, width, _ = _canvas(svg)
+    if width <= 0:
+        return None
+    texts = [box for box in boxes_from_svg(svg) if box.kind == "text" and box.height > 0]
+    return min((box.height for box in texts), default=0.0) * display_width / width \
+        if texts else None
+
+
+def check_figure(svg: str, *, tolerance: float | None = None,
+                 display_width: float | None = None,
+                 min_font_px: float = 11.0) -> list[Finding]:
     """Legibility findings for an emitted figure, each carrying its coordinates.
 
     Runs the *same* :func:`straightedge.qc.check` the animation lane uses, so a
@@ -690,6 +705,10 @@ def check_figure(svg: str, *, tolerance: float | None = None) -> list[Finding]:
     min_x, min_y, width, height = _canvas(svg)
     if width <= 0 or height <= 0:
         return []
+    if display_width is not None and (not math.isfinite(display_width) or display_width <= 0):
+        raise ValueError("display_width must be a positive finite number")
+    if not math.isfinite(min_font_px) or min_font_px <= 0:
+        raise ValueError("min_font_px must be a positive finite number")
     drawn, truncated = _geometry(svg)
     boxes = [b for b in drawn
              if not any(hint in b.label for hint in _BACKGROUND)]
@@ -712,8 +731,23 @@ def check_figure(svg: str, *, tolerance: float | None = None) -> list[Finding]:
         for box, over in truncated
         if not any(hint in box.label for hint in _BACKGROUND)
     ]
+    display_findings: list[Finding] = []
+    if display_width is not None:
+        text_boxes = [box for box in boxes if box.kind == "text" and box.height > 0]
+        if text_boxes:
+            smallest = min(text_boxes, key=lambda box: box.height)
+            rendered_px = smallest.height * display_width / width
+            if rendered_px < min_font_px:
+                display_findings.append(Finding(
+                    "text_too_small", "error",
+                    f"smallest text renders at {rendered_px:.1f}px at display width "
+                    f"{display_width:g}px; minimum is {min_font_px:g}px",
+                    smallest.label,
+                    box=(smallest.x0 - half_w, smallest.x1 - half_w,
+                         smallest.y0 - half_h, smallest.y1 - half_h),
+                ))
     if not boxes:
-        return clipped_away
+        return clipped_away + display_findings
     centred = [
         Box(b.label, b.x0 - half_w, b.x1 - half_w, b.y0 - half_h, b.y1 - half_h,
             kind=b.kind,
@@ -728,4 +762,5 @@ def check_figure(svg: str, *, tolerance: float | None = None) -> list[Finding]:
     # being the only difference. Measured on the full label rather than on the
     # fragment left behind, and located there too, because the fragment is not
     # where the missing glyphs were meant to be.
-    return check_boxes(centred, frame=(width, height), **kwargs) + clipped_away
+    return (check_boxes(centred, frame=(width, height), **kwargs)
+            + clipped_away + display_findings)

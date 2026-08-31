@@ -107,6 +107,30 @@ def test_graph_representation_keeps_a_zero_weight_edge_visible_in_the_matrix():
     assert ">2<" in children  # the matrix formats the weight with :g
 
 
+def test_graph_representation_highlights_one_edge_in_every_view():
+    params = {"nodes": [{"id": x} for x in "ABC"], "edges": [
+        {"from": "A", "to": "B"}, {"from": "B", "to": "C"}],
+        "highlight": ["A", "B"]}
+    svg = render_diagram({"type": "graph_representation", "params": params})
+    children = "".join(base64.b64decode(data).decode("utf-8")
+                       for data in re.findall(r"base64,([^\"']+)", svg))
+    assert "graph-edge graph-edge-highlight" in children
+    assert children.count("matrix-cell matrix-cell-current") >= 5
+
+
+def test_nary_tree_supports_paths_highlights_and_label_size():
+    svg = render_diagram({"type": "tree", "params": {
+        "root": {"value": "r", "children": [
+            {"value": "a"}, {"value": "b"}, {"value": "c"}]},
+        "path": ["r", "b"], "highlights": {"b": "current"},
+        "label_size": 17,
+    }})
+    assert svg.count('class="tree-node ') == 4
+    assert "tree-edge tree-edge-path" in svg
+    assert "tree-node tree-node-current" in svg
+    assert "font-size: 17px" in svg
+
+
 def test_low_link_storyboard_draws_the_bridge_unlike_a_tree_edge():
     params = {"nodes": [{"id": x} for x in "ABCD"], "edges": [
         {"from": "A", "to": "B"}, {"from": "B", "to": "C"},

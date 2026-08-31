@@ -39,10 +39,27 @@ from straightedge.diagrams import DIAGRAM_REGISTRY, render_diagram
 from straightedge.diagrams.legibility import (
     boxes_from_svg,
     check_figure,
+    smallest_font_px,
     styles_from_svg,
     unfilled_classes,
 )
 from straightedge.qc import Finding
+
+
+class TestDisplayWidthLegibility:
+    SVG = ('<svg xmlns="http://www.w3.org/2000/svg" width="400" height="100" '
+           'viewBox="0 0 400 100"><text x="10" y="30" font-size="12px">Label</text></svg>')
+
+    def test_it_reports_the_smallest_font_after_slide_scaling(self):
+        assert smallest_font_px(self.SVG, 400) == pytest.approx(12)
+        assert smallest_font_px(self.SVG, 200) == pytest.approx(6)
+
+    def test_display_width_flags_text_below_the_reading_floor(self):
+        assert not [f for f in check_figure(self.SVG, display_width=400)
+                    if f.check == "text_too_small"]
+        [finding] = [f for f in check_figure(self.SVG, display_width=200)
+                     if f.check == "text_too_small"]
+        assert finding.severity == "error" and "6.0px" in finding.message
 
 #: One representative hint per registered template. Declared rather than
 #: discovered: a check over the whole lane needs a figure per template, and
@@ -100,6 +117,7 @@ CORPUS: dict[str, dict] = {
     'structure_chart': {"title": "Four features", "root": "Project finance", "children": [{"term": "Limited recourse", "desc": "Lenders rely on project cash flow"}, {"term": "Risk sharing", "desc": "Parties bear what they can control"}, {"term": "Off balance sheet", "desc": "Sponsor debt is not increased"}]},
     't_account': {"title": "借贷记账", "accounts": [{"name": "银行存款", "debit": [{"text": "收到投资", "amount": "100000"}], "credit": [{"text": "购买设备", "amount": "60000"}]}]},
     'timeline': {"title": "会计发展简史", "events": [{"date": "远古", "label": "结绳记事", "desc": "简单计数"}, {"date": "1494", "label": "复式记账", "desc": "帕乔利"}, {"date": "当代", "label": "会计信息化", "desc": "智能财务"}]},
+    'tree': {"root": {"value": "root", "children": [{"value": "a"}, {"value": "b"}, {"value": "c"}]}, "path": ["root", "b"], "highlights": {"b": "current"}},
     'turan': {"n": 7, "r": 3, "highlight_clique_free": True},
     'unit_circle': {"angle": 45, "show_sin": True, "show_cos": True},
     'wbs': {"root": {"name": "项目", "children": [{"name": "设计", "children": [{"name": "方案"}, {"name": "施工图"}]}, {"name": "施工"}]}},
