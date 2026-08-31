@@ -637,11 +637,15 @@ class TestMatrixTransformKeepsItsGuidesInThePanel:
                     if f.check == "text_clipped"]
 
     @pytest.mark.parametrize("matrix", [[[2, 0], [0, 3]], [[1, 0], [0, 1]],
-                                        [[-2, 0], [0, 3]], [[3, 0], [0, 1]]])
+                                        [[-2, 0], [0, 3]], [[3, 0], [0, 1]],
+                                        [[0, 0], [-1, 1]], [[0, -1], [1, 0]]])
     def test_the_eigenvalue_label_clears_the_basis_labels(self, matrix):
         """An eigenvector parallel to a basis image — any diagonal matrix —
         put λ at the same tip with the same (+4, -4) offset as Ae1, two 10px
-        labels drawn on top of each other. The ray's other end is empty."""
+        labels drawn on top of each other. Distance heuristics only moved the
+        failure: [[0,0],[-1,1]] puts a basis image at *both* ray ends, so the
+        spot has to be chosen by measuring the candidate text boxes against
+        the labels already placed."""
         assert not [f for f in check_figure(self._svg(matrix=matrix))
                     if f.check == "text_overlap"]
 

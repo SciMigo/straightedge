@@ -568,3 +568,75 @@ class TestALabelWrapsBeforeItTruncates:
         assert ">Session Cache<" in svg
         assert ">(Redis)<" in svg
         assert "…" not in svg, "ellipsised with a whole line to spare"
+
+
+class TestAnchoredAnnotationsParticipateInLayout:
+    """A stack that grows below its component without the layout knowing
+    lands on whatever the layout put there — the component below it — or,
+    under a bottom-row component, runs off the canvas. The notes are wrapped
+    before layout so the gaps widen for the tallest stack and the canvas
+    reserves the room a bottom stack draws into."""
+
+    def test_four_wrapped_notes_fit_the_canvas(self):
+        from straightedge.diagrams.legibility import check_figure
+
+        svg = render_diagram({"type": "architecture_diagram", "params": {
+            "components": [{"id": "api", "label": "API"}],
+            "annotations": [{"text": f"note number {i} long enough to wrap "
+                                     "to two lines here", "near": "api"}
+                            for i in range(4)]}})
+        errors = [f for f in check_figure(svg)
+                  if f.check in ("text_clipped", "out_of_frame")
+                  and f.severity == "error"]
+        assert not errors, [f.message for f in errors]
+
+    @pytest.mark.parametrize("layout", ["left-to-right", "top-to-bottom"])
+    def test_a_note_clears_the_component_below_its_anchor(self, layout):
+        from straightedge.diagrams.legibility import check_figure
+
+        svg = render_diagram({"type": "architecture_diagram", "params": {
+            "components": [{"id": "a", "label": "Upper"},
+                           {"id": "b", "label": "Lower"}],
+            "connections": ([{"from": "a", "to": "b"}]
+                            if layout == "top-to-bottom" else []),
+            "layout": layout,
+            "annotations": [{"text": "a two line annotation that wraps "
+                                     "because it is long", "near": "a"}]}})
+        # The gate is the note landing *on* the lower component (or another
+        # label). A connection stroke crossing the note is the ungated warn
+        # class every centred annotation under a connected component has
+        # always carried.
+        collisions = [f for f in check_figure(svg)
+                      if (f.check == "text_overlap" or "covered" in f.message)
+                      and ("annotation" in (f.label or "")
+                           or "wraps" in (f.label or ""))]
+        assert not collisions, [f.message for f in collisions]
+
+
+class TestFitLinesWrapsByMeasure:
+    """The wrap and the fit must speak the same measure. Unit counting calls
+    fifteen W's seven and a half ems when they render at eleven, so the
+    wrapper handed the fitter one over-full line and a whole empty one; the
+    breaks are now chosen with the same safe per-character widths the fitter
+    and the legibility check apply."""
+
+    def test_wide_glyphs_use_the_second_line(self):
+        from straightedge.diagrams.renderer import fit_lines, text_width
+
+        lines = fit_lines("W" * 15, 128, 12)
+        assert len(lines) == 2 and "…" not in "".join(lines)
+        assert "".join(lines) == "W" * 15
+        assert all(text_width(line, 12, safe=True) <= 128 for line in lines)
+
+    def test_words_still_break_at_spaces(self):
+        from straightedge.diagrams.renderer import fit_lines
+
+        assert fit_lines("Session Cache (Redis)", 128, 12) == [
+            "Session Cache", "(Redis)"]
+
+    def test_a_genuine_overflow_is_still_marked(self):
+        from straightedge.diagrams.renderer import fit_lines, text_width
+
+        lines = fit_lines("W" * 40, 128, 12)
+        assert len(lines) == 2 and lines[-1].endswith("…")
+        assert all(text_width(line, 12, safe=True) <= 128 for line in lines)

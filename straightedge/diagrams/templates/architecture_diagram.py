@@ -140,8 +140,16 @@ def _hierarchical_layout(
     node_ids: List[str],
     connections: List[Dict[str, Any]],
     direction: str,
+    extra_gap: float = 0,
 ) -> Tuple[Dict[str, Tuple[float, float]], int, int]:
-    """BFS layered layout.  Returns (positions, svg_width, svg_height)."""
+    """BFS layered layout.  Returns (positions, svg_width, svg_height).
+
+    ``extra_gap`` widens every vertical gap between components — the
+    same-layer stack when layers run left-to-right, the layer step when they
+    run top-to-bottom. It is how anchored annotations buy the room they draw
+    in: a note stack that grows below its component without the layout
+    knowing lands on whatever component the layout put there.
+    """
     if not node_ids:
         return {}, 200, 200
 
@@ -183,15 +191,17 @@ def _hierarchical_layout(
     max_per_layer = max(len(v) for v in grouped.values())
 
     ltr = direction == "left-to-right"
+    gap_v = _NODE_GAP_V + extra_gap
+    layer_gap_v = _LAYER_GAP_V + extra_gap
 
     if ltr:
         svg_w = _PADDING * 2 + (num_layers - 1) * _LAYER_GAP_H + _BOX_W
-        svg_h = _PADDING * 2 + (max_per_layer - 1) * _NODE_GAP_V + _BOX_H
+        svg_h = _PADDING * 2 + (max_per_layer - 1) * gap_v + _BOX_H
         svg_h = max(svg_h, 300)
     else:
         svg_w = _PADDING * 2 + (max_per_layer - 1) * _NODE_GAP_H + _BOX_W
         svg_w = max(svg_w, 400)
-        svg_h = _PADDING * 2 + (num_layers - 1) * _LAYER_GAP_V + _CYLINDER_H
+        svg_h = _PADDING * 2 + (num_layers - 1) * layer_gap_v + _CYLINDER_H
 
     positions: Dict[str, Tuple[float, float]] = {}
     for lvl, members in grouped.items():
@@ -199,14 +209,14 @@ def _hierarchical_layout(
         for idx, nid in enumerate(members):
             if ltr:
                 x = _PADDING + lvl * _LAYER_GAP_H
-                total_h = (count - 1) * _NODE_GAP_V
+                total_h = (count - 1) * gap_v
                 start_y = (svg_h - total_h) / 2
-                y = start_y + idx * _NODE_GAP_V
+                y = start_y + idx * gap_v
             else:
                 total_w = (count - 1) * _NODE_GAP_H
                 start_x = (svg_w - total_w) / 2
                 x = start_x + idx * _NODE_GAP_H
-                y = _PADDING + lvl * _LAYER_GAP_V
+                y = _PADDING + lvl * layer_gap_v
             positions[nid] = (x, y)
 
     return positions, svg_w, svg_h
@@ -400,16 +410,43 @@ class ArchitectureDiagramTemplate:
             return ""
 
         node_ids = [str(c["id"]) for c in components if "id" in c]
+        kinds = {str(c["id"]): str(c.get("type", "service")).lower()
+                 for c in components if "id" in c}
+
+        # Anchored annotations are wrapped *before* layout because they take
+        # part in it: their stacks hang below the component they name, so the
+        # vertical gaps have to be wide enough to hold the tallest stack and
+        # the canvas tall enough for a stack under a bottom-row component.
+        # Grown without reserving either, four wrapped notes ran off the
+        # bottom of the frame and a two-line note landed on the component
+        # drawn below its anchor.
+        anchored = set(node_ids)
+        anchored_notes: List[Tuple[str, str, List[str]]] = []
+        stack_lines: Dict[str, int] = {}
+        for a in annotations:
+            near_id = str(a.get("near", ""))
+            if a.get("text") and near_id in anchored:
+                lines = fit_lines(str(a["text"]), _BOX_W, 10)
+                anchored_notes.append((near_id, str(a["text"]), lines))
+                stack_lines[near_id] = stack_lines.get(near_id, 0) + len(lines)
+        extra_gap = max((16 + count * _NOTE_LINE for count in stack_lines.values()),
+                        default=0)
+
         positions, svg_w, svg_h = _hierarchical_layout(
-            node_ids, connections, direction,
+            node_ids, connections, direction, extra_gap,
         )
+        for cid, count in stack_lines.items():
+            if cid not in positions:
+                continue
+            comp_h = _CYLINDER_H if kinds.get(cid) in ("database", "datastore") else _BOX_H
+            stack_bottom = positions[cid][1] + comp_h + 16 + count * _NOTE_LINE + _NOTE_PAD
+            svg_h = max(svg_h, math.ceil(stack_bottom))
 
         # An annotation with no `near`, or one naming a component that is not
         # here, has nowhere to point. Those go in a stack along the bottom, and
         # the stack needs room: every one of them used to be placed at the same
         # single spot, so two notes were drawn one on top of the other and the
         # reader saw neither.
-        anchored = set(node_ids)
         loose = [a for a in annotations
                  if not (a.get("near") and str(a["near"]) in anchored)
                  and a.get("text")]
@@ -462,16 +499,14 @@ class ArchitectureDiagramTemplate:
         # note overhung the frame with no <title> holding the lost text, and
         # every note on one component was placed at the same single spot, so
         # two of them overlapped by 100% and the reader saw neither.
+        # The room each stack draws into was reserved before the layout ran.
         anchored_lines_placed: Dict[str, int] = {}
-        for ann in annotations:
-            ann_text = ann.get("text", "")
-            near_id = ann.get("near", "")
-            if not ann_text or not (near_id and near_id in center_map):
+        for near_id, ann_text, lines in anchored_notes:
+            if near_id not in center_map:
                 continue
             ax, ay = center_map[near_id]
             ay += (_CYLINDER_H if kind_map.get(near_id) in ("database", "datastore") else _BOX_H) / 2 + 16
             start = anchored_lines_placed.get(near_id, 0)
-            lines = fit_lines(ann_text, _BOX_W, 10)
             drawn = [text(
                 ax, ay + _NOTE_LINE * (start + i), part,
                 text_anchor="middle",

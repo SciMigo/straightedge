@@ -141,6 +141,50 @@ DEFAULT_STYLES = """
 """
 
 
+def _greedy_wrap(s: str, char_width, budget: float, max_lines: int,
+                 mark_truncation: bool) -> List[str]:
+    """The one wrapping loop, parameterised by how a character is measured.
+
+    ``char_width`` maps one character to its cost against ``budget`` — flat
+    half/full-em units for :func:`wrap_units`, measured safe pixels for
+    :func:`fit_lines`. Breaks at a space when the overflowing line has one, so
+    Latin wraps on word boundaries; CJK has no spaces and keeps the
+    character-greedy behaviour. Content past ``max_lines`` is dropped, but the
+    last kept line is marked with an ellipsis so the loss is visible.
+    """
+    if not s:
+        return []
+    lines: List[str] = []
+    cur, width = "", 0.0
+    for ch in s:
+        w = char_width(ch)
+        if width + w > budget and cur:
+            head, sep, tail = cur.rpartition(" ")
+            if sep and head.strip():
+                lines.append(head.rstrip())
+                cur = tail + ch
+                width = sum(char_width(c) for c in cur)
+            else:
+                lines.append(cur)
+                cur, width = ch, w
+        else:
+            cur += ch
+            width += w
+    if cur.strip():
+        lines.append(cur.strip())
+    if len(lines) <= max_lines:
+        return lines
+    kept = lines[:max_lines]
+    if mark_truncation and kept:
+        last = kept[-1].rstrip()
+        # Trim to leave room for the mark rather than pushing past the budget,
+        # which is what the caller sized its box from.
+        while last and sum(char_width(c) for c in last + ELLIPSIS) > budget:
+            last = last[:-1].rstrip()
+        kept[-1] = last + ELLIPSIS
+    return kept
+
+
 def wrap_units(s: str, max_units: float, max_lines: int = 2,
                mark_truncation: bool = True) -> List[str]:
     """Greedy wrap counting CJK as full-width (1.0) and Latin as ~half (0.5).
@@ -159,38 +203,8 @@ def wrap_units(s: str, max_units: float, max_lines: int = 2,
     had gone. Pass ``mark_truncation=False`` for a caller that measures the
     lines itself and would rather have the raw text.
     """
-    if not s:
-        return []
-    lines: List[str] = []
-    cur, width = "", 0.0
-    for ch in s:
-        w = 1.0 if ord(ch) > 0x2E7F else 0.5
-        if width + w > max_units and cur:
-            head, sep, tail = cur.rpartition(" ")
-            if sep and head.strip():
-                lines.append(head.rstrip())
-                cur = tail + ch
-                width = sum(1.0 if ord(c) > 0x2E7F else 0.5 for c in cur)
-            else:
-                lines.append(cur)
-                cur, width = ch, w
-        else:
-            cur += ch
-            width += w
-    if cur.strip():
-        lines.append(cur.strip())
-    if len(lines) <= max_lines:
-        return lines
-    kept = lines[:max_lines]
-    if mark_truncation and kept:
-        last = kept[-1].rstrip()
-        # Trim to leave room for the mark rather than pushing past `max_units`,
-        # which is the budget the caller sized its box from.
-        while last and sum(1.0 if ord(c) > 0x2E7F else 0.5
-                           for c in last + ELLIPSIS) > max_units:
-            last = last[:-1].rstrip()
-        kept[-1] = last + ELLIPSIS
-    return kept
+    return _greedy_wrap(s, lambda ch: 1.0 if ord(ch) > _WIDE_ABOVE else 0.5,
+                        max_units, max_lines, mark_truncation)
 
 
 # ---------------------------------------------------------------------------
@@ -323,16 +337,19 @@ def fit_lines(value: str, max_px: float, font_px: float, max_lines: int = 2,
               bold: bool = False) -> List[str]:
     """Wrap ``value`` into at most ``max_lines`` lines, each fitting ``max_px``.
 
-    :func:`wrap_units` picks the breaks and :func:`fit_text` guarantees the
-    width, and the two do not measure alike: the wrapper counts Latin at a flat
-    half-em while ``fit_text`` uses the per-character table with
-    :data:`WIDTH_SAFETY` — the measure the legibility check applies. Fed the
-    raw pixel budget, the wrapper over-fills a line the fitter then cuts, so
-    "Session Cache (Redis)" came back as one ellipsised line with its second
-    line empty. Dividing the wrap budget by the safety margin keeps the two in
-    agreement: a line the wrapper emits is a line the fitter (and the checker)
-    accepts, and the ellipsis is reserved for text that truly cannot fit.
+    The wrap and the fit must measure alike, and neither flat count does: the
+    half-em units :func:`wrap_units` speaks over-fill a line of wide glyphs
+    ("Session Cache (Redis)" passed the count and measured 145px against a
+    140px box, coming back as one ellipsised line with its second line empty)
+    and any correction factor just moves the failure — divided by
+    :data:`WIDTH_SAFETY`, fifteen W's were cut to one line that two lines
+    hold. So the breaks are chosen against the same per-character safe-pixel
+    measure :func:`fit_text` and the legibility check apply: a line the
+    wrapper emits is a line the fitter accepts, and the ellipsis is reserved
+    for text that truly cannot fit the lines it was given.
     """
-    units = max_px / (font_px * WIDTH_SAFETY)
     return [fit_text(part, max_px, font_px, bold)
-            for part in wrap_units(value, units, max_lines=max_lines)]
+            for part in _greedy_wrap(
+                value,
+                lambda ch: char_em(ch, bold) * font_px * WIDTH_SAFETY,
+                max_px, max_lines, True)]

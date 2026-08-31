@@ -23,6 +23,7 @@ from ..renderer import (
     style,
     svg_document,
     text,
+    text_width,
 )
 
 
@@ -328,8 +329,15 @@ class MatrixTransformTemplate:
                              fill_opacity="0.15")
                 )
 
+        # Both label sizes below are the 10px the stylesheet sets, and the
+        # boxes cover ascent and descent the way the legibility parser
+        # estimates them.
+        def _label_box(x: float, y: float, s: str) -> Tuple[float, float, float, float]:
+            w = text_width(s, 10, safe=True)
+            return (x, x + w, y - 8.0, y + 2.5)
+
         # Basis vectors
-        basis_tips: List[Tuple[float, float]] = []
+        taken_boxes: List[Tuple[float, float, float, float]] = []
         if show_basis:
             for bv, lbl in _basis_vectors():
                 if matrix is not None:
@@ -338,7 +346,6 @@ class MatrixTransformTemplate:
                     tv = bv
                 origin = to_svg((0, 0))
                 tip = to_svg(tv)
-                basis_tips.append(tip)
                 bcolor = self.COLOR_E1 if lbl == "e1" else self.COLOR_E2
                 elements.append(
                     line(
@@ -348,6 +355,7 @@ class MatrixTransformTemplate:
                     )
                 )
                 lbl_display = lbl if matrix is None else f"A{lbl}"
+                taken_boxes.append(_label_box(tip[0] + 4, tip[1] - 4, lbl_display))
                 elements.append(
                     text(tip[0] + 4, tip[1] - 4, lbl_display,
                          **{"class": "mt-vec-label", "fill": bcolor})
@@ -388,24 +396,28 @@ class MatrixTransformTemplate:
                 # same (+4, -4) offset from *their* tips — so whenever an
                 # eigenvector is parallel to a basis image (any diagonal or
                 # axis-aligned matrix) a fixed end drew the eigenvalue straight
-                # over Ae1. The ray reads the same from either end; the basis
-                # label has only one home. Take the end farther from every
-                # basis tip.
+                # over Ae1. Distance-to-tip heuristics only moved the failure
+                # around ([[0,0],[-1,1]] puts a basis image at *both* ends);
+                # what decides a collision is the text boxes, so measure those:
+                # each candidate spot — both ends, either side of the ray —
+                # against every label already placed, and take the first clear
+                # one.
                 ends = [to_svg((eigenvec[0] * x_range * s, eigenvec[1] * x_range * s))
                         for s in (0.7, -0.7)]
-
-                def _clearance(pt: Tuple[float, float]) -> float:
-                    return min((math.hypot(pt[0] - bx, pt[1] - by)
-                                for bx, by in basis_tips), default=float("inf"))
-
-                tip = max(ends, key=_clearance)
-                # Both ends crowded (both basis images on this ray): drop the
-                # label under the ray instead — the basis label sits above it.
-                label_dy = -4 if _clearance(tip) >= 28 else 12
+                value_text = "λ=" + f"{eigenval:.1f}"
+                candidates = [(end[0] + 4, end[1] + dy)
+                              for dy in (-4, 12, -18) for end in ends]
+                spot = next(
+                    (c for c in candidates
+                     if not any(box[0] < t[1] and t[0] < box[1]
+                                and box[2] < t[3] and t[2] < box[3]
+                                for box in [_label_box(c[0], c[1], value_text)]
+                                for t in taken_boxes)),
+                    candidates[0])
+                taken_boxes.append(_label_box(spot[0], spot[1], value_text))
                 eigen_labels.append(
                     text(
-                        tip[0] + 4, tip[1] + label_dy,
-                        f"\u03bb={eigenval:.1f}",
+                        spot[0], spot[1], value_text,
                         **{"class": "mt-eigen-label"},
                     )
                 )
