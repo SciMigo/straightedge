@@ -510,3 +510,34 @@ class TestAxisAlignedStrokesAreChecked:
         box = Box("dot", 20.0, 20.0, 20.0, 20.0)
         found = check([box, Box("body", -1.0, 1.0, -1.0, 1.0)], frame=(14.0, 8.0))
         assert not [f for f in found if f.check == "out_of_frame"]
+
+
+class TestExtentIsTheOneFilterEverywhere:
+    """The frame check learned that a level line is ink; the empty and overlap
+    checks kept skipping on area, so the three disagreed about the same boxes.
+
+    A number line of level strokes was declared empty by one check while the
+    frame check measured its overhangs, and no zero-height rule could ever be
+    reported as obscuring a label — the two places the area reasoning was not
+    applied when the frame check dropped it.
+    """
+
+    def test_a_scene_of_level_strokes_is_not_empty(self):
+        found = check([_mark("rule", -6, 6, 0, 0), _mark("axis", 0, 0, -3, 3)],
+                      frame=(14.0, 8.0))
+        assert not [f for f in found if f.check == "empty"]
+
+    def test_a_scene_of_points_is_still_empty(self):
+        found = check([Box("dot", 1.0, 1.0, 1.0, 1.0)])
+        assert [f for f in found if f.check == "empty"]
+
+    def test_a_zero_height_rule_through_a_label_is_reported(self):
+        label = _text("label", -1, 1, -0.2, 0.2)
+        found = check([label, _mark("rule", -6, 6, 0, 0)], frame=(14.0, 8.0))
+        hits = [f for f in found if f.check == "text_obscured"]
+        assert hits and hits[0].label == "label"
+
+    def test_a_zero_height_rule_clear_of_the_label_is_silent(self):
+        label = _text("label", -1, 1, -0.2, 0.2)
+        found = check([label, _mark("rule", -6, 6, 2, 2)], frame=(14.0, 8.0))
+        assert not [f for f in found if f.check == "text_obscured"]

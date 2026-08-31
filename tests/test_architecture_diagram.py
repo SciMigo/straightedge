@@ -517,3 +517,126 @@ class TestALooseNoteKeepsItsText:
         ys = sorted(b.y0 for b in boxes_from_svg(svg)
                     if b.kind == "text" and b.label.endswith("note here"))
         assert len(ys) == 3 and len(set(ys)) == 3, f"notes overlap at {ys}"
+
+
+class TestAnchoredAnnotationsGetTheSameCare:
+    """The loose-note rewrite skipped the notes that *do* point at something.
+
+    An anchored annotation was drawn raw eight lines above the rewritten
+    branch: unwrapped, unmeasured, no ``<title>``, and every note on one
+    component at the same per-node spot — so two of them overlapped by 100%
+    and a long one overhung the frame with nothing holding the lost text.
+    """
+
+    def _svg(self, *annotations):
+        return render_diagram({"type": "architecture_diagram", "params": {
+            "components": [{"id": "api", "type": "service", "label": "API"}],
+            "annotations": [{"text": t, "near": "api"} for t in annotations],
+        }})
+
+    def test_two_notes_on_one_component_do_not_overlap(self):
+        from straightedge.diagrams.legibility import check_figure
+
+        svg = self._svg("first note", "second note")
+        assert not [f for f in check_figure(svg) if f.check == "text_overlap"]
+
+    def test_a_long_note_is_wrapped_not_clipped(self):
+        from straightedge.diagrams.legibility import check_figure
+
+        svg = self._svg("a note long enough that drawn raw it overhung the frame")
+        errors = [f for f in check_figure(svg)
+                  if f.check in ("text_clipped", "out_of_frame")
+                  and f.severity == "error"]
+        assert not errors, [f.message for f in errors]
+
+    def test_the_full_text_is_the_accessible_name(self):
+        note = "a note long enough that drawn raw it overhung the frame"
+        assert f"<title>{note}</title>" in self._svg(note)
+
+
+class TestALabelWrapsBeforeItTruncates:
+    """The wrapper counts Latin at a flat half-em and the fitter measures with
+    the per-character table plus the substitution headroom, so a label could
+    pass the wrap count and fail the measure: "Session Cache (Redis)" came
+    back as the single line "Session Cache (R…" with its second line empty,
+    on the figure the wrap-don't-truncate rewrite shipped with."""
+
+    def test_a_label_that_fits_two_lines_uses_them(self):
+        svg = render_diagram({"type": "architecture_diagram", "params": {
+            "components": [{"id": "c", "type": "cache",
+                            "label": "Session Cache (Redis)"}]}})
+        assert ">Session Cache<" in svg
+        assert ">(Redis)<" in svg
+        assert "…" not in svg, "ellipsised with a whole line to spare"
+
+
+class TestAnchoredAnnotationsParticipateInLayout:
+    """A stack that grows below its component without the layout knowing
+    lands on whatever the layout put there — the component below it — or,
+    under a bottom-row component, runs off the canvas. The notes are wrapped
+    before layout so the gaps widen for the tallest stack and the canvas
+    reserves the room a bottom stack draws into."""
+
+    def test_four_wrapped_notes_fit_the_canvas(self):
+        from straightedge.diagrams.legibility import check_figure
+
+        svg = render_diagram({"type": "architecture_diagram", "params": {
+            "components": [{"id": "api", "label": "API"}],
+            "annotations": [{"text": f"note number {i} long enough to wrap "
+                                     "to two lines here", "near": "api"}
+                            for i in range(4)]}})
+        errors = [f for f in check_figure(svg)
+                  if f.check in ("text_clipped", "out_of_frame")
+                  and f.severity == "error"]
+        assert not errors, [f.message for f in errors]
+
+    @pytest.mark.parametrize("layout", ["left-to-right", "top-to-bottom"])
+    def test_a_note_clears_the_component_below_its_anchor(self, layout):
+        from straightedge.diagrams.legibility import check_figure
+
+        svg = render_diagram({"type": "architecture_diagram", "params": {
+            "components": [{"id": "a", "label": "Upper"},
+                           {"id": "b", "label": "Lower"}],
+            "connections": ([{"from": "a", "to": "b"}]
+                            if layout == "top-to-bottom" else []),
+            "layout": layout,
+            "annotations": [{"text": "a two line annotation that wraps "
+                                     "because it is long", "near": "a"}]}})
+        # The gate is the note landing *on* the lower component (or another
+        # label). A connection stroke crossing the note is the ungated warn
+        # class every centred annotation under a connected component has
+        # always carried.
+        collisions = [f for f in check_figure(svg)
+                      if (f.check == "text_overlap" or "covered" in f.message)
+                      and ("annotation" in (f.label or "")
+                           or "wraps" in (f.label or ""))]
+        assert not collisions, [f.message for f in collisions]
+
+
+class TestFitLinesWrapsByMeasure:
+    """The wrap and the fit must speak the same measure. Unit counting calls
+    fifteen W's seven and a half ems when they render at eleven, so the
+    wrapper handed the fitter one over-full line and a whole empty one; the
+    breaks are now chosen with the same safe per-character widths the fitter
+    and the legibility check apply."""
+
+    def test_wide_glyphs_use_the_second_line(self):
+        from straightedge.diagrams.renderer import fit_lines, text_width
+
+        lines = fit_lines("W" * 15, 128, 12)
+        assert len(lines) == 2 and "…" not in "".join(lines)
+        assert "".join(lines) == "W" * 15
+        assert all(text_width(line, 12, safe=True) <= 128 for line in lines)
+
+    def test_words_still_break_at_spaces(self):
+        from straightedge.diagrams.renderer import fit_lines
+
+        assert fit_lines("Session Cache (Redis)", 128, 12) == [
+            "Session Cache", "(Redis)"]
+
+    def test_a_genuine_overflow_is_still_marked(self):
+        from straightedge.diagrams.renderer import fit_lines, text_width
+
+        lines = fit_lines("W" * 40, 128, 12)
+        assert len(lines) == 2 and lines[-1].endswith("…")
+        assert all(text_width(line, 12, safe=True) <= 128 for line in lines)

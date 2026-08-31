@@ -23,6 +23,7 @@ from ..renderer import (
     style,
     svg_document,
     text,
+    text_width,
 )
 
 
@@ -238,10 +239,18 @@ class MatrixTransformTemplate:
         # purpose, and needs the panel to cut it off; the eigenvector rays did
         # not have one to reach for, so they crossed the gutter, the other panel
         # and the edge of the figure.
-        clip_ref = f"url(#clip-{ox:.0f})"
+        #
+        # The id is a fragment identifier, which the browser resolves across
+        # the whole page, first match wins — two figures inlined into one
+        # document share the namespace. Minting it from the full clip geometry
+        # (not just `ox`) makes any collision harmless by construction: two
+        # clipPaths with this id cut the same rectangle, so it no longer
+        # matters whose definition wins. The same rect() the visible panel uses
+        # keeps clip and panel from silently desyncing.
+        clip_id = f"mt-clip-{ox:.0f}-{oy:.0f}-{pw:.0f}x{ph:.0f}"
+        clip_ref = f"url(#{clip_id})"
         elements.append(
-            f'<clipPath id="clip-{ox:.0f}"><rect x="{ox}" y="{oy}" '
-            f'width="{pw}" height="{ph}" rx="4"/></clipPath>'
+            f'<clipPath id="{clip_id}">{rect(ox, oy, pw, ph, rx="4")}</clipPath>'
         )
 
         # Coordinate transforms
@@ -320,7 +329,15 @@ class MatrixTransformTemplate:
                              fill_opacity="0.15")
                 )
 
+        # Both label sizes below are the 10px the stylesheet sets, and the
+        # boxes cover ascent and descent the way the legibility parser
+        # estimates them.
+        def _label_box(x: float, y: float, s: str) -> Tuple[float, float, float, float]:
+            w = text_width(s, 10, safe=True)
+            return (x, x + w, y - 8.0, y + 2.5)
+
         # Basis vectors
+        taken_boxes: List[Tuple[float, float, float, float]] = []
         if show_basis:
             for bv, lbl in _basis_vectors():
                 if matrix is not None:
@@ -338,6 +355,7 @@ class MatrixTransformTemplate:
                     )
                 )
                 lbl_display = lbl if matrix is None else f"A{lbl}"
+                taken_boxes.append(_label_box(tip[0] + 4, tip[1] - 4, lbl_display))
                 elements.append(
                     text(tip[0] + 4, tip[1] - 4, lbl_display,
                          **{"class": "mt-vec-label", "fill": bcolor})
@@ -374,11 +392,32 @@ class MatrixTransformTemplate:
                 # it overruns on purpose; a label that overruns is just a label
                 # the reader cannot finish, and clipping it silently is what the
                 # legibility check now calls out.
-                tip = to_svg((eigenvec[0] * x_range * 0.7, eigenvec[1] * x_range * 0.7))
+                # The ray has two ends, and the basis-image labels sit at the
+                # same (+4, -4) offset from *their* tips — so whenever an
+                # eigenvector is parallel to a basis image (any diagonal or
+                # axis-aligned matrix) a fixed end drew the eigenvalue straight
+                # over Ae1. Distance-to-tip heuristics only moved the failure
+                # around ([[0,0],[-1,1]] puts a basis image at *both* ends);
+                # what decides a collision is the text boxes, so measure those:
+                # each candidate spot — both ends, either side of the ray —
+                # against every label already placed, and take the first clear
+                # one.
+                ends = [to_svg((eigenvec[0] * x_range * s, eigenvec[1] * x_range * s))
+                        for s in (0.7, -0.7)]
+                value_text = "λ=" + f"{eigenval:.1f}"
+                candidates = [(end[0] + 4, end[1] + dy)
+                              for dy in (-4, 12, -18) for end in ends]
+                spot = next(
+                    (c for c in candidates
+                     if not any(box[0] < t[1] and t[0] < box[1]
+                                and box[2] < t[3] and t[2] < box[3]
+                                for box in [_label_box(c[0], c[1], value_text)]
+                                for t in taken_boxes)),
+                    candidates[0])
+                taken_boxes.append(_label_box(spot[0], spot[1], value_text))
                 eigen_labels.append(
                     text(
-                        tip[0] + 4, tip[1] - 4,
-                        f"\u03bb={eigenval:.1f}",
+                        spot[0], spot[1], value_text,
                         **{"class": "mt-eigen-label"},
                     )
                 )

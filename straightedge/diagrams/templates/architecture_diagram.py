@@ -10,16 +10,14 @@ from typing import Any, Dict, List, Optional, Tuple
 from ..registry import register
 from ..renderer import (
     defs,
-    fit_text,
-    wrap_units,
-    group,
+    fit_lines,
     line,
     path,
     rect,
     style,
     svg_document,
-    title as svg_title,
     text,
+    titled_group,
 )
 
 # Component fill colours by kind/type
@@ -142,8 +140,16 @@ def _hierarchical_layout(
     node_ids: List[str],
     connections: List[Dict[str, Any]],
     direction: str,
+    extra_gap: float = 0,
 ) -> Tuple[Dict[str, Tuple[float, float]], int, int]:
-    """BFS layered layout.  Returns (positions, svg_width, svg_height)."""
+    """BFS layered layout.  Returns (positions, svg_width, svg_height).
+
+    ``extra_gap`` widens every vertical gap between components — the
+    same-layer stack when layers run left-to-right, the layer step when they
+    run top-to-bottom. It is how anchored annotations buy the room they draw
+    in: a note stack that grows below its component without the layout
+    knowing lands on whatever component the layout put there.
+    """
     if not node_ids:
         return {}, 200, 200
 
@@ -185,15 +191,17 @@ def _hierarchical_layout(
     max_per_layer = max(len(v) for v in grouped.values())
 
     ltr = direction == "left-to-right"
+    gap_v = _NODE_GAP_V + extra_gap
+    layer_gap_v = _LAYER_GAP_V + extra_gap
 
     if ltr:
         svg_w = _PADDING * 2 + (num_layers - 1) * _LAYER_GAP_H + _BOX_W
-        svg_h = _PADDING * 2 + (max_per_layer - 1) * _NODE_GAP_V + _BOX_H
+        svg_h = _PADDING * 2 + (max_per_layer - 1) * gap_v + _BOX_H
         svg_h = max(svg_h, 300)
     else:
         svg_w = _PADDING * 2 + (max_per_layer - 1) * _NODE_GAP_H + _BOX_W
         svg_w = max(svg_w, 400)
-        svg_h = _PADDING * 2 + (num_layers - 1) * _LAYER_GAP_V + _CYLINDER_H
+        svg_h = _PADDING * 2 + (num_layers - 1) * layer_gap_v + _CYLINDER_H
 
     positions: Dict[str, Tuple[float, float]] = {}
     for lvl, members in grouped.items():
@@ -201,14 +209,14 @@ def _hierarchical_layout(
         for idx, nid in enumerate(members):
             if ltr:
                 x = _PADDING + lvl * _LAYER_GAP_H
-                total_h = (count - 1) * _NODE_GAP_V
+                total_h = (count - 1) * gap_v
                 start_y = (svg_h - total_h) / 2
-                y = start_y + idx * _NODE_GAP_V
+                y = start_y + idx * gap_v
             else:
                 total_w = (count - 1) * _NODE_GAP_H
                 start_x = (svg_w - total_w) / 2
                 x = start_x + idx * _NODE_GAP_H
-                y = _PADDING + lvl * _LAYER_GAP_V
+                y = _PADDING + lvl * layer_gap_v
             positions[nid] = (x, y)
 
     return positions, svg_w, svg_h
@@ -278,12 +286,10 @@ def _render_component(
         center = (cx + w / 2, cy + h / 2)
         elements.extend(_label_lines(label, center[0], center[1] + 4))
 
-    # One group per component, with the title inside it. A `<title>` names its
-    # *parent*, so emitting these as siblings of the shapes made seven of them
-    # children of the root `<svg>` — every one naming the whole document, and
-    # all but the first ignored. Grouped, each names the component it belongs
-    # to, which is what makes it the tooltip and the accessible name.
-    return group("\n".join([svg_title(label), *elements])), center
+    # One group per component, named by its title. Emitted as siblings of the
+    # shapes, seven titles were children of the root `<svg>` — every one naming
+    # the whole document, and all but the first ignored.
+    return titled_group(label, elements), center
 
 
 # ---------------------------------------------------------------------------
@@ -333,16 +339,7 @@ def _label_lines(label: str, cx: float, cy: float) -> List[str]:
     Two lines fit comfortably in 44px of box, so wrap rather than truncate --
     the text is the diagram's content, and there is room for it.
     """
-    # `wrap_units` picks the break, `fit_text` guarantees the width. They do not
-    # measure the same way: the wrapper counts Latin at a flat half-em, which
-    # under-reads a real string — "Session Cache (Redis)" fits its budget by
-    # that count and measures 145px against a 140px box. `fit_text` uses the
-    # per-character table with the font-substitution headroom, which is the
-    # measure the legibility check applies, so a line that survives it is a line
-    # the checker agrees fits.
-    room = _BOX_W - 12
-    lines = [fit_text(part, room, _LABEL_PX)
-             for part in wrap_units(label, room / _LABEL_PX, max_lines=2)]
+    lines = fit_lines(label, _BOX_W - 12, _LABEL_PX)
     top = cy - _LABEL_LINE * (len(lines) - 1) / 2
     return [text(cx, top + _LABEL_LINE * i, part,
                  text_anchor="middle",
@@ -413,16 +410,43 @@ class ArchitectureDiagramTemplate:
             return ""
 
         node_ids = [str(c["id"]) for c in components if "id" in c]
+        kinds = {str(c["id"]): str(c.get("type", "service")).lower()
+                 for c in components if "id" in c}
+
+        # Anchored annotations are wrapped *before* layout because they take
+        # part in it: their stacks hang below the component they name, so the
+        # vertical gaps have to be wide enough to hold the tallest stack and
+        # the canvas tall enough for a stack under a bottom-row component.
+        # Grown without reserving either, four wrapped notes ran off the
+        # bottom of the frame and a two-line note landed on the component
+        # drawn below its anchor.
+        anchored = set(node_ids)
+        anchored_notes: List[Tuple[str, str, List[str]]] = []
+        stack_lines: Dict[str, int] = {}
+        for a in annotations:
+            near_id = str(a.get("near", ""))
+            if a.get("text") and near_id in anchored:
+                lines = fit_lines(str(a["text"]), _BOX_W, 10)
+                anchored_notes.append((near_id, str(a["text"]), lines))
+                stack_lines[near_id] = stack_lines.get(near_id, 0) + len(lines)
+        extra_gap = max((16 + count * _NOTE_LINE for count in stack_lines.values()),
+                        default=0)
+
         positions, svg_w, svg_h = _hierarchical_layout(
-            node_ids, connections, direction,
+            node_ids, connections, direction, extra_gap,
         )
+        for cid, count in stack_lines.items():
+            if cid not in positions:
+                continue
+            comp_h = _CYLINDER_H if kinds.get(cid) in ("database", "datastore") else _BOX_H
+            stack_bottom = positions[cid][1] + comp_h + 16 + count * _NOTE_LINE + _NOTE_PAD
+            svg_h = max(svg_h, math.ceil(stack_bottom))
 
         # An annotation with no `near`, or one naming a component that is not
         # here, has nowhere to point. Those go in a stack along the bottom, and
         # the stack needs room: every one of them used to be placed at the same
         # single spot, so two notes were drawn one on top of the other and the
         # reader saw neither.
-        anchored = set(node_ids)
         loose = [a for a in annotations
                  if not (a.get("near") and str(a["near"]) in anchored)
                  and a.get("text")]
@@ -432,12 +456,14 @@ class ArchitectureDiagramTemplate:
         # was simply not in the document. Whatever the lines cannot hold is
         # still the group's accessible name.
         note_room = svg_w - _PADDING * 2
-        notes = [(str(a["text"]),
-                  [fit_text(part, note_room, 10)
-                   for part in wrap_units(str(a["text"]), note_room / 10, max_lines=2)])
+        notes = [(str(a["text"]), fit_lines(str(a["text"]), note_room, 10))
                  for a in loose]
-        svg_h += _NOTE_LINE * sum(len(lines) for _, lines in notes)
-        svg_h += _NOTE_PAD if loose else 0
+        # One number for the stack's height, used both to reserve it here and
+        # to place it later — two independent copies of this sum drifted apart
+        # is exactly the out-of-frame failure the reservation exists to prevent.
+        notes_h = _NOTE_LINE * sum(len(lines) for _, lines in notes)
+        notes_h += _NOTE_PAD if loose else 0
+        svg_h += notes_h
 
         # Reserve space for caption
         if caption:
@@ -467,29 +493,35 @@ class ArchitectureDiagramTemplate:
         for conn in connections:
             elements.append(_render_connection(conn, center_map, kind_map))
 
-        # Annotations that point at something, drawn where they point.
-        for ann in annotations:
-            ann_text = ann.get("text", "")
-            near_id = ann.get("near", "")
-            if not ann_text or not (near_id and near_id in center_map):
+        # Annotations that point at something, drawn where they point — with
+        # the same care the loose stack gets. Drawn raw they had every defect
+        # the stack was rewritten to fix: unwrapped and unmeasured, so a long
+        # note overhung the frame with no <title> holding the lost text, and
+        # every note on one component was placed at the same single spot, so
+        # two of them overlapped by 100% and the reader saw neither.
+        # The room each stack draws into was reserved before the layout ran.
+        anchored_lines_placed: Dict[str, int] = {}
+        for near_id, ann_text, lines in anchored_notes:
+            if near_id not in center_map:
                 continue
             ax, ay = center_map[near_id]
             ay += (_CYLINDER_H if kind_map.get(near_id) in ("database", "datastore") else _BOX_H) / 2 + 16
-            elements.append(text(
-                ax, ay, ann_text,
+            start = anchored_lines_placed.get(near_id, 0)
+            drawn = [text(
+                ax, ay + _NOTE_LINE * (start + i), part,
                 text_anchor="middle",
                 font_size="10px",
                 font_style="italic",
                 font_family="sans-serif",
                 fill="#888",
-            ))
+            ) for i, part in enumerate(lines)]
+            anchored_lines_placed[near_id] = start + len(lines)
+            elements.append(titled_group(ann_text, drawn))
 
         # The rest go in a stack along the bottom, left-aligned. Centring a
         # 300px note on the left margin put most of it off the canvas, and every
         # one used to be placed at the same single spot, drawn over each other.
-        note_top = (svg_h - (30 if caption else 0)
-                    - _NOTE_LINE * sum(len(lines) for _, lines in notes)
-                    - (_NOTE_PAD if loose else 0))
+        note_top = svg_h - (30 if caption else 0) - notes_h
         placed = 0
         for full, lines in notes:
             drawn = [text(_PADDING, note_top + _NOTE_LINE * (placed + i) + _NOTE_LINE,
@@ -501,7 +533,7 @@ class ArchitectureDiagramTemplate:
                           fill="#888")
                      for i, part in enumerate(lines)]
             placed += len(lines)
-            elements.append(group("\n".join([svg_title(full), *drawn])))
+            elements.append(titled_group(full, drawn))
 
         # Caption
         if caption:
