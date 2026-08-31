@@ -5,8 +5,10 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Dict, List
 
+from ...qc import Finding
 from ..registry import register
 from ..renderer import DEFAULT_STYLES, circle, line, style, svg_document, text, text_width
+from .binary_tree import _coerce_size
 
 
 @dataclass
@@ -56,18 +58,27 @@ def _layout(root: _Node, spacing_x: float, spacing_y: float, padding: float) -> 
 class TreeTemplate:
     """Render ``{value, children: [...]}`` with parents centred over children."""
 
+    def refusal_findings(self, params: Dict[str, Any]) -> list[Finding]:
+        """A malformed root is a shape mistake to report, not a blank figure."""
+        if _build(params.get("root")) is None:
+            return [Finding("tree_root", "error",
+                            "root must be an object with value and optional children")]
+        return []
+
     def render(self, params: Dict[str, Any]) -> str:
         root = _build(params.get("root"))
         if root is None:
-            return svg_document("", 200, 120)
-        spacing_x = float(params.get("node_spacing_x", 72))
-        spacing_y = float(params.get("node_spacing_y", 80))
-        radius = float(params.get("node_radius", 18))
+            return ""
+        spacing_x = _coerce_size(params.get("node_spacing_x", 72), default=72.0, minimum=1.0)
+        spacing_y = _coerce_size(params.get("node_spacing_y", 80), default=80.0, minimum=1.0)
+        radius = _coerce_size(params.get("node_radius", 18), default=18.0, minimum=1.0)
         padding = max(30.0, radius + 12.0)
-        label_size = float(params.get("label_size", params.get("font_size", 13)))
-        caption_size = float(params.get("caption_size", 13))
+        label_size = _coerce_size(params.get("label_size", params.get("font_size", 13)),
+                                  default=13.0, minimum=8.0)
+        caption_size = _coerce_size(params.get("caption_size", 13), default=13.0, minimum=8.0)
         caption = params.get("caption")
-        caption_gap = float(params.get("caption_gap", 30)) if caption else 0.0
+        caption_gap = _coerce_size(params.get("caption_gap", 30),
+                                   default=30.0, minimum=0.0) if caption else 0.0
         highlights = params.get("highlights", {})
         highlights = highlights if isinstance(highlights, dict) else {}
         path_values = params.get("path", [])

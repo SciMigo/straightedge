@@ -17,7 +17,7 @@ from ...graphs import (
     ear_decomposition_steps, edge_coloring_steps,
     euler_steps,
     greedy_coloring_steps, hamiltonian_search_steps,
-    kruskal_steps, matching_steps, max_flow_steps, prim_steps,
+    kruskal_steps, matching_steps, max_flow_steps, partition_keys, prim_steps,
     prufer_decode_graph, prufer_decode_steps, prufer_encode_steps,
     require_vertex, scc_steps, stable_matching_graph, stable_matching_steps,
     topological_sort_steps, vertex_cover_steps,
@@ -62,13 +62,7 @@ def _left_partition(params: Dict[str, Any], graph: Graph) -> List[str]:
     partitions = params.get("partitions")
     if not isinstance(partitions, dict):
         raise GraphError("bipartite_matching needs exactly two named partitions")
-    keys = list(partitions)
-    if "left" in partitions and "right" in partitions:
-        keys = ["left", "right"]
-    elif "left" in partitions or "right" in partitions:
-        # Half-named sides fell through to dict order, so an array literally
-        # named "right" beside any other key became the proposing *left* side.
-        raise GraphError("partitions naming one of left/right must name both")
+    keys = partition_keys(partitions)
     if len(keys) != 2:
         raise GraphError("bipartite_matching needs exactly two named partitions")
     left, right = partitions.get(keys[0]), partitions.get(keys[1])
@@ -200,19 +194,12 @@ def _check_name(message: str) -> str:
 def _refusal(exc: GraphError) -> Finding:
     check = (f"graph_algorithm_{exc.kind}" if exc.kind
              else _check_name(str(exc)))
-    witness = exc.witness
-    label = None
-    if isinstance(witness, (list, tuple)):
-        # Prefer the producer's structured witness shape. Legacy errors
-        # retain the old inference until they are converted one by one.
-        joiner = {"walk": " → ", "edge": "–", "list": ", "}.get(
-            exc.witness_kind,
-            " → " if "cycle" in check else ("–" if len(witness) == 2 else ", "),
-        )
-        label = joiner.join(str(x) for x in witness)
-    elif witness is not None:
-        label = str(witness)
-    return Finding(check, "error", str(exc), label=label)
+    # witness_kind picks the joiner when the producer set one; legacy errors
+    # retain the old check-name inference as the fallback.
+    fallback = (" → " if "cycle" in check else
+                "–" if isinstance(exc.witness, (list, tuple)) and len(exc.witness) == 2
+                else ", ")
+    return Finding(check, "error", str(exc), label=exc.witness_label(fallback))
 
 
 def _step_limit_findings(params: Dict[str, Any], steps: List[Step]) -> List[Finding]:
@@ -287,9 +274,11 @@ def frames_from_steps(params: Dict[str, Any], steps: List[Step]) -> List[Dict[st
             edges = [edge for edge in edges
                      if frame_graph.key(str(edge["from"]), str(edge["to"])) in visible]
         if step.edge_labels:
+            # Relabel the edges already filtered above — rebuilding from
+            # frame_base would silently resurrect edges the step hid.
             edges = [{**edge, "weight": step.edge_labels.get(
                 frame_graph.key(str(edge["from"]), str(edge["to"])), edge.get("weight"))}
-                for edge in frame_base["edges"]]
+                for edge in edges]
         # A one- or two-line panel (a running total, a matching size) fits
         # after the caption; a distance table does not, and its numbers are
         # already on the vertices as badges.

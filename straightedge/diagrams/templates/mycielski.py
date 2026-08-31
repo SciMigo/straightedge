@@ -20,11 +20,8 @@ def _findings(params: Dict[str, Any]) -> List[Finding]:
     try:
         _computed(params)
     except GraphError as exc:
-        witness = exc.witness
-        label = ("→".join(str(value) for value in witness)
-                 if isinstance(witness, (list, tuple)) else
-                 None if witness is None else str(witness))
-        return [Finding("mycielski_input", "error", str(exc), label=label)]
+        return [Finding("mycielski_input", "error", str(exc),
+                        label=exc.witness_label("→"))]
     return []
 
 

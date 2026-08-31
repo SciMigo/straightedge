@@ -735,3 +735,26 @@ def test_edge_coloring_budget_exhaustion_at_delta_still_tries_delta_plus_one():
     edges = [(a, b) for i, a in enumerate(ids) for b in ids[i + 1:]][:-1]
     steps = edge_coloring_steps(_graph(edges))
     assert steps[-1].extras["chromatic_index"] == 9
+
+
+def test_witness_labels_are_shaped_by_their_producer_kind():
+    """Every template shared four drifting copies of this formatting; the
+    exception now formats its own witness and honours witness_kind."""
+    assert GraphError("x", witness=["A", "B", "C"], witness_kind="walk") \
+        .witness_label() == "A → B → C"
+    assert GraphError("x", witness=("A", "B")).witness_label("–") == "A–B"
+    assert GraphError("x", witness=7).witness_label() == "7"
+    assert GraphError("x").witness_label() is None
+
+
+def test_negative_cycle_errors_carry_a_structured_kind():
+    """floyd_warshall sniffed 'negative cycle' out of bellman_ford's message
+    text; both errors now declare kind='negative_cycle'."""
+    graph = _graph([("A", "B", 1), ("B", "C", -3), ("C", "A", 1)], directed=True)
+    with pytest.raises(GraphError) as bellman:
+        bellman_ford_steps(graph, "A")
+    assert bellman.value.kind == "negative_cycle"
+    with pytest.raises(GraphError) as floyd:
+        floyd_warshall_steps(graph)
+    assert floyd.value.kind == "negative_cycle"
+    assert set(floyd.value.witness) == {"A", "B", "C"}

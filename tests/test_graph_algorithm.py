@@ -475,3 +475,32 @@ def test_render_computes_the_steps_once(monkeypatch):
                         if {a, b} not in ({0, 1}, {2, 3}, {4, 5})]}
     assert render_diagram({"type": "graph_algorithm", "params": params})
     assert len(calls) == 1
+
+
+def test_edge_labels_do_not_resurrect_edges_a_step_hides():
+    """frames_from_steps relabeled from the unfiltered base edge list, so the
+    first producer to combine visible_edges with edge_labels would silently
+    draw the hidden edges again."""
+    from straightedge.graphs import Step
+    params = {"nodes": [{"id": x} for x in "ABC"],
+              "edges": [{"from": "A", "to": "B"}, {"from": "B", "to": "C"}]}
+    step = Step("only AB", "keep one edge", {}, {},
+                edge_labels={("A", "B"): "5"},
+                extras={"visible_edges": [("A", "B")]})
+    [frame] = frames_from_steps(params, [step])
+    drawn = frame["visual"]["params"]["edges"]
+    assert [(e["from"], e["to"]) for e in drawn] == [("A", "B")]
+    assert drawn[0]["weight"] == "5"
+
+
+def test_hamiltonian_frames_carry_their_own_explored_counts():
+    """Every frame's extras held the search's final explored total; the count
+    now grows with the trace it annotates."""
+    params = {"algorithm": "hamiltonian_search", "start": "0",
+              "nodes": [{"id": str(i)} for i in range(6)],
+              "edges": [{"from": str(a), "to": str(b)}
+                        for a in range(6) for b in range(a + 1, 6)
+                        if {a, b} not in ({0, 1}, {2, 3}, {4, 5})]}
+    counts = [step.extras["explored"] for step in compute_steps(params)]
+    assert counts[0] == 1
+    assert counts == sorted(counts) and counts[1] < counts[-1]

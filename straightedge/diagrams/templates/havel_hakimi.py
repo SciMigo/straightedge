@@ -30,12 +30,9 @@ def _findings(params: Dict[str, Any]) -> List[Finding]:
     try:
         steps = _steps(params)
     except GraphError as exc:
-        witness = exc.witness
-        label = None
-        if isinstance(witness, (list, tuple)):
-            label = "(" + ", ".join(str(value) for value in witness) + ")"
-        elif witness is not None:
-            label = str(witness)
+        label = exc.witness_label()
+        if isinstance(exc.witness, (list, tuple)) and label is not None:
+            label = f"({label})"
         return [Finding("havel_hakimi_sequence", "error", str(exc), label=label)]
     return _size_findings(params, steps)
 

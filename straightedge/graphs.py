@@ -58,6 +58,17 @@ class GraphError(ValueError):
         self.kind = kind
         self.witness_kind = witness_kind
 
+    def witness_label(self, joiner: str = ", ") -> str | None:
+        """The witness joined for display, or ``None`` when there is none.
+
+        ``witness_kind`` picks the joiner when the producer set one; ``joiner``
+        is the caller's fallback for legacy errors that did not.
+        """
+        if isinstance(self.witness, (list, tuple)):
+            chosen = {"walk": " → ", "edge": "–", "list": ", "}.get(self.witness_kind, joiner)
+            return chosen.join(str(value) for value in self.witness)
+        return None if self.witness is None else str(self.witness)
+
 
 EdgeKey = tuple[str, str]
 
@@ -256,39 +267,29 @@ def require_tree(graph: Graph) -> None:
     """Refuse a directed, cyclic, or disconnected graph with a checkable witness."""
     if graph.directed:
         raise GraphError("a tree must be undirected")
-    parent: dict[str, str | None] = {}
-
-    def visit(vertex: str, previous: str | None, path: list[str]) -> list[str] | None:
-        parent[vertex] = previous
-        for neighbor in graph.neighbors(vertex):
-            if neighbor == previous:
-                continue
-            if neighbor in parent:
-                start = path.index(neighbor) if neighbor in path else 0
-                return path[start:] + [neighbor]
-            found = visit(neighbor, vertex, path + [neighbor])
-            if found:
-                return found
-        return None
-
-    cycle = visit(graph.ids[0], None, [graph.ids[0]])
+    cycle = _find_undirected_cycle(graph)
     if cycle:
-        raise GraphError("the graph has a cycle, so it is not a tree", witness=cycle)
-    if len(parent) != len(graph.ids):
-        first = list(parent)
-        other = next(v for v in graph.ids if v not in parent)
-        second: list[str] = []
-        queue = [other]
-        seen = {other}
+        raise GraphError("the graph has a cycle, so it is not a tree",
+                         witness=cycle + [cycle[0]], witness_kind="walk")
+
+    def component(root: str) -> list[str]:
+        members = [root]
+        seen = {root}
+        queue = [root]
         while queue:
             vertex = queue.pop(0)
-            second.append(vertex)
             for neighbor in graph.neighbors(vertex):
                 if neighbor not in seen:
                     seen.add(neighbor)
+                    members.append(neighbor)
                     queue.append(neighbor)
+        return members
+
+    first = component(graph.ids[0])
+    if len(first) != len(graph.ids):
+        other = next(v for v in graph.ids if v not in set(first))
         raise GraphError("the graph is disconnected, so it is not a tree",
-                         witness=(tuple(first), tuple(second)))
+                         witness=(tuple(first), tuple(component(other))))
 
 
 # --------------------------------------------------------------- Prüfer code
@@ -798,7 +799,7 @@ def hamiltonian_search_steps(graph: Graph, start: Any = None, max_frames: int = 
     on_path = {start_vertex}
     found: list[str] | None = None
     explored = 1
-    events: list[tuple[str, str, list[str], str | None]] = []
+    events: list[tuple[str, str, list[str], str | None, int]] = []
 
     # An undirected "cycle" on two vertices would traverse its one edge twice
     # — has_edge(B, A) is true for the same edge that got there — so closing
@@ -824,7 +825,7 @@ def hamiltonian_search_steps(graph: Graph, start: Any = None, max_frames: int = 
             # no-cycle graph copy ~986k paths (665MB) to draw 10 frames.
             if len(events) < max_frames:
                 events.append((f"Try {neighbor}", f"Extend the partial path to {neighbor}",
-                               list(path), None))
+                               list(path), None, explored))
             if search(neighbor):
                 return True
             rejected = path.pop()
@@ -832,7 +833,7 @@ def hamiltonian_search_steps(graph: Graph, start: Any = None, max_frames: int = 
             if len(events) < max_frames:
                 events.append((f"Backtrack {rejected}",
                                f"No Hamiltonian cycle extends through {rejected}; backtrack",
-                               list(path), rejected))
+                               list(path), rejected, explored))
         return False
 
     search(start_vertex)
@@ -842,7 +843,8 @@ def hamiltonian_search_steps(graph: Graph, start: Any = None, max_frames: int = 
     if expect == "none" and found is not None:
         raise GraphError("a Hamiltonian cycle exists: " + " → ".join(found), witness=found)
 
-    def state(label: str, caption: str, current_path: list[str], rejected: str | None) -> Step:
+    def state(label: str, caption: str, current_path: list[str], rejected: str | None,
+              explored_so_far: int) -> Step:
         nodes = {vertex: "visited" for vertex in current_path}
         nodes[current_path[-1]] = "current"
         if rejected is not None:
@@ -850,9 +852,9 @@ def hamiltonian_search_steps(graph: Graph, start: Any = None, max_frames: int = 
         edges = {graph.key(u, v): "path" for u, v in zip(current_path, current_path[1:])}
         return Step(label, caption, nodes, edges,
                     panel=("path: " + " → ".join(current_path),),
-                    extras={"path": list(current_path), "explored": explored})
+                    extras={"path": list(current_path), "explored": explored_so_far})
 
-    steps = [state("Start", f"Start backtracking at {start_vertex}", [start_vertex], None)]
+    steps = [state("Start", f"Start backtracking at {start_vertex}", [start_vertex], None, 1)]
     for event in events[:max(0, max_frames - 2)]:
         steps.append(state(*event))
     if found is not None:
@@ -907,14 +909,16 @@ def floyd_warshall_steps(graph: Graph) -> list[Step]:
         negative = next((graph.ids[i] for i in range(n) if distance[i][i] < 0), None)
         if negative is not None:
             witness: Any = negative
+            witness_kind = None
             try:
                 bellman_ford_steps(graph, negative)
             except GraphError as exc:
-                if "negative cycle" in str(exc):
+                if exc.kind == "negative_cycle":
                     witness = exc.witness
+                    witness_kind = exc.witness_kind
             raise GraphError(
                 f"negative cycle detected: diagonal entry D[{negative},{negative}] became negative",
-                witness=witness)
+                witness=witness, kind="negative_cycle", witness_kind=witness_kind)
         steps.append(Step(
             f"Via {intermediate}",
             f"Allow {intermediate} as an intermediate vertex; {len(changed)} entries improve",
@@ -1419,7 +1423,7 @@ def bellman_ford_steps(graph: Graph, start: str) -> list[Step]:
             current = previous[current]
         cycle.reverse()
         raise GraphError("the graph has a negative cycle: " + " → ".join(cycle + [cycle[0]]),
-                         witness=cycle)
+                         witness=cycle, kind="negative_cycle", witness_kind="walk")
     return steps
 
 
@@ -1797,6 +1801,21 @@ def max_flow_steps(graph: Graph, source: str, sink: str) -> list[Step]:
 
 
 # ---------------------------------------------------- colouring and matching
+
+
+def partition_keys(declared: dict) -> list[str]:
+    """The declared partition names in drawing order.
+
+    ``left``/``right`` outrank dict order. Naming only one of them is refused
+    rather than guessed — an array literally named "right" beside any other
+    key would otherwise become the left side. Both consumers of authored
+    partitions share this policy so they cannot drift.
+    """
+    if "left" in declared and "right" in declared:
+        return ["left", "right"]
+    if "left" in declared or "right" in declared:
+        raise GraphError("partitions naming one of left/right must name both")
+    return list(declared)
 
 
 def bipartition(graph: Graph) -> tuple[dict[str, int], list[str]]:

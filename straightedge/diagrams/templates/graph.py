@@ -6,7 +6,7 @@ import hashlib
 import math
 from typing import Any, Dict, List, Tuple
 
-from ...graphs import COLOR_ROLES
+from ...graphs import COLOR_ROLES, GraphError, partition_keys
 from ...qc import Finding
 from ..registry import register
 from ..renderer import (
@@ -304,18 +304,11 @@ def _bipartition(
                 "bipartition", "error",
                 "partitions must be an object with exactly two vertex arrays",
             )]
-        keys = list(declared)
-        if "left" in declared and "right" in declared:
-            keys = ["left", "right"]
-        elif "left" in declared or "right" in declared:
-            # Half-named sides fell through to dict order, so an array
-            # literally named "right" beside any other key could be drawn as
-            # the left column.
-            return {}, findings + [Finding(
-                "bipartition", "error",
-                "partitions naming one of left/right must name both",
-            )]
-        elif len(keys) != 2:
+        try:
+            keys = partition_keys(declared)
+        except GraphError as exc:
+            return {}, findings + [Finding("bipartition", "error", str(exc))]
+        if len(keys) != 2:
             return {}, findings + [Finding(
                 "bipartition", "error",
                 "bipartite partitions must contain exactly two named arrays",

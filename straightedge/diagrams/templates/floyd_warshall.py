@@ -27,14 +27,9 @@ def _findings(params: Dict[str, Any]) -> List[Finding]:
     try:
         _steps(params)
     except GraphError as exc:
-        witness = exc.witness
-        if isinstance(witness, (list, tuple)):
-            label = " → ".join(str(value) for value in witness)
-        else:
-            label = None if witness is None else str(witness)
-        check = "floyd_warshall_negative_cycle" if "negative cycle" in str(exc) \
-            else "floyd_warshall_input"
-        return [Finding(check, "error", str(exc), label=label)]
+        check = ("floyd_warshall_negative_cycle" if exc.kind == "negative_cycle"
+                 else "floyd_warshall_input")
+        return [Finding(check, "error", str(exc), label=exc.witness_label(" → "))]
     return []
 
 

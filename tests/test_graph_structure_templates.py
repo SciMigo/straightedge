@@ -179,3 +179,19 @@ def test_binary_tree_survives_a_font_size_it_cannot_read():
     floored = render_diagram({"type": "binary_tree", "params": {
         "root": {"value": 1}, "font_size": 6}})
     assert "font-size: 8px" in floored
+
+
+# ---------------------------------------------- follow-up review findings
+
+
+def test_tree_reports_a_malformed_root_instead_of_drawing_nothing():
+    findings = DIAGRAM_REGISTRY["tree"].refusal_findings({"root": "not-a-node"})
+    assert findings and "root must be an object" in findings[0].message
+    assert render_diagram({"type": "tree", "params": {"root": "not-a-node"}}) == ""
+
+
+def test_tree_tolerates_size_values_it_cannot_read():
+    svg = render_diagram({"type": "tree", "params": {
+        "root": {"value": 1, "children": [{"value": 2}]}, "font_size": "14px",
+        "node_radius": "big"}})
+    assert svg.count("<circle") == 2 and "font-size: 13px" in svg
