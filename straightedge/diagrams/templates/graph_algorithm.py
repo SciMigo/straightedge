@@ -87,6 +87,12 @@ def _left_partition(params: Dict[str, Any], graph: Graph) -> List[str]:
     return left_ids
 
 
+def _step_limit(params: Dict[str, Any]) -> int:
+    """The lane's step budget: an animation holds more frames than a storyboard."""
+    return (MAX_ANIMATED_STEPS if bool(params.get("animate", True))
+            else MAX_STORYBOARD_STEPS)
+
+
 def compute_steps(params: Dict[str, Any]) -> List[Step]:
     """The algorithm's states for ``params``, or :class:`GraphError`."""
     algorithm = _algorithm(params)
@@ -120,7 +126,13 @@ def compute_steps(params: Dict[str, Any]) -> List[Step]:
             raise GraphError("start_cycle must be an array", kind="input")
         return ear_decomposition_steps(graph, start_cycle)
     if algorithm == "hamiltonian_search":
-        return hamiltonian_search_steps(graph, start, params.get("max_frames", 20),
+        # The producer already truncates its trace at max_frames, so the
+        # default is sized to the lane: 20 frames fit an animation, but a
+        # storyboard holds only 12 panels and would otherwise refuse its own
+        # default parameters.
+        default_frames = min(20, _step_limit(params))
+        return hamiltonian_search_steps(graph, start,
+                                        params.get("max_frames", default_frames),
                                         params.get("expect"))
     if algorithm == "edge_coloring":
         return edge_coloring_steps(graph, params.get("classes"), params.get("expect"))
@@ -145,8 +157,7 @@ def compute_steps(params: Dict[str, Any]) -> List[Step]:
         # When appending it is exactly what pushes a storyboard past its
         # panel budget, it yields — a figure that rendered before this panel
         # existed still renders. Ask for it explicitly to be refused instead.
-        limit = (MAX_ANIMATED_STEPS if bool(params.get("animate", True))
-                 else MAX_STORYBOARD_STEPS)
+        limit = _step_limit(params)
         if len(steps) == limit + 1:
             return steps[:-1]
         return steps
@@ -186,31 +197,39 @@ def _check_name(message: str) -> str:
     return "graph_algorithm_refused"
 
 
-def _findings(params: Dict[str, Any]) -> List[Finding]:
-    try:
-        steps = compute_steps(params)
-    except GraphError as exc:
-        check = (f"graph_algorithm_{exc.kind}" if exc.kind
-                 else _check_name(str(exc)))
-        witness = exc.witness
-        label = None
-        if isinstance(witness, (list, tuple)):
-            # Prefer the producer's structured witness shape. Legacy errors
-            # retain the old inference until they are converted one by one.
-            joiner = {"walk": " → ", "edge": "–", "list": ", "}.get(
-                exc.witness_kind,
-                " → " if "cycle" in check else ("–" if len(witness) == 2 else ", "),
-            )
-            label = joiner.join(str(x) for x in witness)
-        elif witness is not None:
-            label = str(witness)
-        return [Finding(check, "error", str(exc), label=label)]
-    limit = MAX_ANIMATED_STEPS if bool(params.get("animate", True)) else MAX_STORYBOARD_STEPS
+def _refusal(exc: GraphError) -> Finding:
+    check = (f"graph_algorithm_{exc.kind}" if exc.kind
+             else _check_name(str(exc)))
+    witness = exc.witness
+    label = None
+    if isinstance(witness, (list, tuple)):
+        # Prefer the producer's structured witness shape. Legacy errors
+        # retain the old inference until they are converted one by one.
+        joiner = {"walk": " → ", "edge": "–", "list": ", "}.get(
+            exc.witness_kind,
+            " → " if "cycle" in check else ("–" if len(witness) == 2 else ", "),
+        )
+        label = joiner.join(str(x) for x in witness)
+    elif witness is not None:
+        label = str(witness)
+    return Finding(check, "error", str(exc), label=label)
+
+
+def _step_limit_findings(params: Dict[str, Any], steps: List[Step]) -> List[Finding]:
+    limit = _step_limit(params)
     if len(steps) > limit:
         return [Finding("graph_algorithm_size", "error",
                         f"the algorithm takes {len(steps)} steps; at most {limit} fit one "
                         + ("animation" if limit == MAX_ANIMATED_STEPS else "storyboard"))]
     return []
+
+
+def _findings(params: Dict[str, Any]) -> List[Finding]:
+    try:
+        steps = compute_steps(params)
+    except GraphError as exc:
+        return [_refusal(exc)]
+    return _step_limit_findings(params, steps)
 
 
 def _base(params: Dict[str, Any]) -> Dict[str, Any]:
@@ -358,9 +377,16 @@ class GraphAlgorithmTemplate:
         params.get("node_radius", 20)
         params.get("width", 600)
         params.get("height", 360)
-        if self.refusal_findings(params):
+        # Compute once and share the steps with the refusal check: several
+        # algorithms here are exponential searches, and running the search
+        # again for the frames doubles every render.
+        try:
+            steps = compute_steps(params)
+        except GraphError:
             return ""
-        frames = _frames(params)
+        if _step_limit_findings(params, steps):
+            return ""
+        frames = frames_from_steps(params, steps)
         heading = str(title) if title is not None else algorithm.replace("_", " ").title()
         if animate:
             return DIAGRAM_REGISTRY["animated_trace"].render({

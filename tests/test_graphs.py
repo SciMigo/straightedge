@@ -694,3 +694,44 @@ def test_topological_sort_default_keeps_the_input_order_tie_break():
                       "edges": [{"from": "B", "to": "A"}]})
     assert topological_sort_steps(g)[-1].panel == ("order: B, A, C",)
     assert topological_sort_steps(g, "fifo")[-1].panel == ("order: B, C, A",)
+
+
+# ------------------------------------------------ review findings on PR #31
+
+
+def test_mycielski_revealed_coloring_matches_its_printed_chromatic_number():
+    """A greedy pass in id order used four colors on this base while the final
+    panel printed chi(M(G)) = 3; the revealed coloring is now the exact
+    search's own witness, so the drawing can never contradict the caption."""
+    base = coerce_graph({"nodes": [{"id": v} for v in ("x1", "y", "x2", "v")],
+                         "edges": [{"from": "x1", "to": "x2"}, {"from": "x2", "to": "v"},
+                                   {"from": "v", "to": "y"}]})
+    final = mycielski_steps(base)[-1]
+    assert final.extras["result_chi"] == 3
+    assert max(final.extras["colors"].values()) == 3
+
+
+def test_edge_coloring_refuses_more_classes_than_the_palette():
+    """graph.py's stylesheet stops at color-11; classes past it silently drew
+    plain gray edges under captions naming those color classes."""
+    edges = [(str(i), str((i + 1) % 11)) for i in range(11)] + [
+        ("0", "5"), ("1", "6"), ("2", "7"), ("3", "8")]
+    with pytest.raises(GraphError, match="only 11 colours"):
+        edge_coloring_steps(_graph(edges), [[list(edge)] for edge in edges])
+
+
+def test_edge_coloring_refuses_an_empty_authored_class():
+    """An empty class rendered a blank panel and inflated the reported
+    chromatic index, wrongly refusing the correct expect value."""
+    with pytest.raises(GraphError, match="class 1 is empty"):
+        edge_coloring_steps(_graph([("A", "B")]), [[], [["A", "B"]]], expect=1)
+
+
+def test_edge_coloring_budget_exhaustion_at_delta_still_tries_delta_plus_one():
+    """K9 minus one edge exhausts the search budget at Delta; the Delta+1
+    coloring Vizing guarantees completes well under budget and must be
+    tried rather than refusing the figure outright."""
+    ids = [str(i) for i in range(9)]
+    edges = [(a, b) for i, a in enumerate(ids) for b in ids[i + 1:]][:-1]
+    steps = edge_coloring_steps(_graph(edges))
+    assert steps[-1].extras["chromatic_index"] == 9

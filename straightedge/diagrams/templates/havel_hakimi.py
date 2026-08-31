@@ -4,17 +4,26 @@ from __future__ import annotations
 
 from typing import Any, Dict, List
 
-from ...graphs import GraphError, havel_hakimi_steps
+from ...graphs import GraphError, Step, havel_hakimi_steps
 from ...qc import Finding
 from ..registry import DIAGRAM_REGISTRY, register
-from .graph_algorithm import _NODE_STATES
-
-
-MAX_STEPS = 12
+from .graph_algorithm import MAX_ANIMATED_STEPS, MAX_STORYBOARD_STEPS, _NODE_STATES
 
 
 def _steps(params: Dict[str, Any]):
     return havel_hakimi_steps(params.get("sequence"), bool(params.get("realize", False)))
+
+
+def _size_findings(params: Dict[str, Any], steps: List[Step]) -> List[Finding]:
+    # The lane sets the budget: a storyboard holds 12 panels, an animation 24
+    # frames, the same accommodation every sibling template makes.
+    limit = (MAX_ANIMATED_STEPS if bool(params.get("animate", False))
+             else MAX_STORYBOARD_STEPS)
+    if len(steps) > limit:
+        return [Finding("havel_hakimi_size", "error",
+                        f"the trace takes {len(steps)} panels; at most {limit} fit one "
+                        + ("animation" if limit == MAX_ANIMATED_STEPS else "storyboard"))]
+    return []
 
 
 def _findings(params: Dict[str, Any]) -> List[Finding]:
@@ -28,15 +37,16 @@ def _findings(params: Dict[str, Any]) -> List[Finding]:
         elif witness is not None:
             label = str(witness)
         return [Finding("havel_hakimi_sequence", "error", str(exc), label=label)]
-    if len(steps) > MAX_STEPS:
-        return [Finding("havel_hakimi_size", "error",
-                        f"the trace takes {len(steps)} panels; at most {MAX_STEPS} fit")]
-    return []
+    return _size_findings(params, steps)
 
 
 def frames(params: Dict[str, Any]) -> List[Dict[str, Any]]:
+    return frames_from_steps(_steps(params))
+
+
+def frames_from_steps(steps: List[Step]) -> List[Dict[str, Any]]:
     out: List[Dict[str, Any]] = []
-    for step in _steps(params):
+    for step in steps:
         if "graph_edges" in step.extras:
             visible = set(step.extras["visible_edges"])
             edges = [{"from": u, "to": v} for u, v in step.extras["graph_edges"]
@@ -83,9 +93,13 @@ class HavelHakimiTemplate:
         params.get("loop", True)
         params.get("columns", 3)
         params.get("title")
-        if self.refusal_findings(params):
+        try:
+            steps = _steps(params)
+        except GraphError:
             return ""
-        trace = frames(params)
+        if _size_findings(params, steps):
+            return ""
+        trace = frames_from_steps(steps)
         title = str(params.get("title", "Havel–Hakimi"))
         if animate:
             return DIAGRAM_REGISTRY["animated_trace"].render({

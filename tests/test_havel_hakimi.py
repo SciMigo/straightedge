@@ -34,3 +34,16 @@ def test_realization_frames_use_styled_node_states():
               for state in frame["visual"]["params"]["highlights"]["nodes"].values()}
     assert "frontier" not in states
     assert "target" in states and "current" in states
+
+
+# ------------------------------------------------ review findings on PR #31
+
+
+def test_the_animated_lane_uses_the_24_frame_budget():
+    """MAX_STEPS=12 was enforced without consulting animate, while every
+    sibling template and the docs give an animation 24 frames."""
+    params = {"sequence": [4, 4, 4, 3, 3, 3, 3, 2], "realize": True, "animate": True}
+    assert not refusal_findings("havel_hakimi", params)
+    assert "<animate" in render_diagram({"type": "havel_hakimi", "params": params})
+    storyboard = refusal_findings("havel_hakimi", {**params, "animate": False})
+    assert storyboard and "at most 12 fit one storyboard" in storyboard[0].message

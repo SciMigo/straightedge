@@ -35,6 +35,22 @@ class TreeNode:
     y: float = 0
 
 
+def _coerce_size(value: Any, default: float, minimum: float) -> float:
+    """A finite pixel size from an author-supplied value, else ``default``.
+
+    These knobs were ignored for years, so existing callers pass anything
+    ("14px"); a value that cannot be read as a finite number falls back
+    rather than failing the whole figure, and the floor keeps text legible.
+    """
+    try:
+        size = float(value)
+    except (TypeError, ValueError):
+        return default
+    if not math.isfinite(size):
+        return default
+    return max(size, minimum)
+
+
 def _normalize_highlights(highlights: Any) -> Dict[str, str]:
     if not isinstance(highlights, dict):
         return {}
@@ -111,9 +127,11 @@ class BinaryTreeTemplate:
         annotations = params.get("annotations", [])
         path_values = params.get("path", [])
         caption = params.get("caption")
-        label_size = float(params.get("label_size", params.get("font_size", 13)))
-        caption_size = float(params.get("caption_size", 13))
-        caption_gap = float(params.get("caption_gap", 20)) if caption else 0.0
+        label_size = _coerce_size(params.get("label_size", params.get("font_size", 13)),
+                                  default=13.0, minimum=8.0)
+        caption_size = _coerce_size(params.get("caption_size", 13), default=13.0, minimum=8.0)
+        caption_gap = _coerce_size(params.get("caption_gap", 20),
+                                   default=20.0, minimum=0.0) if caption else 0.0
         show_null = bool(params.get("show_null", False))
         heap_mode = bool(params.get("heap_mode", False))
 

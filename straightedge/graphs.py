@@ -795,6 +795,7 @@ def hamiltonian_search_steps(graph: Graph, start: Any = None, max_frames: int = 
                                or expect not in {"cycle", "none"}):
         raise GraphError("expect must be cycle or none", kind="input")
     path = [start_vertex]
+    on_path = {start_vertex}
     found: list[str] | None = None
     explored = 1
     events: list[tuple[str, str, list[str], str | None]] = []
@@ -813,9 +814,10 @@ def hamiltonian_search_steps(graph: Graph, start: Any = None, max_frames: int = 
                 return True
             return False
         for neighbor in graph.neighbors(vertex):
-            if neighbor in path:
+            if neighbor in on_path:
                 continue
             path.append(neighbor)
+            on_path.add(neighbor)
             explored += 1
             # Only the first max_frames states are ever rendered, and the
             # search is exponential: keeping every state made an 11-vertex
@@ -826,6 +828,7 @@ def hamiltonian_search_steps(graph: Graph, start: Any = None, max_frames: int = 
             if search(neighbor):
                 return True
             rejected = path.pop()
+            on_path.discard(rejected)
             if len(events) < max_frames:
                 events.append((f"Backtrack {rejected}",
                                f"No Hamiltonian cycle extends through {rejected}; backtrack",
@@ -925,11 +928,11 @@ def floyd_warshall_steps(graph: Graph) -> list[Step]:
 # ---------------------------------------------------------- Mycielski graph
 
 
-def chromatic_number(graph: Graph) -> int:
-    """Exact chromatic number for the small graphs accepted by figure templates."""
+def optimal_coloring(graph: Graph) -> dict[str, int]:
+    """A coloring using exactly χ(G) colors, for the small graphs accepted here."""
     order = sorted(graph.ids, key=lambda vertex: (-graph.degree(vertex), graph.ids.index(vertex)))
 
-    def colorable(limit: int) -> bool:
+    def colorable(limit: int) -> dict[str, int] | None:
         colors: dict[str, int] = {}
 
         def assign(index: int) -> bool:
@@ -946,9 +949,15 @@ def chromatic_number(graph: Graph) -> int:
                     del colors[vertex]
             return False
 
-        return assign(0)
+        return colors if assign(0) else None
 
-    return next(limit for limit in range(1, len(graph.ids) + 1) if colorable(limit))
+    return next(found for limit in range(1, len(graph.ids) + 1)
+                if (found := colorable(limit)) is not None)
+
+
+def chromatic_number(graph: Graph) -> int:
+    """Exact chromatic number for the small graphs accepted by figure templates."""
+    return max(optimal_coloring(graph).values(), default=0)
 
 
 def _has_triangle(graph: Graph) -> bool:
@@ -988,7 +997,11 @@ def mycielski_steps(base: Graph) -> list[Step]:
     graph = mycielski_graph(base)
     n = len(base.ids)
     base_chi = chromatic_number(base)
-    result_chi = chromatic_number(graph)
+    # A greedy pass in id order can use more colors than χ(M(G)) on some bases,
+    # drawing a coloring that contradicts the panel's printed chromatic number
+    # — so the revealed coloring is the exact search's own witness.
+    result_colors = optimal_coloring(graph)
+    result_chi = max(result_colors.values(), default=0)
     base_triangle_free = not _has_triangle(base)
     result_triangle_free = not _has_triangle(graph)
     steps = [Step(
@@ -1001,15 +1014,14 @@ def mycielski_steps(base: Graph) -> list[Step]:
     )]
     colors: dict[str, int] = {}
     for vertex in graph.ids:
-        used = {colors[neighbor] for neighbor in graph.neighbors(vertex) if neighbor in colors}
-        colors[vertex] = next(color for color in range(1, len(graph.ids) + 1)
-                              if color not in used)
+        colors[vertex] = result_colors[vertex]
         final = vertex == graph.ids[-1]
         panel = ((f"χ(G) = {base_chi} · χ(M(G)) = {result_chi}",
                   "triangle-free: " + ("yes" if base_triangle_free and result_triangle_free else "no"))
                  if final else (f"colors used: {max(colors.values())}",))
         steps.append(Step(
-            f"Color {vertex}", f"Assign {vertex} the smallest available color {colors[vertex]}",
+            f"Color {vertex}", f"Assign {vertex} color {colors[vertex]} of an optimal "
+            f"{result_chi}-coloring",
             {name: f"color-{color}" for name, color in colors.items()}, panel=panel,
             extras={"graph": graph, "colors": dict(colors), "base_chi": base_chi,
                     "result_chi": result_chi, "triangle_free": result_triangle_free},
@@ -1088,6 +1100,10 @@ def edge_coloring_steps(graph: Graph, classes: Any = None,
         for color, edge_class in enumerate(classes, 1):
             if not isinstance(edge_class, list):
                 raise GraphError(f"class {color} must be an array")
+            if not edge_class:
+                # An empty class would render a blank panel and inflate the
+                # reported chromatic index past the colors actually used.
+                raise GraphError(f"class {color} is empty", witness=color)
             used_vertices: set[str] = set()
             for raw in edge_class:
                 if isinstance(raw, dict):
@@ -1112,14 +1128,28 @@ def edge_coloring_steps(graph: Graph, classes: Any = None,
                              witness=missing[0])
     else:
         colors = {}
+        budget_error: GraphError | None = None
         for limit in range(delta, delta + 2):
-            found = _edge_coloring_with_k(graph, limit)
+            # A Δ-attempt that exhausts its budget is not a proof the graph is
+            # class 2, but neither may it refuse the figure outright: the
+            # Δ+1-colouring Vizing guarantees is often cheap to find.
+            try:
+                found = _edge_coloring_with_k(graph, limit)
+            except GraphError as exc:
+                budget_error = exc
+                continue
             if found is not None:
                 colors = found
                 break
-        if graph.edges and not colors:  # Vizing guarantees this cannot happen for a simple graph.
+        if graph.edges and not colors:
+            if budget_error is not None:
+                raise budget_error
             raise GraphError("could not compute an edge coloring")
     chromatic_index = max(colors.values(), default=0)
+    if chromatic_index > COLOR_ROLES:
+        raise GraphError(
+            f"the coloring uses {chromatic_index} classes; only {COLOR_ROLES} colours "
+            "can tell them apart", witness=chromatic_index)
     if expect is not None and expect != chromatic_index:
         raise GraphError(f"expected edge chromatic number {expect}, computed {chromatic_index}",
                          witness=(expect, chromatic_index))

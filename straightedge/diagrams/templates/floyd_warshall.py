@@ -39,8 +39,12 @@ def _findings(params: Dict[str, Any]) -> List[Finding]:
 
 
 def frames(params: Dict[str, Any]) -> List[Dict[str, Any]]:
+    return _frames_from_steps(_steps(params))
+
+
+def _frames_from_steps(steps) -> List[Dict[str, Any]]:
     out: List[Dict[str, Any]] = []
-    for step in _steps(params):
+    for step in steps:
         highlights = {f"{row},{column}": "current"
                       for row, column in step.extras["changed"]}
         out.append({"label": step.label, "visual": {"type": "dp_table", "params": {
@@ -73,9 +77,11 @@ class FloydWarshallTemplate:
         params.get("loop", True)
         params.get("columns", 3)
         params.get("title")
-        if self.refusal_findings(params):
+        try:
+            steps = _steps(params)
+        except GraphError:
             return ""
-        trace = frames(params)
+        trace = _frames_from_steps(steps)
         title = str(params.get("title", "Floyd–Warshall"))
         if bool(params.get("animate", False)):
             return DIAGRAM_REGISTRY["animated_trace"].render({

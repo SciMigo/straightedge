@@ -21,6 +21,8 @@ def _compute(params: Dict[str, Any]) -> List[Dict[str, Any]]:
     operations = params.get("operations", [])
     if not isinstance(raw, list) or not isinstance(operations, list):
         raise GraphError("items and operations must be arrays")
+    if str(params.get("view", "heap")).strip().lower() not in {"heap", "sorted"}:
+        raise GraphError("view must be heap or sorted")
     limit = 23 if params.get("animate", True) else 11
     if len(operations) + 1 > limit:
         raise GraphError(f"at most {limit} heap states fit this trace")
@@ -114,18 +116,26 @@ class PriorityQueueTemplate:
         items, operations = params.get("items", []), params.get("operations", [])
         animate = bool(params.get("animate", True)); duration_s = float(params.get("duration_s", 1.2))
         loop = bool(params.get("loop", False)); title = params.get("title", "Min-priority queue")
-        columns = int(params.get("columns", 3)); view = str(params.get("view", "sorted"))
+        # The heap tree with its true array order stays the documented
+        # default; "sorted" is an opt-in view, and its panel says sorted
+        # rather than passing a fully sorted array off as the heap's layout.
+        columns = int(params.get("columns", 3))
+        view = str(params.get("view", "heap")).strip().lower()
         _ = (items, operations)
-        if self.refusal_findings(params): return ""
+        try:
+            states = _compute(params)
+        except GraphError:
+            return ""
         frames = []
-        for state in _compute(params):
-            ordered = sorted(state["heap"])
-            values = [f"({priority:g}, {item_id})" for priority, _, item_id in ordered]
+        for state in states:
             if state["heap"] and view == "heap":
+                values = [f"{item_id}:{priority:g}" for priority, _, item_id in state["heap"]]
                 visual = {"type": "binary_tree", "params": {
                     "root": _tree(state["heap"]),
                     "caption": "heap array: [" + ", ".join(values) + "]"}}
             elif state["heap"]:
+                ordered = sorted(state["heap"])
+                values = [f"({priority:g}, {item_id})" for priority, _, item_id in ordered]
                 current = state.get("current")
                 highlights = {
                     str(index): ("current" if item_id == current else "found")

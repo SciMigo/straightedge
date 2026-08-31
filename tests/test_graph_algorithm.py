@@ -441,3 +441,37 @@ def test_the_graph_template_refuses_half_named_partitions_too():
         "partitions": {"right": ["r1", "r2"], "students": ["s1", "s2"]},
     }) if f.check == "bipartition"][0]
     assert "must name both" in finding.message
+
+
+# ------------------------------------------------ review findings on PR #31
+
+
+def test_hamiltonian_search_storyboard_default_fits_the_panel_budget():
+    """max_frames defaulted to 20 in both lanes, so the storyboard lane
+    refused its own default parameters on the course octahedron; the default
+    is now sized to the lane's budget."""
+    params = {"algorithm": "hamiltonian_search", "start": "0", "animate": False,
+              "nodes": [{"id": str(i)} for i in range(6)],
+              "edges": [{"from": str(a), "to": str(b)}
+                        for a in range(6) for b in range(a + 1, 6)
+                        if {a, b} not in ({0, 1}, {2, 3}, {4, 5})]}
+    assert not refusal_findings("graph_algorithm", params)
+    svg = render_diagram({"type": "graph_algorithm", "params": params})
+    assert svg and "Hamiltonian cycle" in svg
+
+
+def test_render_computes_the_steps_once(monkeypatch):
+    """refusal_findings computed the steps and _frames recomputed them,
+    doubling every exponential search per successful render."""
+    import straightedge.diagrams.templates.graph_algorithm as module
+    calls = []
+    original = module.compute_steps
+    monkeypatch.setattr(module, "compute_steps",
+                        lambda params: calls.append(1) or original(params))
+    params = {"algorithm": "hamiltonian_search", "start": "0",
+              "nodes": [{"id": str(i)} for i in range(6)],
+              "edges": [{"from": str(a), "to": str(b)}
+                        for a in range(6) for b in range(a + 1, 6)
+                        if {a, b} not in ({0, 1}, {2, 3}, {4, 5})]}
+    assert render_diagram({"type": "graph_algorithm", "params": params})
+    assert len(calls) == 1

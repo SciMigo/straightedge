@@ -80,6 +80,8 @@ class TuranTemplate:
         params.get("width", 700)
         params.get("height", 380)
         params.get("node_radius", 18)
-        if self.refusal_findings(params):
+        try:
+            rendered = graph_params(params)
+        except GraphError:
             return ""
-        return DIAGRAM_REGISTRY["graph"].render(graph_params(params))
+        return DIAGRAM_REGISTRY["graph"].render(rendered)

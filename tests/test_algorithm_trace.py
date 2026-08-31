@@ -467,3 +467,56 @@ class TestTheStoryboardIsAsLegibleAsItsChildren:
                        "transition": {"type": "swap", "indices": [0, 0], "label": long}},
                       array_step([1])]}})
         assert svg.count(f"<title>{long}</title>") == 3
+
+
+# ------------------------------------------------ review findings on PR #31
+
+
+def test_pop_min_accepts_any_item_of_minimal_priority():
+    """Ties were broken by items-array position, falsely refusing a legal
+    min-heap pop of the item not listed first."""
+    tied = priority_step([{"id": "A", "priority": 1}, {"id": "B", "priority": 1}])
+    only_a = priority_step([{"id": "A", "priority": 1}])
+    tied["transition"] = {"type": "pop_min", "value": "B"}
+    assert inspect_algorithm_trace({"steps": [tied, only_a]}) == []
+    unclaimed = priority_step([{"id": "A", "priority": 1}, {"id": "B", "priority": 1}])
+    unclaimed["transition"] = {"type": "pop_min"}
+    assert inspect_algorithm_trace({"steps": [unclaimed, only_a]}) == []
+    wrong = priority_step([{"id": "A", "priority": 1}, {"id": "B", "priority": 2}])
+    wrong["transition"] = {"type": "pop_min", "value": "B"}
+    [finding] = inspect_algorithm_trace({"steps": [wrong, only_a]})
+    assert "not 'A'" in finding["message"]
+
+
+def test_pop_min_labels_the_arrow_from_its_validated_id_key():
+    """The validator prefers `id`, but the arrow label read only node/value,
+    drawing a bare unlabeled pop_min between the panels."""
+    before = priority_step([{"id": "A", "priority": 1}])
+    before["transition"] = {"type": "pop_min", "id": "A"}
+    after = priority_step([])
+    after["label"] = "empty"
+    svg = render_diagram({"type": "algorithm_trace", "params": {
+        "steps": [before, after]}})
+    assert "pop_min A" in svg
+
+
+def test_an_explicit_panel_size_is_bounded():
+    """Explicit panel_width/panel_height lost their clamp entirely; a
+    500000px panel rendered with zero findings and nothing downstream
+    checks canvas size."""
+    [width_finding, height_finding] = inspect_algorithm_trace({
+        "panel_width": 500000, "panel_height": 400000,
+        "steps": [array_step([1])]})
+    assert width_finding["code"] == height_finding["code"] == "INVALID_PANEL_SIZE"
+    assert "at most 2000" in width_finding["message"]
+
+
+def test_a_font_size_that_is_not_a_readable_number_is_refused():
+    """float('14px') crashed the render into the registry's blanket except,
+    returning an empty figure with the reason lost; a 6px label rendered
+    below every documented floor with no finding."""
+    for value in ("14px", 6, 500):
+        [finding] = inspect_algorithm_trace({
+            "font_size": value, "steps": [array_step([1])]})
+        assert finding["code"] == "INVALID_FONT_SIZE"
+        assert finding["path"] == "$.font_size"

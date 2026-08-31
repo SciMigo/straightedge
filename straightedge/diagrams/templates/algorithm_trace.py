@@ -43,6 +43,13 @@ from ..renderer import (defs, fit_text, group, path, rect, style, svg_document, 
 MAX_STEPS = 12
 MIN_PANEL_WIDTH, MAX_PANEL_WIDTH = 220, 600
 MIN_PANEL_HEIGHT, MAX_PANEL_HEIGHT = 160, 480
+#: Explicit panel_width/panel_height may exceed the automatic bounds (the
+#: documented answer to an UNREADABLE_STEP), but not without limit — an
+#: unbounded panel renders a megapixel canvas that nothing downstream checks.
+MAX_EXPLICIT_PANEL = 2000
+#: Author-tunable text sizes; below the floor the qc pass would flag the text
+#: as unreadable anyway, and past the ceiling the text is the figure.
+MIN_FONT_PX, MAX_FONT_PX = 8, 72
 #: Horizontal inset of the child figure inside its card, each side.
 PANEL_INSET = 10
 #: Below this, a child's 12px labels are drawn under 8px tall. The documented
@@ -213,19 +220,24 @@ def _transition_error(current: Dict[str, Any], following: Dict[str, Any],
             return None
         if not before_items:
             return "cannot pop_min from an empty priority queue"
-        minimum = min(enumerate(before_items), key=lambda pair: (
-            pair[1].get("priority"), pair[0]
-        ))[1]
-        minimum_id = str(minimum.get("id"))
+        # Any item of minimal priority is a legal pop — ties are broken by the
+        # author's queue, not by position in the items array.
+        minimum_priority = min(item.get("priority") for item in before_items)
+        minimum_ids = [str(item.get("id")) for item in before_items
+                       if item.get("priority") == minimum_priority]
         claimed = transition.get("id", transition.get("value", transition.get("node")))
-        if claimed is not None and str(claimed) != minimum_id:
-            return f"pop_min says it removes {claimed!r}, not {minimum_id!r}"
+        if claimed is not None and str(claimed) not in minimum_ids:
+            named = " or ".join(repr(value) for value in minimum_ids)
+            return f"pop_min says it removes {str(claimed)!r}, not {named}"
+        removed_id = (str(claimed) if claimed is not None else
+                      next((value for value in minimum_ids if value not in after_by_id),
+                           minimum_ids[0]))
         expected = dict(before_by_id)
-        expected.pop(minimum_id)
+        expected.pop(removed_id)
         if after_by_id != expected:
             return f"next priority queue must be {expected!r}, got {after_by_id!r}"
         coupled = dict(transition)
-        coupled["value"] = minimum_id
+        coupled["value"] = removed_id
         return _coupled_frontier_error(current, following, kind, coupled)
 
     required_type = _REQUIRED_VISUAL[kind]
@@ -444,9 +456,20 @@ def _envelope_findings(params: Dict[str, Any]) -> Tuple[List[Finding], List[Any]
             "INVALID_COLUMNS", "columns must be a positive integer", "$.columns"))
     for name in ("panel_width", "panel_height"):
         value = params.get(name)
-        if value is not None and not _positive_number(value):
+        if value is not None and not (_positive_number(value)
+                                      and value <= MAX_EXPLICIT_PANEL):
             findings.append(_finding(
-                "INVALID_PANEL_SIZE", f"{name} must be a positive number", f"$.{name}"))
+                "INVALID_PANEL_SIZE",
+                f"{name} must be a positive number of at most {MAX_EXPLICIT_PANEL}",
+                f"$.{name}"))
+    for name in ("label_size", "font_size", "title_size"):
+        value = params.get(name)
+        if value is not None and not (_positive_number(value)
+                                      and MIN_FONT_PX <= value <= MAX_FONT_PX):
+            findings.append(_finding(
+                "INVALID_FONT_SIZE",
+                f"{name} must be a number from {MIN_FONT_PX} to {MAX_FONT_PX} pixels",
+                f"$.{name}"))
     if len(steps) > MAX_STEPS:
         findings.append(_finding(
             "TOO_MANY_STEPS", f"at most {MAX_STEPS} steps fit in one storyboard", "$.steps"))
@@ -640,8 +663,12 @@ def _transition_label(transition: Any) -> str:
         return f"{kind} {transition.get('value', '')}".strip()
     if kind in {"pop", "dequeue"}:
         return kind
-    if kind in {"visit", "settle", "pop_min"}:
+    if kind in {"visit", "settle"}:
         return f"{kind} {transition.get('node', transition.get('value', ''))}".strip()
+    if kind == "pop_min":
+        # The validator's preferred key is `id`; the label reads the same keys.
+        item_id = transition.get("id", transition.get("value", transition.get("node", "")))
+        return f"pop_min {item_id}".strip()
     if kind == "discover":
         return f"discover {transition.get('node', '')}".strip()
     if kind == "decrease_key":
