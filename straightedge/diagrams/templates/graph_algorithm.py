@@ -65,6 +65,10 @@ def _left_partition(params: Dict[str, Any], graph: Graph) -> List[str]:
     keys = list(partitions)
     if "left" in partitions and "right" in partitions:
         keys = ["left", "right"]
+    elif "left" in partitions or "right" in partitions:
+        # Half-named sides fell through to dict order, so an array literally
+        # named "right" beside any other key became the proposing *left* side.
+        raise GraphError("partitions naming one of left/right must name both")
     if len(keys) != 2:
         raise GraphError("bipartite_matching needs exactly two named partitions")
     left, right = partitions.get(keys[0]), partitions.get(keys[1])
@@ -131,9 +135,21 @@ def compute_steps(params: Dict[str, Any]) -> List[Step]:
     if algorithm == "prim":
         return prim_steps(graph, start)
     if algorithm == "topological_sort":
-        return topological_sort_steps(graph, str(params.get("tie_break", "fifo")))
+        return topological_sort_steps(graph, str(params.get("tie_break", "input")))
     if algorithm == "scc":
-        return scc_steps(graph)
+        condensation = params.get("condensation")
+        if condensation is not None:
+            return scc_steps(graph, condensation=bool(condensation))
+        steps = scc_steps(graph)
+        # The condensation DAG is a summary panel, not part of the trace.
+        # When appending it is exactly what pushes a storyboard past its
+        # panel budget, it yields — a figure that rendered before this panel
+        # existed still renders. Ask for it explicitly to be refused instead.
+        limit = (MAX_ANIMATED_STEPS if bool(params.get("animate", True))
+                 else MAX_STORYBOARD_STEPS)
+        if len(steps) == limit + 1:
+            return steps[:-1]
+        return steps
     if algorithm == "max_flow":
         return max_flow_steps(graph, params.get("source", graph.ids[0]),
                               params.get("sink", graph.ids[-1]))

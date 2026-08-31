@@ -7,6 +7,7 @@ from typing import Any, Dict, List
 from ...graphs import GraphError, havel_hakimi_steps
 from ...qc import Finding
 from ..registry import DIAGRAM_REGISTRY, register
+from .graph_algorithm import _NODE_STATES
 
 
 MAX_STEPS = 12
@@ -43,8 +44,13 @@ def frames(params: Dict[str, Any]) -> List[Dict[str, Any]]:
             visual = {"type": "graph", "params": {
                 "nodes": [{"id": vertex} for vertex in step.extras["graph_nodes"]],
                 "edges": edges,
+                # Step roles pass through the same mapping graph_algorithm
+                # applies: raw, the "frontier" role reached the renderer with
+                # no CSS rule behind it, so the vertices being joined drew
+                # exactly like untouched ones.
                 "highlights": {
-                    "nodes": step.node_states,
+                    "nodes": {v: _NODE_STATES.get(role, role)
+                              for v, role in step.node_states.items()},
                     "edges": [list(edge) for edge in visible],
                 },
                 "caption": step.caption,

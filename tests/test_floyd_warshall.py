@@ -34,3 +34,13 @@ def test_catalog_publishes_the_template_surface():
     template = {item.id: item for item in list_templates()}["floyd_warshall"]
     assert {"nodes", "edges", "directed", "animate"} <= set(template.params)
     assert template.motion == "optional"
+
+
+def test_directed_defaults_to_true_as_the_catalog_says():
+    """The catalog and render() both read `directed` defaulting to true, but
+    the steps coerced the graph with coerce_graph's false — so an input with
+    no `directed` key was refused as "needs a directed graph"."""
+    params = {"nodes": [{"id": "A"}, {"id": "B"}],
+              "edges": [{"from": "A", "to": "B", "weight": 2}]}
+    assert refusal_findings("floyd_warshall", params) == []
+    assert render_diagram({"type": "floyd_warshall", "params": params})

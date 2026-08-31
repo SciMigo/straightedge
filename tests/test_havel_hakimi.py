@@ -23,3 +23,14 @@ def test_template_catalog_publishes_the_surface():
     template = {item.id: item for item in list_templates()}["havel_hakimi"]
     assert {"sequence", "realize", "animate"} <= set(template.params)
     assert template.motion == "optional"
+
+
+def test_realization_frames_use_styled_node_states():
+    """`frontier` is a step role, not a graph-template state: passed through
+    raw it reached the renderer with no CSS rule behind it, so the vertices
+    being joined drew exactly like untouched ones."""
+    trace = frames({"sequence": [3, 3, 2, 2, 2], "realize": True})
+    states = {state for frame in trace if frame["visual"]["type"] == "graph"
+              for state in frame["visual"]["params"]["highlights"]["nodes"].values()}
+    assert "frontier" not in states
+    assert "target" in states and "current" in states

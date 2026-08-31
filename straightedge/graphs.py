@@ -54,6 +54,13 @@ class GraphError(ValueError):
 
 EdgeKey = tuple[str, str]
 
+#: How many distinct ``color-N`` roles the graph template can actually draw —
+#: its stylesheet defines ``.graph-…-color-1`` through ``-11`` and its
+#: normaliser drops anything past that, *silently*. A producer of unbounded
+#: colour roles (ears, colourings) must refuse past this rather than emit
+#: roles that render as plain gray under captions claiming otherwise.
+COLOR_ROLES = 11
+
 
 @dataclass(frozen=True)
 class Edge:
@@ -427,7 +434,14 @@ def havel_hakimi_steps(sequence: list[Any], realize: bool = False) -> list[Step]
         batches.append((vertex, neighbors))
         reduced.sort(key=lambda item: (-item[0], _vertex_sort_key(item[1])))
         displayed = [d for d, _ in reduced]
-        highlights = {str(index): "comparison" for index in range(min(degree, len(reduced)))}
+        # Highlight the entries that were decremented, found by identity after
+        # the re-sort. Highlighting the first `degree` positions of the sorted
+        # row marked whatever happened to sort there: on (3,3,2,2,2) the
+        # untouched 2 was lit and a decremented 1 was not — the teaching figure
+        # marking the wrong entries.
+        decremented = set(neighbors)
+        highlights = {str(index): "comparison"
+                      for index, (_, name) in enumerate(reduced) if name in decremented}
         steps.append(Step(
             f"Remove {degree}",
             f"Remove {degree}; decrement the next {degree} entries",
@@ -624,6 +638,11 @@ def ear_decomposition_steps(graph: Graph, start_cycle: list[Any] | None = None) 
         introduced.update(ear)
         used.update(graph.key(u, v) for u, v in zip(ear, ear[1:]))
 
+    if len(ears) > COLOR_ROLES:
+        raise GraphError(
+            f"the decomposition has {len(ears)} ears; only {COLOR_ROLES} colours "
+            "can tell them apart", witness=len(ears))
+
     steps: list[Step] = []
     colored: dict[EdgeKey, str] = {}
     visible_nodes: set[str] = set()
@@ -769,10 +788,16 @@ def hamiltonian_search_steps(graph: Graph, start: Any = None, max_frames: int = 
     explored = 1
     events: list[tuple[str, str, list[str], str | None]] = []
 
+    # An undirected "cycle" on two vertices would traverse its one edge twice
+    # — has_edge(B, A) is true for the same edge that got there — so closing
+    # needs three vertices unless the graph is directed, where the return arc
+    # is a different edge.
+    closable = len(graph.ids) >= 3 or graph.directed
+
     def search(vertex: str) -> bool:
         nonlocal explored, found
         if len(path) == len(graph.ids):
-            if graph.has_edge(path[-1], start_vertex):
+            if closable and graph.has_edge(path[-1], start_vertex):
                 found = list(path) + [start_vertex]
                 return True
             return False
@@ -781,14 +806,19 @@ def hamiltonian_search_steps(graph: Graph, start: Any = None, max_frames: int = 
                 continue
             path.append(neighbor)
             explored += 1
-            events.append((f"Try {neighbor}", f"Extend the partial path to {neighbor}",
-                           list(path), None))
+            # Only the first max_frames states are ever rendered, and the
+            # search is exponential: keeping every state made an 11-vertex
+            # no-cycle graph copy ~986k paths (665MB) to draw 10 frames.
+            if len(events) < max_frames:
+                events.append((f"Try {neighbor}", f"Extend the partial path to {neighbor}",
+                               list(path), None))
             if search(neighbor):
                 return True
             rejected = path.pop()
-            events.append((f"Backtrack {rejected}",
-                           f"No Hamiltonian cycle extends through {rejected}; backtrack",
-                           list(path), rejected))
+            if len(events) < max_frames:
+                events.append((f"Backtrack {rejected}",
+                               f"No Hamiltonian cycle extends through {rejected}; backtrack",
+                               list(path), rejected))
         return False
 
     search(start_vertex)
@@ -1470,12 +1500,19 @@ def _find_cycle(graph: Graph, among: Iterable[str]) -> list[str]:
     return []
 
 
-def topological_sort_steps(graph: Graph, tie_break: str = "fifo") -> list[Step]:
-    """Kahn's algorithm: repeatedly remove a vertex with no incoming edge."""
+def topological_sort_steps(graph: Graph, tie_break: str = "input") -> list[Step]:
+    """Kahn's algorithm: repeatedly remove a vertex with no incoming edge.
+
+    ``input`` — the default, and the only behaviour this function ever had
+    before tie-breaks became selectable — takes the earliest ready vertex in
+    the caller's node order, so published figures keep their order on
+    regeneration. ``fifo`` takes them in the order they became ready; ``min``
+    by vertex name.
+    """
     if not graph.directed:
         raise GraphError("topological order needs a directed graph")
-    if tie_break not in {"min", "fifo"}:
-        raise GraphError("tie_break must be min or fifo")
+    if tie_break not in {"input", "min", "fifo"}:
+        raise GraphError("tie_break must be input, min, or fifo")
     indegree = {v: 0 for v in graph.ids}
     for edge in graph.edges:
         indegree[edge.target] += 1
@@ -1485,10 +1522,14 @@ def topological_sort_steps(graph: Graph, tie_break: str = "fifo") -> list[Step]:
                   {v: "frontier" for v in graph.ids if indegree[v] == 0}, {},
                   {v: f"in {d}" for v, d in indegree.items()},
                   panel=("order: ∅",))]
+    input_position = {v: i for i, v in enumerate(graph.ids)}
     ready = [v for v in graph.ids if indegree[v] == 0]
     while ready:
         if tie_break == "min":
             current = min(ready, key=_vertex_sort_key)
+            ready.remove(current)
+        elif tie_break == "input":
+            current = min(ready, key=input_position.__getitem__)
             ready.remove(current)
         else:
             current = ready.pop(0)
@@ -1514,8 +1555,13 @@ def topological_sort_steps(graph: Graph, tie_break: str = "fifo") -> list[Step]:
     return steps
 
 
-def scc_steps(graph: Graph) -> list[Step]:
-    """Kosaraju: finish order on G, then components peeled off the reverse."""
+def scc_steps(graph: Graph, condensation: bool = True) -> list[Step]:
+    """Kosaraju: finish order on G, then components peeled off the reverse.
+
+    ``condensation`` appends the condensation-DAG summary panel. It is a
+    summary, not part of the trace, which is why a caller with a panel budget
+    can drop it rather than refuse the whole figure.
+    """
     if not graph.directed:
         raise GraphError("strongly connected components need a directed graph")
     finished: list[str] = []
@@ -1568,6 +1614,8 @@ def scc_steps(graph: Graph) -> list[Step]:
                           extras={"algorithm": "Kosaraju", "components":
                                   [list(component_) for component_ in components],
                                   "finish_order": list(finished)}))
+    if not condensation:
+        return steps
     condensation_edges: list[EdgeKey] = []
     for edge in graph.edges:
         source = f"C{assigned[edge.source]}"
@@ -1734,9 +1782,15 @@ def greedy_coloring_steps(graph: Graph, order: list[str] | None = None) -> list[
     return steps
 
 
-def matching_steps(graph: Graph, left: list[str]) -> tuple[list[Step], dict[str, str]]:
+def matching_steps(graph: Graph, left: list[str],
+                   hall_panel: bool = True) -> tuple[list[Step], dict[str, str]]:
     """Kuhn's augmenting paths; returns the steps and the final matching
-    keyed by the right-hand vertex."""
+    keyed by the right-hand vertex.
+
+    ``hall_panel`` appends the Hall-violator certificate when the matching is
+    deficient. It belongs to the matching story; a caller telling a different
+    one on the same machinery (König's cover) turns it off rather than gaining
+    an undocumented panel."""
     left = [require_vertex(graph, v, "left vertex") for v in left]
     match_r: dict[str, str] = {}
     steps = [Step("Empty matching", "No edges matched", panel=("matching size = 0",))]
@@ -1757,7 +1811,7 @@ def matching_steps(graph: Graph, left: list[str]) -> tuple[list[Step], dict[str,
             nodes = {x: "visited" for pair in edges for x in pair}
             steps.append(Step(f"Augment from {u}", f"Augmenting path from {u} grows the matching",
                               nodes, edges, panel=(f"matching size = {len(match_r)}",)))
-    if len(match_r) < len(left):
+    if hall_panel and len(match_r) < len(left):
         z = alternating_reach(graph, left, match_r)
         left_set = set(left)
         s = [vertex for vertex in left if vertex in z]
@@ -1811,7 +1865,7 @@ def konig_cover(graph: Graph, left: list[str], match_r: dict[str, str]) -> list[
 
 
 def vertex_cover_steps(graph: Graph, left: list[str]) -> list[Step]:
-    steps, match_r = matching_steps(graph, left)
+    steps, match_r = matching_steps(graph, left, hall_panel=False)
     cover = konig_cover(graph, left, match_r)
     nodes = {v: "current" for v in cover}
     edges = {graph.key(l, r): "tree" for r, l in match_r.items()}

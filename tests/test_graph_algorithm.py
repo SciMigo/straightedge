@@ -298,7 +298,7 @@ def test_topological_sort_routes_fifo_and_min_tie_breaks():
     assert compute_steps({**params, "tie_break": "min"})[-1].panel == (
         "order: A, B, C, D",)
     finding = refusal_findings("graph_algorithm", {**params, "tie_break": "random"})[0]
-    assert "tie_break must be min or fifo" in finding.message
+    assert "tie_break must be input, min, or fifo" in finding.message
 
 
 def test_topological_sort_matches_both_course_d8_orders():
@@ -343,3 +343,52 @@ def test_failed_bipartite_matching_finishes_on_the_hall_violator():
     assert steps[-1].extras["S"] == list("abcd")
     assert steps[-1].extras["neighbors"] == ["1", "2", "3"]
     assert all("Hall" not in step.label for step in steps[:-1])
+
+
+def test_scc_condensation_yields_to_a_full_storyboard():
+    """The condensation DAG is a summary panel. Appending it to a trace that
+    already filled the 12-panel storyboard turned a previously renderable
+    figure into a refusal; unrequested, it yields instead. Asking for it
+    explicitly keeps the refusal, and the animated lane has room for it."""
+    params = {"algorithm": "scc", "directed": True, "animate": False,
+              "nodes": [{"id": x} for x in "ABCDEFGHIJK"],
+              "edges": [{"from": "A", "to": "B"}]}
+    assert refusal_findings("graph_algorithm", params) == []
+    steps = compute_steps(params)
+    assert len(steps) == 12 and steps[-1].label == "Component 11"
+    explicit = refusal_findings("graph_algorithm", {**params, "condensation": True})
+    assert explicit and "13 steps" in explicit[0].message
+    animated = compute_steps({**params, "animate": True})
+    assert animated[-1].label == "Condensation DAG"
+
+
+def test_scc_condensation_false_drops_the_summary_panel():
+    params = {"algorithm": "scc", "directed": True, "condensation": False,
+              "nodes": [{"id": x} for x in "ABC"],
+              "edges": [{"from": "A", "to": "B"}]}
+    assert all(step.label != "Condensation DAG" for step in compute_steps(params))
+
+
+def test_half_named_partitions_are_refused_not_guessed():
+    """With only one of left/right named, dict order decided the sides — so an
+    array literally named "right" beside any other key became the proposing
+    *left* side, flipping S and N(S) in every Hall panel."""
+    params = {"algorithm": "bipartite_matching",
+              "nodes": [{"id": x} for x in ("r1", "r2", "s1", "s2")],
+              "edges": [{"from": "r1", "to": "s1"}, {"from": "r2", "to": "s2"}],
+              "partitions": {"right": ["r1", "r2"], "students": ["s1", "s2"]}}
+    finding = refusal_findings("graph_algorithm", params)[0]
+    assert "must name both" in finding.message
+    renamed = {**params, "partitions": {"proposers": ["r1", "r2"],
+                                        "students": ["s1", "s2"]}}
+    assert refusal_findings("graph_algorithm", renamed) == []
+
+
+def test_the_graph_template_refuses_half_named_partitions_too():
+    finding = [f for f in refusal_findings("graph", {
+        "layout": "bipartite",
+        "nodes": [{"id": x} for x in ("r1", "r2", "s1", "s2")],
+        "edges": [{"from": "r1", "to": "s1"}, {"from": "r2", "to": "s2"}],
+        "partitions": {"right": ["r1", "r2"], "students": ["s1", "s2"]},
+    }) if f.check == "bipartition"][0]
+    assert "must name both" in finding.message

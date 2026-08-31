@@ -86,8 +86,8 @@ accepts everything the video does and more:
 | `bellman_ford` | weights, `start` | the negative cycle |
 | `kruskal` | undirected, weights | — (rejected edges are drawn dashed) |
 | `prim` | undirected, weights, `start` | — |
-| `topological_sort` | directed; `tie_break` is `"fifo"` or `"min"` | the cycle, or an unknown tie-break policy |
-| `scc` | directed | — (Kosaraju finish order, reverse DFS trees, and condensation DAG) |
+| `topological_sort` | directed; `tie_break` is `"input"` (default: earliest ready vertex in node order), `"fifo"`, or `"min"` | the cycle, or an unknown tie-break policy |
+| `scc` | directed; `condensation` (default true) appends the condensation DAG, yielding it when that one panel would overflow a storyboard | — (Kosaraju finish order, reverse DFS trees, and condensation DAG) |
 | `max_flow` | directed, capacities, `source`, `sink` | source = sink, an uncapacitated edge |
 | `greedy_coloring` | optional `vertex_order` | — |
 | `bipartite_matching` | `partitions.left/right` | an edge inside one side; a failed search ends on its Hall violator |
@@ -97,7 +97,7 @@ accepts everything the video does and more:
 | `prufer_encode` | a tree; optional `expect` | a cycle, disconnected components, or first mismatching code position |
 | `prufer_decode` | `code` on vertices `1..len(code)+2` | the first code entry outside that range |
 | `tree_center` | a tree; optional `show_eccentricities` | a cycle or disconnected components |
-| `ear_decomposition` | a 2-connected graph; optional `start_cycle` | an articulation vertex or disconnected components |
+| `ear_decomposition` | a 2-connected graph; optional `start_cycle` | an articulation vertex, disconnected components, or more ears than the 11 colours can tell apart |
 | `stable_matching` | complete `proposers` / `receivers` preference objects; optional `check` | a malformed preference list or the first blocking pair |
 | `hamiltonian_search` | `start`, optional `max_frames` and `expect` | a false expected cycle/non-cycle claim, with the cycle or exhausted-state count |
 | `edge_coloring` | optional authored `classes` and `expect` | adjacent same-class edges, omitted edges, or an impossible expectation below Δ |

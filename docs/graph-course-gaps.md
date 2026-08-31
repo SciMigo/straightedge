@@ -231,8 +231,11 @@ interview track.
 
 ### 12. ✅ `topological_sort` `tie_break` — module i03
 
-- **Change.** Accept `tie_break: "min" | "fifo"` so the storyboard's peel
-  order matches the lecture's stated order; refuse an unknown value.
+- **Change.** Accept `tie_break: "input" | "min" | "fifo"` so the storyboard's
+  peel order matches the lecture's stated order; refuse an unknown value.
+  `input` — the earliest ready vertex in node order — is the default because
+  it is the only behaviour the algorithm ever had, so published figures keep
+  their order on regeneration.
 - **Instance.** `D₈` in `i03/topic.md`.
 - **Also wanted.** A three-colour (white/gray/black) DFS storyboard with a
   stack panel for cycle detection — a `graph_traversal` option rather than a

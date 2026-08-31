@@ -13,7 +13,11 @@ MAX_VERTICES = 7
 
 
 def _steps(params: Dict[str, Any]):
-    graph = coerce_graph(params)
+    # This template documents `directed` as defaulting to True (render reads
+    # it that way), but coerce_graph defaults to False — fed through raw, an
+    # input with no `directed` key built an undirected graph that
+    # floyd_warshall_steps then refused. The default belongs to the template.
+    graph = coerce_graph({**params, "directed": bool(params.get("directed", True))})
     if len(graph.ids) > MAX_VERTICES:
         raise GraphError(f"at most {MAX_VERTICES} vertices fit in a readable DP table")
     return floyd_warshall_steps(graph)

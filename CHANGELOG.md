@@ -16,16 +16,24 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Hall witnesses for deficient bipartite matchings.** A failed final
   augmentation now ends on the alternating reach, highlights deterministic
   `S` and `N(S)`, and states the strict Hall inequality. Matching and König
-  cover now share the same alternating-reach computation.
+  cover share the same alternating-reach computation, but the Hall panel
+  itself belongs to `bipartite_matching` — `vertex_cover` keeps exactly its
+  documented panels.
 
 - **Complete Kosaraju SCC storyboards.** `scc` now names the algorithm, exposes
   the first-pass finish order, grows actual reverse-pass DFS trees one
   component at a time, and finishes on a computed hierarchical condensation
-  DAG rather than merely recoloring the original graph.
+  DAG rather than merely recoloring the original graph. The condensation is a
+  summary panel (`condensation: false` drops it), and when appending it is
+  exactly what would overflow a storyboard's panel budget it yields, so every
+  trace that rendered before it existed still renders.
 
 - **Explicit topological-sort tie-breaking.** Kahn traces accept
-  `tie_break: "fifo" | "min"`; the ready frontier and resulting lecture order
-  now follow the named policy, and unknown policies are refused.
+  `tie_break: "input" | "fifo" | "min"`; the ready frontier and resulting
+  lecture order follow the named policy, and unknown policies are refused.
+  The default stays `input` — the earliest ready vertex in node order, the
+  only behaviour the trace ever had — so published figures keep their order
+  on regeneration.
 
 - **Smallest-last degeneracy orderings.** `degeneracy_ordering` deletes a
   deterministic minimum-degree vertex per frame, tracks the maximum such

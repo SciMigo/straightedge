@@ -6,6 +6,7 @@ import hashlib
 import math
 from typing import Any, Dict, List, Tuple
 
+from ...graphs import COLOR_ROLES
 from ...qc import Finding
 from ..registry import register
 from ..renderer import (
@@ -74,7 +75,10 @@ def _normalize_color_edges(highlights: Any) -> Dict[Tuple[str, str], str]:
             number = int(role.split("-", 1)[1])
         except ValueError:
             continue
-        if not 1 <= number <= 11 or not isinstance(raw_edges, list):
+        # COLOR_ROLES is the stylesheet's palette size; a producer of colour
+        # roles (ear_decomposition_steps) refuses past the same constant, so a
+        # role dropped here is malformed input, never a silently gray ear.
+        if not 1 <= number <= COLOR_ROLES or not isinstance(raw_edges, list):
             continue
         for edge in raw_edges:
             if isinstance(edge, (list, tuple)) and len(edge) == 2:
@@ -223,6 +227,14 @@ def _bipartition(
         keys = list(declared)
         if "left" in declared and "right" in declared:
             keys = ["left", "right"]
+        elif "left" in declared or "right" in declared:
+            # Half-named sides fell through to dict order, so an array
+            # literally named "right" beside any other key could be drawn as
+            # the left column.
+            return {}, findings + [Finding(
+                "bipartition", "error",
+                "partitions naming one of left/right must name both",
+            )]
         elif len(keys) != 2:
             return {}, findings + [Finding(
                 "bipartition", "error",

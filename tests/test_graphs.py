@@ -590,3 +590,93 @@ def test_connectivity_honours_start_and_refuses_a_stranger():
     assert connectivity_steps(graph, start="D")[1].label != connectivity_steps(graph)[1].label
     with pytest.raises(GraphError, match="start 'Z' is not a vertex"):
         steps_for("graph/connectivity", {"nodes": [{"id": "A"}], "edges": [], "start": "Z"})
+
+
+# ------------------------------------------------- post-review regressions
+
+
+def test_a_two_vertex_graph_has_no_undirected_hamiltonian_cycle():
+    """A → B → A traverses the one edge twice; a cycle needs three distinct
+    edges. `has_edge(B, A)` is true for the very edge that got there, so the
+    closing check used to report a cycle — and refuse expect="none" with it."""
+    g = _graph([("A", "B")])
+    steps = hamiltonian_search_steps(g, "A", expect="none")
+    assert steps[-1].label == "Exhausted search"
+    assert steps[-1].extras["cycle"] is None
+
+
+def test_a_directed_two_cycle_still_closes_on_its_second_arc():
+    """Directed graphs return on a different edge, so A ⇄ B is a real cycle."""
+    g = _graph([("A", "B"), ("B", "A")], directed=True)
+    steps = hamiltonian_search_steps(g, "A", expect="cycle")
+    assert steps[-1].extras["cycle"] == ["A", "B", "A"]
+
+
+def test_hamiltonian_search_trace_memory_is_bounded_by_max_frames():
+    """Only the first `max_frames` states are ever drawn, and the search is
+    exponential: keeping a path copy for every explored state made an
+    11-vertex no-cycle input allocate hundreds of megabytes to render ten
+    frames."""
+    import tracemalloc
+
+    ids = [str(i) for i in range(8)]
+    edges = [(a, b) for a in ids for b in ids if a < b] + [("7", "8")]
+    g = _graph(edges)
+    tracemalloc.start()
+    try:
+        steps = hamiltonian_search_steps(g, "0", max_frames=10)
+        _, peak = tracemalloc.get_traced_memory()
+    finally:
+        tracemalloc.stop()
+    assert steps[-1].extras["cycle"] is None
+    assert steps[-1].extras["explored"] > 10_000     # the search still ran
+    assert peak < 1_000_000, f"trace kept the whole search: peak {peak} bytes"
+
+
+def test_havel_hakimi_highlights_the_decremented_entries():
+    """On (3,3,2,2,2), removing the 3 decrements one 3 and two 2s; the sorted
+    row is (2,2,1,1) with one *untouched* 2. Highlighting the first `degree`
+    positions lit that untouched 2 and missed a decremented 1 — the fix
+    follows the entries through the re-sort by identity."""
+    step = havel_hakimi_steps([3, 3, 2, 2, 2])[1]
+    assert step.extras["values"] == [2, 2, 1, 1]
+    assert sorted(step.extras["highlights"]) == ["0", "2", "3"]
+
+
+def test_ear_decomposition_refuses_more_ears_than_colours():
+    """K7 has 15 ears and the graph template's palette has 11 colours; roles
+    past color-11 rendered as plain gray under captions numbering every ear."""
+    ids = [str(i) for i in range(7)]
+    g = _graph([(a, b) for a in ids for b in ids if a < b])
+    with pytest.raises(GraphError, match="11 colours") as refused:
+        ear_decomposition_steps(g)
+    assert refused.value.witness == 15
+
+
+def test_scc_condensation_panel_is_optional():
+    """The condensation DAG is a summary, not part of the trace, so a caller
+    with a panel budget can drop it instead of refusing the whole figure."""
+    g = _graph([("A", "B"), ("B", "C"), ("C", "A"), ("C", "D")], directed=True)
+    with_summary = scc_steps(g)
+    without = scc_steps(g, condensation=False)
+    assert with_summary[-1].label == "Condensation DAG"
+    assert without == with_summary[:-1]
+
+
+def test_vertex_cover_keeps_its_documented_panels():
+    """The Hall-violator panel belongs to the matching story; shared machinery
+    leaked it into König cover storyboards, which document no such panel."""
+    g = _graph([("a", "x"), ("b", "x")])
+    labels = [s.label for s in vertex_cover_steps(g, ["a", "b"])]
+    assert "Hall violator" not in labels
+    assert labels[-1] == "Vertex cover"
+
+
+def test_topological_sort_default_keeps_the_input_order_tie_break():
+    """The pre-tie-break algorithm took the earliest ready vertex in node
+    order; published figures regenerate with their order intact only if that
+    stays the default (fifo reordered B, A, C into B, C, A)."""
+    g = coerce_graph({"directed": True, "nodes": [{"id": x} for x in "ABC"],
+                      "edges": [{"from": "B", "to": "A"}]})
+    assert topological_sort_steps(g)[-1].panel == ("order: B, A, C",)
+    assert topological_sort_steps(g, "fifo")[-1].panel == ("order: B, C, A",)
