@@ -22,6 +22,7 @@ from straightedge.graphs import (
     prufer_decode_graph, prufer_decode_steps, prufer_encode_steps,
     topological_sort_steps, traversal_steps, tree_center_steps, vertex_cover_steps,
 )
+from straightedge.graphs import _edge_coloring_with_k
 
 
 def _graph(edges, directed=False, **node_kwargs):
@@ -359,6 +360,19 @@ def test_edge_coloring_verifies_authored_classes_and_refuses_shared_vertex():
     with pytest.raises(GraphError, match="below maximum degree") as too_few:
         edge_coloring_steps(k4, expect=2)
     assert too_few.value.witness == 3
+
+
+def test_edge_coloring_refuses_when_exact_search_exhausts_its_budget():
+    """Class-2 graphs can make the attempted Delta-colouring exponential.
+
+    The figure lane must return a checked refusal rather than pinning a CPU;
+    authored colour classes remain the escape hatch for a known colouring.
+    """
+    ids = [str(index) for index in range(9)]
+    k9 = _graph([(left, right) for left in ids for right in ids if left < right])
+    with pytest.raises(GraphError, match="search budget") as refused:
+        _edge_coloring_with_k(k9, 8, max_states=100)
+    assert refused.value.kind == "complexity"
 
 
 # -------------------------------------------------------------- degeneracy

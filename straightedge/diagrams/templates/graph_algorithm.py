@@ -117,7 +117,7 @@ def compute_steps(params: Dict[str, Any]) -> List[Step]:
     if algorithm == "ear_decomposition":
         start_cycle = params.get("start_cycle")
         if start_cycle is not None and not isinstance(start_cycle, list):
-            raise GraphError("start_cycle must be an array")
+            raise GraphError("start_cycle must be an array", kind="input")
         return ear_decomposition_steps(graph, start_cycle)
     if algorithm == "hamiltonian_search":
         return hamiltonian_search_steps(graph, start, params.get("max_frames", 20),
@@ -190,13 +190,17 @@ def _findings(params: Dict[str, Any]) -> List[Finding]:
     try:
         steps = compute_steps(params)
     except GraphError as exc:
-        check = _check_name(str(exc))
+        check = (f"graph_algorithm_{exc.kind}" if exc.kind
+                 else _check_name(str(exc)))
         witness = exc.witness
         label = None
         if isinstance(witness, (list, tuple)):
-            # A cycle reads as a walk; a pair as an edge; anything else — the
-            # odd-degree vertices, a stranded component — as a plain list.
-            joiner = " → " if "cycle" in check else ("–" if len(witness) == 2 else ", ")
+            # Prefer the producer's structured witness shape. Legacy errors
+            # retain the old inference until they are converted one by one.
+            joiner = {"walk": " → ", "edge": "–", "list": ", "}.get(
+                exc.witness_kind,
+                " → " if "cycle" in check else ("–" if len(witness) == 2 else ", "),
+            )
             label = joiner.join(str(x) for x in witness)
         elif witness is not None:
             label = str(witness)
@@ -344,7 +348,7 @@ class GraphAlgorithmTemplate:
         params.get("check")
         params.get("max_frames", 20)
         params.get("classes")
-        params.get("tie_break", "fifo")
+        params.get("tie_break", "input")
         params.get("graph_layout", "circular")
         animate = bool(params.get("animate", True))
         duration_s = float(params.get("duration_s", 1.2))

@@ -47,9 +47,16 @@ class GraphError(ValueError):
     student can check, not merely that a check failed.
     """
 
-    def __init__(self, message: str, witness: Any = None) -> None:
+    def __init__(self, message: str, witness: Any = None, *,
+                 kind: str | None = None,
+                 witness_kind: str | None = None) -> None:
         super().__init__(message)
         self.witness = witness
+        # Optional structured metadata for adapters that need stable refusal
+        # ids and human-readable witnesses. Older errors deliberately keep the
+        # message classifier as a fallback while new surfaces can be explicit.
+        self.kind = kind
+        self.witness_kind = witness_kind
 
 
 EdgeKey = tuple[str, str]
@@ -352,7 +359,8 @@ def prufer_decode_graph(code: list[Any]) -> Graph:
             entry = -1
         if entry < 1 or entry > n or str(entry) != str(value):
             raise GraphError(f"code entry {value!r} at position {index + 1} is outside 1..{n}",
-                             witness=(index + 1, value))
+                             witness=(index + 1, value), kind="code",
+                             witness_kind="list")
         parsed.append(entry)
     degree = {vertex: 1 for vertex in range(1, n + 1)}
     for vertex in parsed:
@@ -555,7 +563,7 @@ def ear_decomposition_steps(graph: Graph, start_cycle: list[Any] | None = None) 
     if analysis.articulations:
         cut = analysis.articulations[0]
         raise GraphError(f"the graph is not 2-connected; {cut} is an articulation vertex",
-                         witness=cut)
+                         witness=cut, kind="connectivity")
     reach = {graph.ids[0]}
     queue = [graph.ids[0]]
     while queue:
@@ -567,20 +575,22 @@ def ear_decomposition_steps(graph: Graph, start_cycle: list[Any] | None = None) 
     if len(reach) != len(graph.ids):
         other = next(vertex for vertex in graph.ids if vertex not in reach)
         raise GraphError("the graph is disconnected, so it is not 2-connected",
-                         witness=(graph.ids[0], other))
+                         witness=(graph.ids[0], other), kind="connectivity",
+                         witness_kind="list")
 
     if start_cycle is not None:
         if not isinstance(start_cycle, list) or len(start_cycle) < 4:
-            raise GraphError("start_cycle must be a closed cycle with at least three vertices")
+            raise GraphError("start_cycle must be a closed cycle with at least three vertices",
+                             kind="input")
         cycle = [require_vertex(graph, vertex, "start_cycle entry") for vertex in start_cycle]
         if cycle[0] != cycle[-1] or len(set(cycle[:-1])) != len(cycle) - 1:
             raise GraphError("start_cycle must close once without repeating an internal vertex",
-                             witness=cycle)
+                             witness=cycle, kind="cycle", witness_kind="walk")
         missing = next(((u, v) for u, v in zip(cycle, cycle[1:])
                         if not graph.has_edge(u, v)), None)
         if missing:
             raise GraphError(f"start_cycle uses missing edge {missing[0]}–{missing[1]}",
-                             witness=missing)
+                             witness=missing, kind="edges", witness_kind="edge")
     else:
         # _find_cycle is the directed finder topological_sort uses; on an
         # undirected graph it returns the back-edge to the DFS parent as a
@@ -781,8 +791,9 @@ def hamiltonian_search_steps(graph: Graph, start: Any = None, max_frames: int = 
     start_vertex = require_vertex(graph, graph.ids[0] if start is None else start, "start")
     if not isinstance(max_frames, int) or isinstance(max_frames, bool) or not 2 <= max_frames <= 24:
         raise GraphError("max_frames must be an integer from 2 to 24")
-    if expect is not None and expect not in {"cycle", "none"}:
-        raise GraphError("expect must be cycle or none")
+    if expect is not None and (not isinstance(expect, str)
+                               or expect not in {"cycle", "none"}):
+        raise GraphError("expect must be cycle or none", kind="input")
     path = [start_vertex]
     found: list[str] | None = None
     explored = 1
@@ -1009,14 +1020,38 @@ def mycielski_steps(base: Graph) -> list[Step]:
 # ------------------------------------------------------------ edge coloring
 
 
-def _edge_coloring_with_k(graph: Graph, limit: int) -> dict[EdgeKey, int] | None:
+EDGE_COLORING_SEARCH_STATES = 50_000
+
+
+def _edge_coloring_with_k(
+    graph: Graph,
+    limit: int,
+    *,
+    max_states: int = EDGE_COLORING_SEARCH_STATES,
+) -> dict[EdgeKey, int] | None:
+    """Find a ``limit``-edge-colouring within a deterministic search budget.
+
+    Deciding whether a graph is class 1 is NP-complete. The figure API accepts
+    eleven vertices, enough for a naive exhaustive search on a class-2 graph
+    to run effectively without bound. Refuse once the state budget is spent;
+    callers that already know a colouring can provide authored ``classes``.
+    """
     edges = [graph.key(edge.source, edge.target) for edge in graph.edges]
     adjacent = {edge: {other for other in edges if other != edge and set(edge) & set(other)}
                 for edge in edges}
     order = sorted(edges, key=lambda edge: (-len(adjacent[edge]), edges.index(edge)))
     colors: dict[EdgeKey, int] = {}
+    states = 0
 
     def assign(index: int) -> bool:
+        nonlocal states
+        states += 1
+        if states > max_states:
+            raise GraphError(
+                f"edge coloring search budget of {max_states} states was exhausted; "
+                "provide verified classes for this graph",
+                witness=max_states, kind="complexity",
+            )
         if index == len(order):
             return True
         edge = order[index]
@@ -1158,8 +1193,8 @@ def degeneracy_ordering_steps(graph: Graph) -> list[Step]:
 # ------------------------------------------------------------ Turán graphs
 
 
-def turan_graph(n: Any, r: Any) -> tuple[Graph, list[list[str]]]:
-    """Build the complete balanced ``r``-partite graph ``T(n,r)``."""
+def validate_turan_parameters(n: Any, r: Any) -> tuple[int, int]:
+    """Validate and return the two integer parameters of ``T(n,r)``."""
     if not isinstance(n, int) or isinstance(n, bool) or n < 1:
         raise GraphError("n must be a positive integer")
     if not isinstance(r, int) or isinstance(r, bool):
@@ -1168,6 +1203,12 @@ def turan_graph(n: Any, r: Any) -> tuple[Graph, list[list[str]]]:
         raise GraphError("r must be at least 1", witness=r)
     if r > n:
         raise GraphError(f"r={r} cannot exceed n={n}", witness=(n, r))
+    return n, r
+
+
+def turan_graph(n: Any, r: Any) -> tuple[Graph, list[list[str]]]:
+    """Build the complete balanced ``r``-partite graph ``T(n,r)``."""
+    n, r = validate_turan_parameters(n, r)
     quotient, larger = divmod(n, r)
     ids = [str(vertex) for vertex in range(n)]
     parts: list[list[str]] = []

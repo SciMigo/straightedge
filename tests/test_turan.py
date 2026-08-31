@@ -43,6 +43,22 @@ def test_non_integer_parameters_are_rejected_by_the_builder():
             raise AssertionError("non-integer Turán parameter was accepted")
 
 
+def test_oversized_input_is_refused_before_the_graph_is_materialized(monkeypatch):
+    """The 11-vertex drawing cap is a precondition, not a post-build check.
+
+    Constructing T(n,r) first allocates O(n squared) edges merely to discover
+    that the resulting figure cannot be drawn.
+    """
+    import straightedge.diagrams.templates.turan as template
+
+    def should_not_build(*_args, **_kwargs):
+        raise AssertionError("oversized Turán graph was materialized")
+
+    monkeypatch.setattr(template, "turan_graph", should_not_build)
+    finding = refusal_findings("turan", {"n": 2500, "r": 2})[0]
+    assert finding.check == "turan_input" and "at most 11 fit" in finding.message
+
+
 def test_catalog_publishes_the_template_surface():
     template = {item.id: item for item in list_templates()}["turan"]
     assert {"n", "r", "highlight_clique_free"} <= set(template.params)

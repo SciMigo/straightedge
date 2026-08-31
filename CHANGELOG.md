@@ -11,7 +11,8 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Balanced Turán graph figures.** The new `turan` template computes
   `T(n,r)` from two integers, draws its N-way parts as colored columns, and
   reports the verified edge count and clique-free claim. Invalid part counts
-  and figures over the 11-vertex cap are refused with witnesses.
+  and figures over the 11-vertex cap are refused with witnesses before the
+  quadratic edge set is materialized.
 
 - **Hall witnesses for deficient bipartite matchings.** A failed final
   augmentation now ends on the alternating reach, highlights deterministic
@@ -43,7 +44,9 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Exact small-graph edge coloring.** `edge_coloring` computes a proper
   coloring with Δ or Δ+1 colors, draws each class with a numbered edge role,
   and validates authored `classes`. Shared endpoints and false `expect`
-  values are refused with concrete witnesses.
+  values are refused with concrete witnesses. The exact class-1 search has a
+  deterministic state budget; hard instances refuse with a request for
+  verified authored classes instead of running without bound.
 
 - **Checked Mycielski constructions.** The new `mycielski` template builds the
   original, shadow, and hub layers from the supplied base graph, then computes

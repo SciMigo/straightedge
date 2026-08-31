@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List
 
-from ...graphs import GraphError, turan_graph
+from ...graphs import GraphError, turan_graph, validate_turan_parameters
 from ...qc import Finding
 from ..registry import DIAGRAM_REGISTRY, register
 
@@ -13,10 +13,11 @@ MAX_VERTICES = 11
 
 
 def _computed(params: Dict[str, Any]):
-    graph, parts = turan_graph(params.get("n"), params.get("r"))
-    if len(graph.ids) > MAX_VERTICES:
-        raise GraphError(f"T({len(graph.ids)},{len(parts)}) has {len(graph.ids)} vertices; "
-                         f"at most {MAX_VERTICES} fit", witness=len(graph.ids))
+    n, r = validate_turan_parameters(params.get("n"), params.get("r"))
+    if n > MAX_VERTICES:
+        raise GraphError(f"T({n},{r}) has {n} vertices; "
+                         f"at most {MAX_VERTICES} fit", witness=n)
+    graph, parts = turan_graph(n, r)
     return graph, parts
 
 

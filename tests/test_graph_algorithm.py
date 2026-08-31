@@ -1,3 +1,4 @@
+from straightedge import list_templates
 from straightedge.diagrams import render_diagram
 from straightedge.diagrams.registry import refusal_findings
 from straightedge.diagrams.templates.graph_algorithm import (
@@ -137,6 +138,54 @@ def test_refusals_carry_the_witness_in_the_right_shape():
                           {"from": "C", "to": "B", "weight": 1}]}
     finding = refusal_findings("graph_algorithm", negative)[0]
     assert finding.check == "graph_algorithm_negative_cycle" and "→" in finding.label
+
+
+def test_new_algorithm_refusals_have_structured_ids_and_labels():
+    malformed_cycle = refusal_findings("graph_algorithm", {
+        "algorithm": "ear_decomposition", "nodes": [{"id": "A"}],
+        "edges": [], "start_cycle": "ABC",
+    })[0]
+    assert malformed_cycle.check == "graph_algorithm_input"
+
+    articulation = refusal_findings("graph_algorithm", {
+        "algorithm": "ear_decomposition", "nodes": [{"id": x} for x in "ABC"],
+        "edges": [{"from": "A", "to": "B"}, {"from": "B", "to": "C"}],
+    })[0]
+    assert articulation.check == "graph_algorithm_connectivity"
+    assert articulation.label == "B"
+
+    missing_edge = refusal_findings("graph_algorithm", {
+        "algorithm": "ear_decomposition", "nodes": [{"id": x} for x in "ABCD"],
+        "edges": [{"from": "A", "to": "B"}, {"from": "B", "to": "C"},
+                  {"from": "C", "to": "D"}, {"from": "D", "to": "A"}],
+        "start_cycle": ["A", "B", "D", "A"],
+    })[0]
+    assert missing_edge.check == "graph_algorithm_edges"
+    assert missing_edge.label == "B–D"
+
+    bad_code = refusal_findings("graph_algorithm", {
+        "algorithm": "prufer_decode", "code": [1, 9],
+    })[0]
+    assert bad_code.check == "graph_algorithm_code"
+    assert bad_code.label == "2, 9"
+
+
+def test_hamiltonian_expect_array_is_refused_instead_of_raising_type_error():
+    finding = refusal_findings("graph_algorithm", {
+        "algorithm": "hamiltonian_search", "nodes": [{"id": x} for x in "ABC"],
+        "edges": [{"from": "A", "to": "B"}, {"from": "B", "to": "C"},
+                  {"from": "C", "to": "A"}],
+        "expect": ["A", "B", "C", "A"],
+    })[0]
+    assert finding.check == "graph_algorithm_input"
+    assert "cycle or none" in finding.message
+
+
+def test_catalog_publishes_the_input_tie_break_default():
+    template = {item.id: item for item in list_templates()}["graph_algorithm"]
+    tie_break = next(parameter for parameter in template.parameters
+                     if parameter["name"] == "tie_break")
+    assert tie_break["default"] == "input"
 
 
 def test_prufer_encode_and_decode_draw_the_course_instance():
