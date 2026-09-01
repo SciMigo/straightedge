@@ -125,6 +125,77 @@ FIGURES: tuple[Figure, ...] = (
         "Five panels: three augmenting paths with their bottlenecks, then the "
         "min cut whose capacity equals the flow value of 5",
     ),
+    # --- graph theory, computed · 02 (posts/graph-course-algorithms.html) ---
+    # The course's own instances, so the figures agree with its text.
+    Figure(
+        "graph-turan",
+        {"type": "turan",
+         "params": {"n": 7, "r": 3, "highlight_clique_free": True}},
+        "The Turán graph T(7,3): parts of sizes 3, 2 and 2 drawn as three "
+        "coloured columns with every cross-part edge; the caption states 16 "
+        "edges and no K4",
+    ),
+    Figure(
+        "graph-prufer-storyboard",
+        {"type": "graph_algorithm",
+         "params": {"algorithm": "prufer_encode", "animate": False, "columns": 3,
+                    "expect": [3, 3, 4, 4],
+                    "title": "Prüfer code: delete the smallest leaf, write down its neighbour",
+                    "nodes": [{"id": str(i)} for i in range(1, 7)],
+                    "edges": [{"from": a, "to": b} for a, b in
+                              [("1", "3"), ("2", "3"), ("3", "4"), ("4", "5"), ("4", "6")]]}},
+        "Five panels of Prüfer encoding on a six-vertex tree; each deleted leaf "
+        "is highlighted with its edge dashed, and the code grows to (3, 3, 4, 4)",
+    ),
+    Figure(
+        "graph-stable-matching-storyboard",
+        {"type": "graph_algorithm",
+         "params": {"algorithm": "stable_matching", "animate": False, "columns": 4,
+                    "title": "Gale–Shapley: ten proposals to a stable matching",
+                    "proposers": {"A": ["4", "3", "1", "2"], "B": ["3", "4", "2", "1"],
+                                  "C": ["1", "2", "4", "3"], "D": ["1", "4", "3", "2"]},
+                    "receivers": {"1": ["B", "A", "C", "D"], "2": ["A", "B", "D", "C"],
+                                  "3": ["D", "A", "B", "C"], "4": ["C", "B", "A", "D"]}}},
+        "Twelve panels of Gale–Shapley on four proposers and four receivers: "
+        "each proposal, each held offer, each rejection drawn dashed, ending on "
+        "the stable matching A–1, B–4, C–2, D–3 after ten proposals",
+    ),
+    Figure(
+        "graph-havel-hakimi-storyboard",
+        {"type": "havel_hakimi",
+         "params": {"animate": False, "realize": True, "sequence": [3, 3, 2, 2, 2],
+                    "title": "Havel–Hakimi: reduce the sequence, then build the graph back up"}},
+        "Seven panels: the degree sequence (3,3,2,2,2) reduced to (0,0) with the "
+        "decremented entries highlighted, then the graph realised one restored "
+        "vertex at a time",
+    ),
+    Figure(
+        "graph-floyd-warshall-storyboard",
+        {"type": "floyd_warshall",
+         "params": {"animate": False, "directed": True,
+                    "title": "Floyd–Warshall: one table per intermediate vertex",
+                    "nodes": [{"id": x} for x in "ABCD"],
+                    "edges": [{"from": a, "to": b, "weight": w} for a, b, w in
+                              [("A", "B", 3), ("B", "C", -2), ("A", "C", 5),
+                               ("C", "D", 1), ("D", "B", 4), ("A", "D", 10)]]}},
+        "Five distance tables for a four-vertex digraph with one negative edge, "
+        "infinity rendered explicitly and every entry an intermediate vertex "
+        "improves highlighted",
+    ),
+    Figure(
+        "graph-hamiltonian-animated",
+        {"type": "graph_algorithm",
+         "params": {"algorithm": "hamiltonian_search", "animate": True,
+                    "duration_s": 1.0, "loop": True, "start": "0", "expect": "cycle",
+                    "title": "Backtracking for a Hamiltonian cycle of the octahedron",
+                    "nodes": [{"id": str(i)} for i in range(6)],
+                    "edges": [{"from": str(a), "to": str(b)}
+                              for a in range(6) for b in range(a + 1, 6)
+                              if {a, b} not in ({0, 1}, {2, 3}, {4, 5})]}},
+        "Backtracking search on the octahedron as an animated SVG: the partial "
+        "path grows, a dead end backtracks, and the found Hamiltonian cycle is "
+        "the last frame",
+    ),
 )
 
 

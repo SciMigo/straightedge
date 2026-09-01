@@ -202,8 +202,8 @@ interview track.
   then a greedy colouring showing χ rises by one while triangle-free.
 - **Inputs.** `nodes`, `edges` of the base graph; layout is fixed by the
   template.
-- **Refuse.** Base graph over the cap (Mycielski triples the vertex count
-  plus one, so base ≤ 3 for the 11-vertex figure cap; document this).
+- **Refuse.** Base graph over the cap (`M(G)` has `2n + 1` vertices, so
+  base ≤ 5 for the 11-vertex figure cap; `C₅` is exactly at it).
 - **Instance.** `M(C₅)` = Grötzsch graph, 11 vertices, 20 edges, χ = 4.
 
 ### 10. ✅ `edge_coloring` — module 22

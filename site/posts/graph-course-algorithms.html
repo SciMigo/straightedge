@@ -1,0 +1,311 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#090d14">
+    <meta name="description" content="A 34-module graph-theory course left a marker wherever the figure it wanted did not exist. Fourteen of those were algorithms — Prüfer codes, Gale–Shapley, Havel–Hakimi, Floyd–Warshall, Hamiltonian search, Turán and Mycielski constructions, edge colouring and more. 0.8.0 draws all of them from the computation and refuses, with the witness, what the graph makes false.">
+    <meta property="og:title" content="Graph theory, computed: fourteen more algorithms, each with the witness it refuses on">
+    <meta property="og:description" content="A course wrote down the figures it could not get. Every one of them is now computed first and drawn from the run: a wrong Prüfer code is refused at the position it differs, an unstable matching with its blocking pair, a degree sequence at the entry that goes negative.">
+    <meta property="og:image" content="https://pub-ae0e951cb13d4628913ced2bc423d839.r2.dev/straightedge/assets/posters/graph-turan.jpg">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://scimigo.github.io/straightedge/posts/graph-course-algorithms.html">
+    <link rel="canonical" href="https://scimigo.github.io/straightedge/posts/graph-course-algorithms.html">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Graph theory, computed · 02">
+    <meta name="twitter:description" content="Prüfer codes, Gale–Shapley, Havel–Hakimi, Floyd–Warshall, Hamiltonian search, Turán and Mycielski — computed from the graph you pass in, refused with the witness when the claim is false.">
+    <meta name="twitter:image" content="https://pub-ae0e951cb13d4628913ced2bc423d839.r2.dev/straightedge/assets/posters/graph-turan.jpg">
+    <title>Graph theory, computed: fourteen more algorithms, each with the witness it refuses on</title>
+    <link rel="stylesheet" href="../styles.css">
+    <link rel="stylesheet" href="post.css">
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "TechArticle",
+      "headline": "Graph theory, computed: fourteen more algorithms, each with the witness it refuses on",
+      "description": "A graph-theory course left a marker wherever the figure it wanted did not exist; fourteen were algorithms. All of them are now computed first and drawn from the run, and a request the graph makes false is refused with the structure that proves it.",
+      "url": "https://scimigo.github.io/straightedge/posts/graph-course-algorithms.html",
+      "image": "https://pub-ae0e951cb13d4628913ced2bc423d839.r2.dev/straightedge/assets/posters/graph-turan.jpg",
+      "datePublished": "2026-09-01",
+      "author": { "@type": "Organization", "name": "SciMigo" },
+      "publisher": { "@type": "Organization", "name": "Straightedge" },
+      "about": ["Graph theory", "Prüfer code", "Stable matching", "Havel–Hakimi", "Floyd–Warshall", "Hamiltonian cycle", "Turán graph", "Mycielski construction", "Edge colouring", "Algorithm visualization"],
+      "isPartOf": { "@type": "WebSite", "name": "Straightedge", "url": "https://scimigo.github.io/straightedge/" }
+    }
+    </script>
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="wordmark" href="../index.html" aria-label="Straightedge, back to the gallery">
+        <span class="wordmark-mark" aria-hidden="true"></span>
+        <span>Straightedge</span>
+      </a>
+      <a class="repo-link" href="index.html">All posts <span aria-hidden="true">↗</span></a>
+    </header>
+
+    <main class="post">
+      <div class="post-head">
+        <p class="post-kicker">Graph theory, computed · 02</p>
+        <h1>Fourteen more algorithms, each with the witness it refuses on</h1>
+        <p class="post-dateline">
+          <time datetime="2026-09-01">1 Sep 2026</time>
+          <span class="dot" aria-hidden="true">·</span>
+          <span class="tag">Graph algorithms</span>
+        </p>
+        <p class="standfirst">
+          A graph-theory course — 24 modules and 10 interview modules — was
+          written against the twelve algorithms in
+          <a href="graph-theory-computed.html">the first post</a>. Wherever the
+          figure it wanted did not exist, the author left a marker in the module
+          with the exact request they had tried to send. Fourteen of those
+          markers were algorithms. Release 0.8.0 draws every one of them the way
+          the first twelve are drawn: the algorithm runs on the graph you pass
+          in, the frames are its states, and a request the graph makes false is
+          refused with the structure that proves it.
+        </p>
+      </div>
+
+      <div class="post-body">
+        <div class="claim">
+          <p>
+            <strong>Four templates, eight algorithms, three storyboards finished.</strong>
+            <code>turan</code>, <code>mycielski</code>, <code>floyd_warshall</code>
+            and <code>havel_hakimi</code> are new; <code>graph_algorithm</code>
+            gains Prüfer encoding and decoding, Jordan tree centres, open-ear
+            decompositions, Gale–Shapley, bounded Hamiltonian search, edge
+            colouring and smallest-last degeneracy orderings; and strongly
+            connected components, topological sort and bipartite matching now
+            end where the lecture ends — on the condensation DAG, on the stated
+            tie-break, on the Hall violator. Every state is computed in
+            <code>straightedge/graphs.py</code>, and the storyboard is drawn from
+            the run.
+          </p>
+        </div>
+
+        <h2>A tree becomes a code, one leaf at a time</h2>
+        <figure class="post-figure">
+          <img src="../assets/svg/graph-prufer-storyboard.svg"
+               alt="Five panels of Prüfer encoding on a six-vertex tree. In each panel the smallest remaining leaf is highlighted and its edge drawn dashed, and the caption appends that leaf's neighbour to the code, which grows from () to (3, 3, 4, 4)."
+               loading="lazy">
+          <figcaption>
+            <span><code>prufer_encode</code> on the course's tree <em>H</em>. Each
+              panel deletes the smallest leaf and writes down its neighbour; the
+              code the caption accumulates is the one the module's exercise
+              asks for, and <code>prufer_decode</code> grows the same tree back
+              from it, one edge per panel.</span>
+          </figcaption>
+        </figure>
+        <p>
+          The encoding takes an <code>expect</code>, and this is where a
+          storyboard earns its place in a lab. Hand it the code a student wrote
+          and it does not draw a tree labelled with the wrong answer; it stops
+          at the first position where the student's code and the computed one
+          disagree:
+        </p>
+<pre><code>$ straightedge draw graph_algorithm --params '{"algorithm": "prufer_encode",
+    "nodes": [{"id":"1"},{"id":"2"},{"id":"3"},{"id":"4"}],
+    "edges": [{"from":"1","to":"3"},{"from":"2","to":"3"},{"from":"3","to":"4"}],
+    "expect": [3, 4]}'
+'graph_algorithm' was refused: expected Prüfer code first differs at position 2: computed '3', expected '4'</code></pre>
+        <p>
+          Jordan's leaf-stripping works the same way. <code>tree_center</code>
+          removes every leaf in simultaneous rounds and reveals the one or two
+          centres only on the round that proves them — never a panel early —
+          with the eccentricities badged on the vertices if you ask. Hand it a
+          graph with a cycle and the refusal is the cycle, because a graph with
+          a cycle is not a tree and there is nothing else to say.
+        </p>
+
+        <h2>Proposals, held offers, rejections</h2>
+        <figure class="post-figure">
+          <img src="../assets/svg/graph-stable-matching-storyboard.svg"
+               alt="Twelve panels of Gale–Shapley on four proposers A to D and four receivers 1 to 4. Each panel highlights one proposal, held offers are drawn as solid coloured edges, rejected proposals as dashed red edges, and the last panel shows the stable matching A–1, B–4, C–2, D–3 after ten proposals."
+               loading="lazy">
+          <figcaption>
+            <span><code>stable_matching</code> on the course's instance. Ten
+              proposals, three of them rejected; the panel line under each
+              frame is the set of offers currently held, which is the whole
+              state of the algorithm and the thing a student has to track by
+              hand.</span>
+          </figcaption>
+        </figure>
+        <p>
+          The module's exercise is not "run Gale–Shapley". It is "here is a
+          matching; is it stable?" — and the answer is either yes or a
+          specific pair who would both rather be with each other. So the
+          template takes a <code>check</code> matching and refuses it with
+          exactly that pair:
+        </p>
+<pre><code>$ straightedge draw graph_algorithm --params '{"algorithm": "stable_matching",
+    "proposers": {...}, "receivers": {...},
+    "check": {"A": "4", "B": "3", "C": "1", "D": "2"}}'
+'graph_algorithm' was refused: authored matching is unstable: (D, 3) is a blocking pair</code></pre>
+        <p>
+          Bipartite matching gained the same kind of ending. When the last
+          augmentation search fails, the storyboard no longer stops on "no
+          augmenting path"; it highlights the alternating reach from the
+          unsaturated vertex, names <em>S</em> and <em>N(S)</em>, and states
+          the strict Hall inequality that proves no perfect matching exists.
+          That is the certificate the course asks students to produce, and
+          now the figure produces it.
+        </p>
+
+        <h2>A sequence that is a graph, and one that is not</h2>
+        <figure class="post-figure">
+          <img src="../assets/svg/graph-havel-hakimi-storyboard.svg"
+               alt="Seven panels of Havel–Hakimi. The first four reduce the degree sequence (3,3,2,2,2) to (2,2,1,1), (1,1,0) and (0,0), with the decremented entries highlighted in orange. The last three restore the vertices in reverse and join each to the required number of neighbours until the realised five-vertex graph appears."
+               loading="lazy">
+          <figcaption>
+            <span><code>havel_hakimi</code> with <code>realize: true</code>. The
+              reduction is an array storyboard and the realisation is a graph
+              storyboard; they are one template because the second half is
+              built by undoing the first, and the figure should say so.</span>
+          </figcaption>
+        </figure>
+        <p>
+          The course's failing example is the sequence (3, 3, 3, 1). It is not
+          graphic, and the reason is not a theorem; it is the specific step
+          where the reduction asks a vertex for more neighbours than remain:
+        </p>
+<pre><code>$ straightedge draw havel_hakimi --params '{"sequence": [3, 3, 3, 1]}'
+'havel_hakimi' was refused: Havel–Hakimi reduction produced a negative entry: (1, -1)</code></pre>
+
+        <h2>Tables, not arrows</h2>
+        <figure class="post-figure">
+          <img src="../assets/svg/graph-floyd-warshall-storyboard.svg"
+               alt="Five distance tables for a four-vertex digraph, one per intermediate vertex. Infinity is written as the symbol, and every entry an intermediate vertex improves is highlighted in yellow — two via B, two via C, one via D."
+               loading="lazy">
+          <figcaption>
+            <span><code>floyd_warshall</code> on the interview module's digraph.
+              One table per intermediate vertex, with only the entries that
+              vertex improved highlighted — which is the thing a hand-drawn
+              version always gets wrong, because the temptation is to
+              highlight the row and column of <em>k</em> instead.</span>
+          </figcaption>
+        </figure>
+        <p>
+          One of the edges is negative, and that is fine; Floyd–Warshall does
+          not care. A negative <em>cycle</em> is a different matter. The
+          template runs the whole DP, watches the diagonal, and the moment an
+          entry <em>D[v,v]</em> goes below zero it stops and says which one:
+        </p>
+<pre><code>$ straightedge draw floyd_warshall --params '{"directed": true,
+    "nodes": [{"id":"A"},{"id":"B"},{"id":"C"}],
+    "edges": [{"from":"A","to":"B","weight":1},{"from":"B","to":"C","weight":-3},{"from":"C","to":"B","weight":1}]}'
+'floyd_warshall' was refused: negative cycle detected: diagonal entry D[C,C] became negative</code></pre>
+
+        <h2>Search that knows when to stop</h2>
+        <figure class="post-figure">
+          <img src="../assets/svg/graph-hamiltonian-animated.svg"
+               alt="Backtracking search for a Hamiltonian cycle on the octahedron as an animated SVG. The partial path grows from vertex 0 as highlighted edges, a dead end is backtracked, and the final frame shows the found cycle through all six vertices."
+               loading="lazy">
+          <figcaption>
+            <span><code>hamiltonian_search</code> on the octahedron as a native
+              animated SVG — the same frames as the storyboard, cross-faded
+              with SVG's own timing. The search explores the full state space
+              but emits at most <code>max_frames</code>, and the caption
+              reports how many states it actually visited.</span>
+          </figcaption>
+        </figure>
+        <p>
+          The Petersen graph is the course's reason for this template: it has a
+          Hamiltonian <em>path</em> and no Hamiltonian <em>cycle</em>, and
+          students are asked to believe the second half. Ask the template for
+          the cycle and it does not draw a plausible-looking one:
+        </p>
+<pre><code>$ straightedge draw graph_algorithm --params '{"algorithm": "hamiltonian_search",
+    "start": "0", "expect": "cycle", "nodes": [...10 vertices...], "edges": [...15 edges...]}'
+'graph_algorithm' was refused: no Hamiltonian cycle exists; exhausted 274 search states</code></pre>
+        <p>
+          The state count is the point. "There is no cycle" is a claim; "274
+          states were searched and none closed" is a certificate a student can
+          reproduce, and it is what the finding carries.
+        </p>
+
+        <h2>Built, not drawn</h2>
+        <figure class="post-figure">
+          <img src="../assets/svg/graph-turan.svg"
+               alt="The Turán graph T(7,3): three coloured columns of sizes 3, 2 and 2 with every edge between different columns drawn, and a caption stating 16 edges and no K4."
+               loading="lazy">
+          <figcaption>
+            <span><code>turan</code> takes two integers and computes the rest:
+              parts as equal as possible, the cross-part edges, the edge count,
+              and the claim that no <em>K</em><sub>r+1</sub> exists — verified
+              on the graph it built, not asserted from the formula.</span>
+          </figcaption>
+        </figure>
+        <p>
+          <code>mycielski</code> is the same idea for a construction that has to
+          be seen to be believed: it copies your base graph as the
+          <em>u</em> layer, adds a shadow vertex <em>v<sub>i</sub></em> joined
+          to each <em>u<sub>i</sub></em>'s neighbours, adds the hub <em>w</em>
+          joined to every shadow, then colours the result and checks that the
+          chromatic number rose by one while the graph stayed triangle-free.
+          On <em>C</em><sub>5</sub> that is the Grötzsch graph, and the
+          twelve-panel storyboard ends on the line the module wants written on
+          the board: χ(<em>G</em>) = 3, χ(<em>M</em>(<em>G</em>)) = 4,
+          triangle-free. Both templates enforce the eleven-vertex figure cap
+          on the graph they construct — <em>M</em>(<em>G</em>) has
+          2<em>n</em> + 1 vertices, so a base graph of more than five is
+          refused with the count rather than drawn as a thicket.
+        </p>
+
+        <h2>What each one needs, and what it refuses</h2>
+        <div class="results">
+          <table>
+            <thead>
+              <tr><th>Algorithm</th><th>Needs</th><th>Refused with</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Prüfer encode · decode</td><td>a tree, or a code</td><td class="diff">the cycle, or the first differing code position</td></tr>
+              <tr><td>Tree centre</td><td>a tree</td><td class="diff">the cycle or the components</td></tr>
+              <tr><td>Ear decomposition</td><td>2-connected</td><td class="diff">the articulation vertex</td></tr>
+              <tr><td>Stable matching</td><td>complete strict preferences</td><td class="diff">the blocking pair</td></tr>
+              <tr><td>Hamiltonian search</td><td>a start, a frame budget</td><td class="diff">the found cycle, or the exhausted search</td></tr>
+              <tr><td>Edge colouring</td><td>—</td><td class="diff">the vertex two same-class edges share; an expectation below Δ</td></tr>
+              <tr><td>Degeneracy ordering</td><td>—</td><td>—</td></tr>
+              <tr><td>Havel–Hakimi</td><td>a degree sequence</td><td class="diff">the entry that went negative</td></tr>
+              <tr><td>Floyd–Warshall</td><td>directed, weights</td><td class="diff">the diagonal entry that went negative</td></tr>
+              <tr><td>Turán <em>T(n,r)</em></td><td>two integers</td><td class="diff"><em>r</em> &gt; <em>n</em>, or more than eleven vertices</td></tr>
+              <tr><td>Mycielski <em>M(G)</em></td><td>a base graph of at most three vertices</td><td class="diff">the constructed vertex count</td></tr>
+              <tr><td>SCC · condensation</td><td>directed</td><td>—</td></tr>
+              <tr><td>Topological sort · tie-break</td><td>directed, <code>input</code> / <code>fifo</code> / <code>min</code></td><td class="diff">the cycle; an unknown policy</td></tr>
+              <tr><td>Bipartite matching · Hall violator</td><td>a declared partition</td><td class="diff">an edge inside one side</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>
+          All of these are storyboards in the SVG lane, and every
+          <code>graph_algorithm</code> value is also an animated SVG with
+          <code>animate: true</code>. None of them is a Manim video yet; the
+          animation lane still holds its five concepts, and a course instance
+          that needs more than eight vertices in motion is still refused with
+          the count rather than rendered small.
+        </p>
+
+        <h2>What is left</h2>
+        <p>
+          The work list the course produced is closed, and what remains on it
+          is deliberately not an algorithm: multigraphs for Königsberg and the
+          Shannon triangle, a composite panel that keeps the heap beside
+          Dijkstra, list-valued faces for planar embeddings, and a
+          <code>comparison</code> that takes two figures instead of two
+          columns of text. Each of those changes the vocabulary a figure is
+          drawn in rather than adding a computation to it, which is why they
+          were fenced off from the fourteen above and why they come next.
+        </p>
+      </div>
+
+      <nav class="series-nav" aria-label="Series navigation">
+        <span>
+          <span class="muted">Previous</span>
+          <a href="graph-theory-computed.html">The picture cannot show a state the algorithm did not reach</a>
+        </span>
+        <span class="next">
+          <span class="muted">Next</span>
+          Matching and cover: why König's theorem is a certificate
+        </span>
+      </nav>
+    </main>
+  </body>
+</html>
