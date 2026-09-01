@@ -6,6 +6,23 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-09-01
+
+A minor release that closes the graph-theory course's algorithm work list
+([docs/graph-course-gaps.md](docs/graph-course-gaps.md)). The figure lane gains
+four templates — `turan`, `mycielski`, `floyd_warshall`, `havel_hakimi` — and
+`graph_algorithm` grows from twelve algorithms to twenty: Prüfer encoding and
+decoding, Jordan centres, open-ear decompositions, Gale–Shapley, bounded
+Hamiltonian search, edge colouring and smallest-last degeneracy orderings join
+the existing set, while SCC, topological sort and bipartite matching finish
+their storyboards with the condensation DAG, an explicit tie-break policy, and
+the Hall violator. Every state is computed, and a request the graph makes false
+is refused with the witness. The animation lane is unchanged.
+
+No behaviour changes for existing figures: `topological_sort`'s default
+tie-break is the only order it ever had, and the SCC condensation panel yields
+when it would overflow a storyboard that rendered before it existed.
+
 ### Added
 
 - **Balanced Turán graph figures.** The new `turan` template computes

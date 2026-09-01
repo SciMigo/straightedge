@@ -5,14 +5,21 @@
   <link href="https://scimigo.github.io/straightedge/posts/feed.xml" rel="self"/>
   <link href="https://scimigo.github.io/straightedge/posts/"/>
   <id>https://scimigo.github.io/straightedge/posts/</id>
-  <updated>2026-08-26T00:00:00Z</updated>
+  <updated>2026-09-01T00:00:00Z</updated>
   <author><name>SciMigo</name></author>
   <entry>
     <title>The picture cannot show a state the algorithm did not reach</title>
     <link href="https://scimigo.github.io/straightedge/posts/graph-theory-computed.html"/>
     <id>https://scimigo.github.io/straightedge/posts/graph-theory-computed.html</id>
-    <updated>2026-08-26T00:00:00Z</updated>
-    <summary>Eleven graph algorithms — BFS, DFS, Dijkstra, Bellman–Ford, Kruskal, Prim, topological sort, strongly connected components, max flow with its min cut, greedy colouring, bipartite matching with König&#x27;s cover, Euler circuits — computed once and drawn twice, as Manim video and as SVG storyboard. A graph that makes the claim false is refused with the witness.</summary>
+    <updated>2026-09-01T00:00:00Z</updated>
+    <summary>Twenty graph algorithms — BFS, DFS, Dijkstra, Bellman–Ford, Kruskal, Prim, topological sort, strongly connected components, max flow with its min cut, greedy colouring, bipartite matching with König&#x27;s cover, Euler circuits, low-link connectivity, Prüfer codes, tree centres, ear decompositions, Gale–Shapley, Hamiltonian search, edge colouring, degeneracy orderings — computed once and drawn as SVG storyboard, five of them as Manim video too. A graph that makes the claim false is refused with the witness.</summary>
+  </entry>
+  <entry>
+    <title>Fourteen more algorithms, each with the witness it refuses on</title>
+    <link href="https://scimigo.github.io/straightedge/posts/graph-course-algorithms.html"/>
+    <id>https://scimigo.github.io/straightedge/posts/graph-course-algorithms.html</id>
+    <updated>2026-09-01T00:00:00Z</updated>
+    <summary>A 34-module graph-theory course left a marker wherever the figure it wanted did not exist. Fourteen of those were algorithms — Prüfer codes, Gale–Shapley, Havel–Hakimi, Floyd–Warshall, Hamiltonian search, Turán and Mycielski constructions, edge colouring and more. 0.8.0 draws all of them from the computation and refuses, with the witness, what the graph makes false.</summary>
   </entry>
   <entry>
     <title>The picture is not the proof</title>

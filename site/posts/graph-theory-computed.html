@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#090d14">
-    <meta name="description" content="Eleven graph algorithms — BFS, DFS, Dijkstra, Bellman–Ford, Kruskal, Prim, topological sort, strongly connected components, max flow with its min cut, greedy colouring, bipartite matching with König's cover, Euler circuits — computed once and drawn twice, as Manim video and as SVG storyboard. A graph that makes the claim false is refused with the witness.">
+    <meta name="description" content="Twenty graph algorithms — BFS, DFS, Dijkstra, Bellman–Ford, Kruskal, Prim, topological sort, strongly connected components, max flow with its min cut, greedy colouring, bipartite matching with König's cover, Euler circuits, low-link connectivity, Prüfer codes, tree centres, ear decompositions, Gale–Shapley, Hamiltonian search, edge colouring, degeneracy orderings — computed once and drawn as SVG storyboard, five of them as Manim video too. A graph that makes the claim false is refused with the witness.">
     <meta property="og:title" content="Graph theory, computed: the picture cannot show a state the algorithm did not reach">
     <meta property="og:description" content="Hand the algorithm a student's graph; every intermediate state on screen came from running it. Ask for a topological order of a cyclic graph and you get the cycle, not a picture.">
     <meta property="og:image" content="https://pub-ae0e951cb13d4628913ced2bc423d839.r2.dev/straightedge/assets/posters/graph-max-flow.jpg">
@@ -23,7 +23,7 @@
       "@context": "https://schema.org",
       "@type": "TechArticle",
       "headline": "Graph theory, computed: the picture cannot show a state the algorithm did not reach",
-      "description": "Eleven graph algorithms computed once and drawn twice — Manim video and SVG storyboard — from the graph a student passes in. A graph that makes the claim false is refused with the witness: the cycle, the negative cycle, the odd-degree vertices.",
+      "description": "Twenty graph algorithms computed once and drawn as SVG storyboard, five of them as Manim video too, from the graph a student passes in. A graph that makes the claim false is refused with the witness: the cycle, the negative cycle, the odd-degree vertices.",
       "url": "https://scimigo.github.io/straightedge/posts/graph-theory-computed.html",
       "image": "https://pub-ae0e951cb13d4628913ced2bc423d839.r2.dev/straightedge/assets/posters/graph-max-flow.jpg",
       "datePublished": "2026-08-25",
@@ -48,7 +48,7 @@
         <p class="post-kicker">Graph theory, computed · 01</p>
         <h1>The picture cannot show a state the algorithm did not reach</h1>
         <p class="post-dateline">
-          <time datetime="2026-08-26">26 Aug 2026</time>
+          <time datetime="2026-09-01">1 Sep 2026</time>
           <span class="dot" aria-hidden="true">·</span>
           <span class="tag">Graph algorithms</span>
         </p>
@@ -87,12 +87,14 @@
       <div class="post-body">
         <div class="claim">
           <p>
-            <strong>Eleven graph algorithms, computed once and drawn twice.</strong>
+            <strong>Twenty graph algorithms, computed once and drawn from the computation.</strong>
             BFS and DFS, Dijkstra and Bellman–Ford, Kruskal and Prim, Kahn's
             topological order, Kosaraju's components, Edmonds–Karp with its
-            min cut, greedy colouring, Kuhn's matching with König's cover, and
-            Hierholzer's Euler circuit live in one module,
-            <code>straightedge/graphs.py</code>. The Manim scene and the SVG
+            min cut, greedy colouring, Kuhn's matching with König's cover,
+            Hierholzer's Euler circuit, low-link connectivity, and — since
+            0.8.0 — Prüfer codes, Jordan centres, ear decompositions,
+            Gale–Shapley, Hamiltonian search, edge colouring and degeneracy
+            orderings live in one module, <code>straightedge/graphs.py</code>. The Manim scene and the SVG
             storyboard both read its step trace, so a video and a handout of
             the same request cannot disagree about which vertex was settled
             third — and neither can show a state the algorithm did not reach.
@@ -212,15 +214,34 @@
               <tr><td>Bipartite matching · König cover</td><td>a declared partition</td><td class="diff">an edge inside one side</td></tr>
               <tr><td>Euler circuit / trail</td><td>connected edges</td><td class="diff">the odd-degree vertices</td></tr>
               <tr><td>Bridges · articulation vertices · blocks</td><td>undirected</td><td class="diff">a directed graph</td></tr>
+              <tr><td>Prüfer encode · decode</td><td>a tree, or a code</td><td class="diff">the cycle, the first differing code position</td></tr>
+              <tr><td>Tree centre</td><td>a tree</td><td class="diff">the cycle or the components</td></tr>
+              <tr><td>Ear decomposition</td><td>2-connected</td><td class="diff">the articulation vertex</td></tr>
+              <tr><td>Stable matching</td><td>complete strict preferences</td><td class="diff">the blocking pair</td></tr>
+              <tr><td>Hamiltonian search</td><td>a start, a frame budget</td><td class="diff">the found cycle, or the exhausted search</td></tr>
+              <tr><td>Edge colouring</td><td>—</td><td class="diff">the vertex two same-class edges share</td></tr>
+              <tr><td>Degeneracy ordering</td><td>—</td><td>—</td></tr>
             </tbody>
           </table>
         </div>
         <p>
-          All twelve are in the SVG lane as <code>graph_algorithm</code>. Five
+          All twenty are in the SVG lane as <code>graph_algorithm</code>. Five
           concepts — traversal, shortest path, spanning tree, max flow,
           connectivity — are also Manim videos under the <code>graph</code>
           topic, reachable by prompt on a stock graph or by template with your
           own.
+        </p>
+        <p>
+          Four constructions a course draws often enough to earn their own
+          template are checked the same way. <code>turan</code> builds
+          <em>T(n,r)</em> and reports the verified edge count;
+          <code>mycielski</code> builds the shadow layer and hub over your base
+          graph, colours it, and confirms it stayed triangle-free;
+          <code>floyd_warshall</code> shows one distance table per intermediate
+          vertex and refuses a negative cycle with the cycle;
+          <code>havel_hakimi</code> reduces a degree sequence step by step and
+          realises the graph on the way back up, or stops at the entry that
+          went negative.
         </p>
         <p>
           The structures a graph lesson keeps beside the graph are computed the
@@ -276,7 +297,7 @@ straightedge draw graph_algorithm --params '{"algorithm": "dijkstra", "animate":
         </span>
         <span class="next">
           <span class="muted">Next</span>
-          Matching and cover: why König's theorem is a certificate
+          <a href="graph-course-algorithms.html">Fourteen more algorithms, each with the witness it refuses on</a>
         </span>
       </nav>
     </main>

@@ -1,8 +1,11 @@
-# Graph-theory course: the algorithms and figures still missing
+# Graph-theory course: the algorithm work list, and what is still missing
 
 A work list for the templates a 34-module graph-theory course
 (`../graph-theory`, 24 core modules + 10 interview modules) asks for and
-Straightedge 0.7.0 does not yet draw. Each item is scoped to be one PR in the
+Straightedge 0.7.0 did not draw. All fourteen algorithm items landed in 0.8.0;
+the list is kept as the record of what each one shows, refuses and tests
+against. What remains open is the structural work at the end, which no
+algorithm item can absorb. Each item was scoped to be one PR in the
 shape of #28: a computed step trace, a `graph_algorithm` (or new) template
 that refuses a false request with the witness, an example, a legibility-corpus
 entry, and tests. The course's own `TEMPLATE GAP:` markers, in each module's
@@ -64,7 +67,7 @@ instance its tests should use; the exact vertex labels are in
 `C₅`, the prism `C₃□K₂`, the bowtie, `tail_graph()`, `W₅`, the octahedron
 `K₂,₂,₂`, the Grötzsch graph, and the Turán graphs `T₆,₂`, `T₆,₃`, `T₇,₃`.
 
-## Work list
+## Work list (complete as of 0.8.0)
 
 Ordered by how many modules each unblocks, then by syllabus order. "Modules"
 are directory prefixes under `../graph-theory/modules/`; `iNN` is the
@@ -199,8 +202,8 @@ interview track.
   then a greedy colouring showing χ rises by one while triangle-free.
 - **Inputs.** `nodes`, `edges` of the base graph; layout is fixed by the
   template.
-- **Refuse.** Base graph over the cap (Mycielski triples the vertex count
-  plus one, so base ≤ 3 for the 11-vertex figure cap; document this).
+- **Refuse.** Base graph over the cap (`M(G)` has `2n + 1` vertices, so
+  base ≤ 5 for the 11-vertex figure cap; `C₅` is exactly at it).
 - **Instance.** `M(C₅)` = Grötzsch graph, 11 vertices, 20 edges, χ = 4.
 
 ### 10. ✅ `edge_coloring` — module 22
@@ -258,10 +261,11 @@ interview track.
 - **Instances.** `H` (a..e / 1..5) in module 11 — violator
   `S = {a,b,c,d}`, `N(S) = {1,2,3}`; `A₅` in i10 — `S = {4,5}`, `N(S) = {d}`.
 
-## Blocked on structural work (not algorithms)
+## Still open: blocked on structural work (not algorithms)
 
 These course requests cannot be met by adding an algorithm; they are listed
-so nobody scopes them into one of the items above by accident.
+so nobody scopes them into one of the items above by accident. As of 0.8.0
+they are the whole of what the course still asks for.
 
 - **Multigraphs and self-loops** in `coerce_graph` (Königsberg in 01 and 04,
   de Bruijn `B(2,3)` in 06 — that module's one animation — and the Shannon

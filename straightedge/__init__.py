@@ -24,7 +24,7 @@ Three checks run at three different moments, and they catch different things:
 #: metadata and anything reading it at runtime — the MCP server advertises it to
 #: clients — cannot drift apart. Kept a plain literal because setuptools reads it
 #: statically, without importing the package at build time.
-__version__ = "0.7.0"
+__version__ = "0.8.0"
 
 from .aspect import ASPECTS, LANDSCAPE, VERTICAL
 from .catalog import Template, list_templates
