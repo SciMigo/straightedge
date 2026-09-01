@@ -100,7 +100,7 @@ template are published by `list_templates()`; see
 diagram type returns an empty string so a missing optional figure does not abort
 an entire document build.
 
-The registry currently contains 49 templates across several domains:
+The registry currently contains 54 templates across several domains:
 
 - Math and data: function graphs, coordinate planes, Riemann sums, unit circles,
   polar graphs, matrices, step functions, heatmaps, tables, and compass-and-
@@ -119,12 +119,16 @@ The registry currently contains 49 templates across several domains:
   [`animated_trace`](docs/advanced-cs-figures.md) turns any checked figure
   sequence into a standalone animated SVG without Manim or ffmpeg.
   [`graph_algorithm`](docs/graph-animations.md) computes Dijkstra, Bellman–Ford,
-  Kruskal, Prim, topological order, strongly connected components, max flow
-  with its min cut, greedy colouring, bipartite matching, König's vertex cover
-  Euler circuits, and low-link connectivity (bridges, articulation vertices,
-  and biconnected blocks) — and refuses, with the witness, what the graph makes false.
-  What a graph-theory course still asks for beyond these is listed in
-  [docs/graph-course-gaps.md](docs/graph-course-gaps.md).
+  Kruskal, Prim, topological order, strongly connected components with their
+  condensation, max flow with its min cut, greedy colouring, bipartite matching
+  with the Hall violator, König's vertex cover, Euler circuits, low-link
+  connectivity (bridges, articulation vertices, and biconnected blocks), Prüfer
+  codes, Jordan tree centres, open-ear decompositions, Gale–Shapley stable
+  matchings, bounded Hamiltonian search, edge colouring, and smallest-last
+  degeneracy orderings — and refuses, with the witness, what the graph makes
+  false. `turan`, `mycielski`, `floyd_warshall`, and `havel_hakimi` are checked
+  constructions of their own. The structural work a graph-theory course still
+  asks for is listed in [docs/graph-course-gaps.md](docs/graph-course-gaps.md).
 - Projects and business: Gantt charts, calendar roadmaps, org charts,
   work-breakdown structures, project networks, timelines, flow diagrams, and
   T-accounts.
