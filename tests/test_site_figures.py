@@ -67,3 +67,30 @@ class TestTheFiguresAreOnThePagesThatClaimThem:
         for figure in FIGURES:
             assert f"assets/svg/{figure.name}.svg" in pages, (
                 f"{figure.name} is declared and built but appears on no page")
+
+
+# ------------------------------------------------------- the landing-page counts
+
+
+class TestTheLandingPageCounts:
+    """The hero's numbers were typed once at the first release and never read
+    again: the page said 35 templates while the registry held 54. A count that
+    sits in prose beside the thing it counts is the feed problem again, so it is
+    checked the same way — against the registry, and against the page itself."""
+
+    INDEX = OUT.parent.parent / "index.html"
+
+    @pytest.fixture(scope="class")
+    def page(self):
+        return self.INDEX.read_text(encoding="utf-8")
+
+    def test_the_template_count_is_the_registry_size(self, page):
+        from straightedge.diagrams import DIAGRAM_REGISTRY
+        n = len(DIAGRAM_REGISTRY)
+        assert f"<strong>{n}</strong><span>dependency-free SVG templates</span>" in page
+        assert f"{n} dependency-free templates" in page, "og:description is stale"
+        assert f"<p>{n} figure templates render from the standard library alone" in page
+
+    def test_the_animation_count_is_the_number_of_videos_on_the_page(self, page):
+        n = page.count("<video")
+        assert f"<strong>{n}</strong><span>playable animation examples</span>" in page
