@@ -11,8 +11,10 @@ from typing import Any, Dict, List
 
 from ..registry import register
 from ..renderer import (
+    boxes_collide,
     circle,
     group,
+    label_box,
     line,
     path,
     rect,
@@ -118,24 +120,15 @@ class UnitCircleTemplate:
                                  **{"class": "uc-background"}))
 
         # The extents of every label placed so far, so a later label can dodge
-        # them. 0.8em above the baseline and 0.25em below covers ascent and
-        # descenders the way the legibility parser estimates them.
+        # them; the box and overlap maths are the renderer's shared helpers.
         placed_boxes: List[tuple[float, float, float, float]] = []
-
-        def label_box(x: float, y: float, s: str, px: float,
-                      anchor: str = "start") -> tuple[float, float, float, float]:
-            w = text_width(s, px, safe=True)
-            x0 = x - w if anchor == "end" else x - w / 2 if anchor == "middle" else x
-            return (x0, x0 + w, y - 0.8 * px, y + 0.25 * px)
 
         def place(x: float, y: float, s: str, px: float,
                   anchor: str = "start") -> None:
             placed_boxes.append(label_box(x, y, s, px, anchor))
 
         def collides(box: tuple[float, float, float, float]) -> bool:
-            return any(box[0] < b[1] and b[0] < box[1]
-                       and box[2] < b[3] and b[2] < box[3]
-                       for b in placed_boxes)
+            return any(boxes_collide(box, b) for b in placed_boxes)
 
         # Draw axes
         axes_elements = [

@@ -107,6 +107,30 @@ def test_graph_representation_keeps_a_zero_weight_edge_visible_in_the_matrix():
     assert ">2<" in children  # the matrix formats the weight with :g
 
 
+def test_graph_representation_highlights_one_edge_in_every_view():
+    params = {"nodes": [{"id": x} for x in "ABC"], "edges": [
+        {"from": "A", "to": "B"}, {"from": "B", "to": "C"}],
+        "highlight": ["A", "B"]}
+    svg = render_diagram({"type": "graph_representation", "params": params})
+    children = "".join(base64.b64decode(data).decode("utf-8")
+                       for data in re.findall(r"base64,([^\"']+)", svg))
+    assert "graph-edge graph-edge-highlight" in children
+    assert children.count("matrix-cell matrix-cell-current") >= 5
+
+
+def test_nary_tree_supports_paths_highlights_and_label_size():
+    svg = render_diagram({"type": "tree", "params": {
+        "root": {"value": "r", "children": [
+            {"value": "a"}, {"value": "b"}, {"value": "c"}]},
+        "path": ["r", "b"], "highlights": {"b": "current"},
+        "label_size": 17,
+    }})
+    assert svg.count('class="tree-node ') == 4
+    assert "tree-edge tree-edge-path" in svg
+    assert "tree-node tree-node-current" in svg
+    assert "font-size: 17px" in svg
+
+
 def test_low_link_storyboard_draws_the_bridge_unlike_a_tree_edge():
     params = {"nodes": [{"id": x} for x in "ABCD"], "edges": [
         {"from": "A", "to": "B"}, {"from": "B", "to": "C"},
@@ -117,3 +141,57 @@ def test_low_link_storyboard_draws_the_bridge_unlike_a_tree_edge():
                        for data in re.findall(r"base64,([^\"']+)", svg))
     assert "graph-edge graph-edge-cut" in children
     assert "graph-edge graph-edge-highlight" in children
+
+
+# ------------------------------------------------ review findings on PR #31
+
+
+def _decoded_children(svg: str) -> str:
+    return "".join(base64.b64decode(data).decode("utf-8")
+                   for data in re.findall(r"base64,([^\"']+)", svg))
+
+
+def test_priority_queue_defaults_to_the_documented_heap_tree():
+    """A new `view` param defaulted to "sorted", silently regenerating every
+    published figure as a sorted array instead of the heap tree, with the
+    caption's labels changed and a sorted array misrepresenting heap order."""
+    params = {"items": [{"id": "A", "priority": 5}, {"id": "B", "priority": 2}],
+              "operations": [], "animate": False}
+    children = _decoded_children(render_diagram({"type": "priority_queue",
+                                                 "params": params}))
+    assert children.count("<circle") == 2
+    assert "heap array: [B:2, A:5]" in children
+    sorted_view = _decoded_children(render_diagram({
+        "type": "priority_queue", "params": {**params, "view": "sorted"}}))
+    assert "<circle" not in sorted_view and "(2, B)" in sorted_view
+    findings = DIAGRAM_REGISTRY["priority_queue"].refusal_findings(
+        {**params, "view": "array"})
+    assert findings and "view must be heap or sorted" in findings[0].message
+
+
+def test_binary_tree_survives_a_font_size_it_cannot_read():
+    """font_size was ignored for years, then fed through bare float(): a
+    '14px' that rendered fine crashed to an empty figure with the reason
+    swallowed by the registry's blanket except."""
+    svg = render_diagram({"type": "binary_tree", "params": {
+        "root": {"value": 1, "left": {"value": 2}}, "font_size": "14px"}})
+    assert svg.count("<circle") == 2 and "font-size: 13px" in svg
+    floored = render_diagram({"type": "binary_tree", "params": {
+        "root": {"value": 1}, "font_size": 6}})
+    assert "font-size: 8px" in floored
+
+
+# ---------------------------------------------- follow-up review findings
+
+
+def test_tree_reports_a_malformed_root_instead_of_drawing_nothing():
+    findings = DIAGRAM_REGISTRY["tree"].refusal_findings({"root": "not-a-node"})
+    assert findings and "root must be an object" in findings[0].message
+    assert render_diagram({"type": "tree", "params": {"root": "not-a-node"}}) == ""
+
+
+def test_tree_tolerates_size_values_it_cannot_read():
+    svg = render_diagram({"type": "tree", "params": {
+        "root": {"value": 1, "children": [{"value": 2}]}, "font_size": "14px",
+        "node_radius": "big"}})
+    assert svg.count("<circle") == 2 and "font-size: 13px" in svg

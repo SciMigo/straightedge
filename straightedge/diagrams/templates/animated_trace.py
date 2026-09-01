@@ -134,6 +134,8 @@ class AnimatedTraceTemplate:
         loop = bool(params.get("loop", True))
         title_value = params.get("title")
         background = str(params.get("background", "#ffffff"))
+        label_size = float(params.get("label_size", params.get("font_size", 14)))
+        title_size = float(params.get("title_size", label_size))
         findings, rendered = _render_frames(params)
         if findings or not rendered:
             return ""
@@ -143,11 +145,13 @@ class AnimatedTraceTemplate:
         height = max(frame[3] for frame in frames) + 68
         total = duration_per_frame * len(rendered)
         parts = [style("""
-.animated-trace-label{font:600 14px Inter,Helvetica,Arial,sans-serif;fill:#27313b}
 @media (prefers-reduced-motion:reduce){
   .animated-trace-frame{opacity:0!important}
   .animated-trace-first{opacity:1!important}
 }
+""" + f"""
+.animated-trace-label{{font:600 {label_size:g}px Inter,Helvetica,Arial,sans-serif;fill:#27313b}}
+.animated-trace-title{{font-size:{title_size:g}px}}
 """)]
         # The background is a plain fill, not a CSS custom property: an SVG
         # embedded through <img> gets no page styles, and a renderer without
@@ -159,7 +163,8 @@ class AnimatedTraceTemplate:
         if title_value is not None:
             parts.append(text(
                 width / 2, 20, str(title_value),
-                **{"class": "animated-trace-label", "text_anchor": "middle"},
+                **{"class": "animated-trace-label animated-trace-title",
+                   "text_anchor": "middle"},
             ))
         top = 28 if title_value is not None else 8
         content_h = height - top - 34

@@ -89,6 +89,38 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `expect` codes are refused with the cycle, components, or first differing
   position as a witness.
 
+- **A sorted view for priority queues.** `priority_queue` accepts
+  `view: "sorted"` to draw the items as a priority-ordered `(priority, id)`
+  array; the documented binary-heap tree with its true array order stays the
+  default, and unknown views are refused.
+
+### Fixed
+
+- **Figures can no longer contradict their captions.** The Mycielski trace
+  reveals the exact search's optimal coloring instead of a greedy pass that
+  could exceed the printed `χ(M(G))`; edge colorings refuse classes past the
+  11-color palette (which drew unstyled gray edges) and empty authored
+  classes (a blank panel that inflated the reported chromatic index).
+
+- **Fewer false refusals.** `pop_min` transitions accept any item of minimal
+  priority instead of breaking ties by array position; edge coloring falls
+  through to the Δ+1 attempt when the Δ search merely exhausts its state
+  budget; `havel_hakimi` honors the 24-frame animation budget; and
+  `hamiltonian_search` sizes its default `max_frames` to the lane so a
+  storyboard renders with default parameters.
+
+- **Style knobs are validated or tolerated, never fatal.** `algorithm_trace`
+  refuses non-numeric or unreadable `label_size`/`font_size`/`title_size`
+  and bounds explicit `panel_width`/`panel_height` at 2000px; `binary_tree`
+  and `tree` fall back to their defaults for size values they cannot read
+  instead of blanking the figure, and `tree` reports a malformed `root`
+  through `refusal_findings` instead of silently drawing nothing.
+
+- **Every graph figure computes its algorithm once per render.** The
+  storyboard templates shared one compute between the refusal check and the
+  frames instead of running their sometimes-exponential searches twice, and
+  the Hamiltonian search tracks path membership in a set.
+
 ## [0.7.0] - 2026-08-26
 
 A minor release about graph theory, and about every state on screen being

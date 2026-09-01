@@ -89,6 +89,8 @@ svg = render_diagram({"type": "priority_queue", "params": {
 
 The heap tree and its array order are shown together. Popping the last item
 produces an explicit empty-queue frame instead of a blank child figure.
+`view: "sorted"` opts into an array of `(priority, id)` pairs ordered by
+priority instead of the heap tree.
 
 ## Four equivalent graph representations
 

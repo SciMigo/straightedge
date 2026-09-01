@@ -13,9 +13,11 @@ from typing import Any, Dict, List, Tuple
 from ..registry import register
 from ..renderer import (
     DEFAULT_STYLES,
+    boxes_collide,
     circle,
     defs,
     group,
+    label_box,
     line,
     path,
     polyline,
@@ -23,7 +25,6 @@ from ..renderer import (
     style,
     svg_document,
     text,
-    text_width,
 )
 
 
@@ -329,12 +330,10 @@ class MatrixTransformTemplate:
                              fill_opacity="0.15")
                 )
 
-        # Both label sizes below are the 10px the stylesheet sets, and the
-        # boxes cover ascent and descent the way the legibility parser
-        # estimates them.
+        # Both label sizes below are the 10px the stylesheet sets; the box
+        # and overlap maths are the renderer's shared helpers.
         def _label_box(x: float, y: float, s: str) -> Tuple[float, float, float, float]:
-            w = text_width(s, 10, safe=True)
-            return (x, x + w, y - 8.0, y + 2.5)
+            return label_box(x, y, s, 10)
 
         # Basis vectors
         taken_boxes: List[Tuple[float, float, float, float]] = []
@@ -409,9 +408,7 @@ class MatrixTransformTemplate:
                               for dy in (-4, 12, -18) for end in ends]
                 spot = next(
                     (c for c in candidates
-                     if not any(box[0] < t[1] and t[0] < box[1]
-                                and box[2] < t[3] and t[2] < box[3]
-                                for box in [_label_box(c[0], c[1], value_text)]
+                     if not any(boxes_collide(_label_box(c[0], c[1], value_text), t)
                                 for t in taken_boxes)),
                     candidates[0])
                 taken_boxes.append(_label_box(spot[0], spot[1], value_text))

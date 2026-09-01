@@ -43,6 +43,13 @@ from ..renderer import (defs, fit_text, group, path, rect, style, svg_document, 
 MAX_STEPS = 12
 MIN_PANEL_WIDTH, MAX_PANEL_WIDTH = 220, 600
 MIN_PANEL_HEIGHT, MAX_PANEL_HEIGHT = 160, 480
+#: Explicit panel_width/panel_height may exceed the automatic bounds (the
+#: documented answer to an UNREADABLE_STEP), but not without limit — an
+#: unbounded panel renders a megapixel canvas that nothing downstream checks.
+MAX_EXPLICIT_PANEL = 2000
+#: Author-tunable text sizes; below the floor the qc pass would flag the text
+#: as unreadable anyway, and past the ceiling the text is the figure.
+MIN_FONT_PX, MAX_FONT_PX = 8, 72
 #: Horizontal inset of the child figure inside its card, each side.
 PANEL_INSET = 10
 #: Below this, a child's 12px labels are drawn under 8px tall. The documented
@@ -55,13 +62,18 @@ MARGIN = 28
 HEADER_H = 58
 STEP_HEAD_H = 42
 
-_TRANSITION_TYPES = {"swap", "push", "pop", "enqueue", "dequeue"}
+_TRANSITION_TYPES = {
+    "swap", "push", "pop", "enqueue", "dequeue",
+    "visit", "discover", "settle", "decrease_key", "pop_min",
+}
 _REQUIRED_VISUAL = {
     "swap": "array_state",
     "push": "stack",
     "pop": "stack",
     "enqueue": "queue",
     "dequeue": "queue",
+    "decrease_key": "priority_queue",
+    "pop_min": "priority_queue",
 }
 _QUEUE_ENDS = {"front", "back"}
 
@@ -73,9 +85,23 @@ def _finding(code: str, message: str, path_: str) -> Finding:
     return {"code": code, "severity": "error", "message": message, "path": path_}
 
 
-def _visual(step: Dict[str, Any]) -> Dict[str, Any] | None:
+def _visuals(step: Dict[str, Any]) -> List[Dict[str, Any]] | None:
     value = step.get("visual")
-    return value if isinstance(value, dict) else None
+    if isinstance(value, dict):
+        return [value]
+    if (isinstance(value, list) and 1 <= len(value) <= 2
+            and all(isinstance(item, dict) for item in value)):
+        return value
+    return None
+
+
+def _visual(step: Dict[str, Any], kind: str | None = None) -> Dict[str, Any] | None:
+    visuals = _visuals(step)
+    if not visuals:
+        return None
+    if kind is None:
+        return visuals[0] if len(visuals) == 1 else None
+    return next((visual for visual in visuals if visual.get("type") == kind), None)
 
 
 def _child_params(visual: Dict[str, Any]) -> Dict[str, Any] | None:
@@ -90,13 +116,29 @@ def _child_params(visual: Dict[str, Any]) -> Dict[str, Any] | None:
     return raw if isinstance(raw, dict) else None
 
 
-def _values(step: Dict[str, Any]) -> List[Any] | None:
-    visual = _visual(step)
+def _values(step: Dict[str, Any], kind: str | None = None) -> List[Any] | None:
+    visual = _visual(step, kind)
     params = _child_params(visual) if visual is not None else None
     if params is None:
         return None
     values = params.get("values")
     return list(values) if isinstance(values, list) else None
+
+
+def _priority_items(step: Dict[str, Any]) -> List[Dict[str, Any]] | None:
+    visual = _visual(step, "priority_queue")
+    params = _child_params(visual) if visual is not None else None
+    items = params.get("items") if params else None
+    if not isinstance(items, list) or not all(isinstance(item, dict) for item in items):
+        return None
+    ids = [str(item.get("id")) for item in items if item.get("id") is not None]
+    if len(ids) != len(items) or len(ids) != len(set(ids)):
+        return None
+    if any(not isinstance(item.get("priority"), (int, float))
+           or isinstance(item.get("priority"), bool)
+           or not math.isfinite(item["priority"]) for item in items):
+        return None
+    return [dict(item) for item in items]
 
 
 def _is_index(value: Any) -> bool:
@@ -122,7 +164,7 @@ def _operation_disagreement(current: Dict[str, Any], kind: str,
     transition; without this it would approve a storyboard whose panel draws
     the opposite of what the arrow between the panels says.
     """
-    visual = _visual(current)
+    visual = _visual(current, _REQUIRED_VISUAL[kind])
     params = _child_params(visual) if visual is not None else None
     operation = (params or {}).get("operation")
     if not isinstance(operation, dict) or not operation:
@@ -148,17 +190,63 @@ def _transition_error(current: Dict[str, Any], following: Dict[str, Any],
     """Return why a supported state transition is false, or ``None``."""
     kind = str(transition.get("type") or "").strip().lower()
     if kind not in _TRANSITION_TYPES:
-        return ("transition.type must be swap, push, pop, enqueue, or dequeue; "
+        return ("transition.type must be swap, push, pop, enqueue, dequeue, visit, "
+                "discover, settle, decrease_key, or pop_min; "
                 "omit transition for an unchecked explanatory step")
 
-    current_visual, following_visual = _visual(current), _visual(following)
-    current_type = current_visual.get("type") if current_visual else None
-    following_type = following_visual.get("type") if following_visual else None
+    if kind in {"visit", "discover", "settle"}:
+        return _graph_transition_error(current, following, kind, transition)
+
+    if kind in {"decrease_key", "pop_min"}:
+        before_items, after_items = _priority_items(current), _priority_items(following)
+        if before_items is None or after_items is None:
+            return f"{kind} requires items arrays on adjacent priority_queue visuals"
+        before_by_id = {str(item.get("id")): item.get("priority") for item in before_items}
+        after_by_id = {str(item.get("id")): item.get("priority") for item in after_items}
+        if kind == "decrease_key":
+            item_id = str(transition.get("id", transition.get("node", "")))
+            priority = transition.get("priority")
+            if not item_id or item_id not in before_by_id:
+                return "decrease_key needs the id of an existing item"
+            if (not isinstance(priority, (int, float)) or isinstance(priority, bool)
+                    or not math.isfinite(priority)):
+                return "decrease_key needs a numeric priority"
+            if priority > before_by_id[item_id]:
+                return "decrease_key cannot increase a priority"
+            expected = dict(before_by_id)
+            expected[item_id] = priority
+            if after_by_id != expected:
+                return f"next priority queue must be {expected!r}, got {after_by_id!r}"
+            return None
+        if not before_items:
+            return "cannot pop_min from an empty priority queue"
+        # Any item of minimal priority is a legal pop — ties are broken by the
+        # author's queue, not by position in the items array.
+        minimum_priority = min(item.get("priority") for item in before_items)
+        minimum_ids = [str(item.get("id")) for item in before_items
+                       if item.get("priority") == minimum_priority]
+        claimed = transition.get("id", transition.get("value", transition.get("node")))
+        if claimed is not None and str(claimed) not in minimum_ids:
+            named = " or ".join(repr(value) for value in minimum_ids)
+            return f"pop_min says it removes {str(claimed)!r}, not {named}"
+        removed_id = (str(claimed) if claimed is not None else
+                      next((value for value in minimum_ids if value not in after_by_id),
+                           minimum_ids[0]))
+        expected = dict(before_by_id)
+        expected.pop(removed_id)
+        if after_by_id != expected:
+            return f"next priority queue must be {expected!r}, got {after_by_id!r}"
+        coupled = dict(transition)
+        coupled["value"] = removed_id
+        return _coupled_frontier_error(current, following, kind, coupled)
+
     required_type = _REQUIRED_VISUAL[kind]
-    if current_type != required_type or following_type != required_type:
+    current_visual = _visual(current, required_type)
+    following_visual = _visual(following, required_type)
+    if current_visual is None or following_visual is None:
         return f"{kind} requires adjacent {required_type} visuals"
 
-    a, b = _values(current), _values(following)
+    a, b = _values(current, required_type), _values(following, required_type)
     if a is None or b is None:
         return f"{kind} needs values arrays on both adjacent visuals"
 
@@ -208,7 +296,142 @@ def _transition_error(current: Dict[str, Any], following: Dict[str, Any],
 
     if b != expected:
         return f"next values must be {expected!r}, got {b!r}"
-    return _operation_disagreement(current, kind, transition, end)
+    disagreement = _operation_disagreement(current, kind, transition, end)
+    if disagreement:
+        return disagreement
+    return _coupled_frontier_error(current, following, kind, transition)
+
+
+def _graph_states(step: Dict[str, Any]) -> Dict[str, str] | None:
+    visual = _visual(step, "graph")
+    if visual is None:
+        return None
+    params = _child_params(visual) if visual is not None else None
+    highlights = params.get("highlights") if params else None
+    nodes = highlights.get("nodes") if isinstance(highlights, dict) else None
+    if not isinstance(nodes, dict):
+        return {}
+    return {str(node): str(state).strip().lower() for node, state in nodes.items()}
+
+
+def _graph_nodes(step: Dict[str, Any]) -> set[str]:
+    visual = _visual(step, "graph")
+    params = _child_params(visual) if visual is not None else None
+    raw = params.get("nodes") if params else None
+    return {str(node.get("id")) for node in raw if isinstance(node, dict) and node.get("id") is not None} \
+        if isinstance(raw, list) else set()
+
+
+def _graph_has_edge(step: Dict[str, Any], source: str, target: str) -> bool:
+    visual = _visual(step, "graph")
+    params = _child_params(visual) if visual is not None else None
+    if not params:
+        return False
+    directed = bool(params.get("directed", False))
+    for edge in params.get("edges", []):
+        if not isinstance(edge, dict):
+            continue
+        left, right = str(edge.get("from")), str(edge.get("to"))
+        if (left, right) == (source, target) or (not directed and (left, right) == (target, source)):
+            return True
+    return False
+
+
+def _next_neighbor(step: Dict[str, Any], source: str,
+                   states: Dict[str, str]) -> str | None:
+    """First undiscovered neighbor using the caller's stable ordering contract."""
+    visual = _visual(step, "graph")
+    params = _child_params(visual) if visual is not None else None
+    if not params:
+        return None
+    directed = bool(params.get("directed", False))
+    neighbors: List[str] = []
+    for edge in params.get("edges", []):
+        if not isinstance(edge, dict):
+            continue
+        left, right = str(edge.get("from")), str(edge.get("to"))
+        neighbor = right if left == source else left if not directed and right == source else None
+        if neighbor is not None and neighbor not in neighbors:
+            neighbors.append(neighbor)
+    order = params.get("neighbor_order")
+    if isinstance(order, list):
+        rank = {str(node): index for index, node in enumerate(order)}
+        neighbors.sort(key=lambda node: rank.get(node, len(rank)))
+    return next((node for node in neighbors
+                 if states.get(node, "unvisited") in {"default", "unvisited"}), None)
+
+
+def _persistent_graph_error(current: Dict[str, str], following: Dict[str, str],
+                            changing: str) -> str | None:
+    for node, state in current.items():
+        after = following.get(node)
+        if node == changing:
+            continue
+        if state == "settled" and after != "settled":
+            return f"settled node {node!r} must stay settled"
+        if state == "visited" and after not in {"visited", "settled"}:
+            return f"visited node {node!r} must stay visited"
+    return None
+
+
+def _graph_transition_error(current: Dict[str, Any], following: Dict[str, Any],
+                            kind: str, transition: Dict[str, Any]) -> str | None:
+    before, after = _graph_states(current), _graph_states(following)
+    if before is None or after is None:
+        return f"{kind} requires adjacent graph visuals"
+    if "node" not in transition:
+        return f"{kind} needs node"
+    node = str(transition["node"])
+    if node not in _graph_nodes(current) or node not in _graph_nodes(following):
+        return f"{kind} names unknown graph node {node!r}"
+    persistent = _persistent_graph_error(before, after, node)
+    if persistent:
+        return persistent
+    if kind == "discover":
+        if "from" not in transition:
+            return "discover needs from"
+        source = str(transition["from"])
+        if source not in _graph_nodes(current) or not _graph_has_edge(current, source, node):
+            return f"discover needs an edge from {source!r} to {node!r}"
+        expected = _next_neighbor(current, source, before)
+        if expected is not None and node != expected:
+            return (f"discover must follow neighbor order from {source!r}: "
+                    f"expected {expected!r}, got {node!r}")
+        if after.get(node) != "frontier":
+            return f"discovered node {node!r} must be frontier in the next graph"
+    elif kind == "visit":
+        if after.get(node) != "visited":
+            return f"visited node {node!r} must be visited in the next graph"
+    else:
+        if before.get(node) != "frontier" or after.get(node) != "settled":
+            return f"settle must move node {node!r} from frontier to settled"
+    return None
+
+
+def _coupled_frontier_error(current: Dict[str, Any], following: Dict[str, Any],
+                            kind: str, transition: Dict[str, Any]) -> str | None:
+    before, after = _graph_states(current), _graph_states(following)
+    if before is None and after is None:
+        return None
+    if before is None or after is None:
+        return f"a coupled {kind} needs a graph in both adjacent composite visuals"
+    value = transition.get("value")
+    if value is None:
+        return None
+    node = str(value)
+    if node not in _graph_nodes(current):
+        return f"{kind} value {node!r} is not a graph node"
+    persistent = _persistent_graph_error(before, after, node)
+    if persistent:
+        return persistent
+    if kind in {"enqueue", "push"} and after.get(node) != "frontier":
+        return f"{kind} node {node!r} must be frontier in the next graph"
+    if kind in {"dequeue", "pop", "pop_min"}:
+        if before.get(node) != "frontier":
+            return f"{kind} node {node!r} must be frontier in the current graph"
+        if after.get(node) == "frontier":
+            return f"{kind} node {node!r} must leave the frontier in the next graph"
+    return None
 
 
 def _positive_number(value: Any) -> bool:
@@ -233,9 +456,20 @@ def _envelope_findings(params: Dict[str, Any]) -> Tuple[List[Finding], List[Any]
             "INVALID_COLUMNS", "columns must be a positive integer", "$.columns"))
     for name in ("panel_width", "panel_height"):
         value = params.get(name)
-        if value is not None and not _positive_number(value):
+        if value is not None and not (_positive_number(value)
+                                      and value <= MAX_EXPLICIT_PANEL):
             findings.append(_finding(
-                "INVALID_PANEL_SIZE", f"{name} must be a positive number", f"$.{name}"))
+                "INVALID_PANEL_SIZE",
+                f"{name} must be a positive number of at most {MAX_EXPLICIT_PANEL}",
+                f"$.{name}"))
+    for name in ("label_size", "font_size", "title_size"):
+        value = params.get(name)
+        if value is not None and not (_positive_number(value)
+                                      and MIN_FONT_PX <= value <= MAX_FONT_PX):
+            findings.append(_finding(
+                "INVALID_FONT_SIZE",
+                f"{name} must be a number from {MIN_FONT_PX} to {MAX_FONT_PX} pixels",
+                f"$.{name}"))
     if len(steps) > MAX_STEPS:
         findings.append(_finding(
             "TOO_MANY_STEPS", f"at most {MAX_STEPS} steps fit in one storyboard", "$.steps"))
@@ -245,22 +479,28 @@ def _envelope_findings(params: Dict[str, Any]) -> Tuple[List[Finding], List[Any]
         if not isinstance(step, dict):
             findings.append(_finding("INVALID_STEP", "step must be an object", step_path))
             continue
-        visual = _visual(step)
-        if visual is None:
+        visuals = _visuals(step)
+        if visuals is None:
             findings.append(_finding(
-                "MISSING_VISUAL", "step needs visual: {type, params}", f"{step_path}.visual"))
+                "MISSING_VISUAL",
+                "step needs visual: {type, params}, or a list of one or two visuals",
+                f"{step_path}.visual"))
             continue
-        kind = visual.get("type")
-        if kind == "algorithm_trace":
-            findings.append(_finding(
-                "RECURSIVE_TRACE", "an algorithm trace cannot contain itself",
-                f"{step_path}.visual.type"))
-        elif not isinstance(kind, str) or kind not in DIAGRAM_REGISTRY:
-            findings.append(_finding(
-                "UNKNOWN_VISUAL", f"unknown visual type {kind!r}", f"{step_path}.visual.type"))
-        if _child_params(visual) is None:
-            findings.append(_finding(
-                "INVALID_PARAMS", "visual.params must be an object", f"{step_path}.visual.params"))
+        for visual_index, visual in enumerate(visuals):
+            suffix = f"[{visual_index}]" if isinstance(step.get("visual"), list) else ""
+            visual_path = f"{step_path}.visual{suffix}"
+            kind = visual.get("type")
+            if kind == "algorithm_trace":
+                findings.append(_finding(
+                    "RECURSIVE_TRACE", "an algorithm trace cannot contain itself",
+                    f"{visual_path}.type"))
+            elif not isinstance(kind, str) or kind not in DIAGRAM_REGISTRY:
+                findings.append(_finding(
+                    "UNKNOWN_VISUAL", f"unknown visual type {kind!r}", f"{visual_path}.type"))
+            if _child_params(visual) is None:
+                findings.append(_finding(
+                    "INVALID_PARAMS", "visual.params must be an object",
+                    f"{visual_path}.params"))
 
         transition = step.get("transition")
         if transition is None:
@@ -281,7 +521,8 @@ def _envelope_findings(params: Dict[str, Any]) -> Tuple[List[Finding], List[Any]
     return findings, steps
 
 
-def _render_child(index: int, step: Dict[str, Any]) -> Tuple[Finding | None, str]:
+def _render_visual(index: int, visual_index: int,
+                   visual: Dict[str, Any]) -> Tuple[Finding | None, str]:
     """One child figure, or the finding that stands in for it.
 
     The child template is called directly rather than through
@@ -290,10 +531,10 @@ def _render_child(index: int, step: Dict[str, Any]) -> Tuple[Finding | None, str
     the child crashed, refused a false claim, or genuinely drew nothing.
     Those are three different repairs, so they are three findings.
     """
-    visual = _visual(step) or {}
     kind = str(visual.get("type"))
     params = _child_params(visual) or {}
-    path_ = f"$.steps[{index}].visual.params"
+    suffix = f"[{visual_index}]" if visual_index >= 0 else ""
+    path_ = f"$.steps[{index}].visual{suffix}.params"
     refused = refusal_findings(kind, params)
     if refused:
         reason = "; ".join(f"{f.check}: {f.message}" for f in refused)
@@ -308,6 +549,37 @@ def _render_child(index: int, step: Dict[str, Any]) -> Tuple[Finding | None, str
         return _finding("BLANK_STEP",
                         "the child visual drew no data marks; check its params", path_), ""
     return None, svg
+
+
+def _compose_children(children: List[str]) -> str:
+    if len(children) == 1:
+        return children[0]
+    frames = [figure_frame(svg) for svg in children]
+    target_height = max(frame[3] for frame in frames)
+    gap = 18.0
+    widths = [frame[2] * target_height / frame[3] if frame[3] > 0 else frame[2]
+              for frame in frames]
+    total_width = sum(widths) + gap * (len(children) - 1)
+    x = 0.0
+    parts: List[str] = []
+    for child_index, (svg, width) in enumerate(zip(children, widths)):
+        parts.append(_embedded_svg(svg, x, 0, width, target_height,
+                                   f"Composite visual {child_index + 1}"))
+        x += width + gap
+    return svg_document("".join(parts), round(total_width), round(target_height),
+                        class_name="diagram algorithm-trace-composite")
+
+
+def _render_child(index: int, step: Dict[str, Any]) -> Tuple[Finding | None, str]:
+    visuals = _visuals(step) or []
+    rendered: List[str] = []
+    composite = isinstance(step.get("visual"), list)
+    for visual_index, visual in enumerate(visuals):
+        finding, svg = _render_visual(index, visual_index if composite else -1, visual)
+        if finding:
+            return finding, ""
+        rendered.append(svg)
+    return None, _compose_children(rendered)
 
 
 def _clamp(value: float, low: int, high: int) -> int:
@@ -325,10 +597,10 @@ def _panel_size(params: Dict[str, Any], rendered: List[str]) -> Tuple[int, int]:
     tallest = max((frame[3] for frame in frames), default=0.0)
     width = params.get("panel_width")
     height = params.get("panel_height")
-    panel_width = _clamp(width if width is not None else widest + 2 * PANEL_INSET,
-                         MIN_PANEL_WIDTH, MAX_PANEL_WIDTH)
-    panel_height = _clamp(height if height is not None else tallest,
-                          MIN_PANEL_HEIGHT, MAX_PANEL_HEIGHT)
+    panel_width = (max(1, int(width)) if width is not None else
+                   _clamp(widest + 2 * PANEL_INSET, MIN_PANEL_WIDTH, MAX_PANEL_WIDTH))
+    panel_height = (max(1, int(height)) if height is not None else
+                    _clamp(tallest, MIN_PANEL_HEIGHT, MAX_PANEL_HEIGHT))
     return panel_width, panel_height
 
 
@@ -391,6 +663,17 @@ def _transition_label(transition: Any) -> str:
         return f"{kind} {transition.get('value', '')}".strip()
     if kind in {"pop", "dequeue"}:
         return kind
+    if kind in {"visit", "settle"}:
+        return f"{kind} {transition.get('node', transition.get('value', ''))}".strip()
+    if kind == "pop_min":
+        # The validator's preferred key is `id`; the label reads the same keys.
+        item_id = transition.get("id", transition.get("value", transition.get("node", "")))
+        return f"pop_min {item_id}".strip()
+    if kind == "discover":
+        return f"discover {transition.get('node', '')}".strip()
+    if kind == "decrease_key":
+        item_id = transition.get("id", transition.get("node", ""))
+        return f"decrease {item_id} → {transition.get('priority', '')}".strip()
     return ""
 
 
@@ -430,6 +713,8 @@ class AlgorithmTraceTemplate:
         layout = params.get("layout") or "grid"
         panel_width, panel_height = _panel_size(params, rendered)
         show_numbers = bool(params.get("show_step_numbers", True))
+        label_size = float(params.get("label_size", params.get("font_size", 14)))
+        title_size = float(params.get("title_size", 23))
 
         # An explicit row or column is a layout; `columns` tunes the grid.
         if layout == "row":
@@ -447,10 +732,12 @@ class AlgorithmTraceTemplate:
         width = int(2 * MARGIN + columns * panel_width + (columns - 1) * GAP_X)
         height = int(top + rows * card_height + (rows - 1) * GAP_Y + MARGIN)
 
-        parts: List[str] = [defs(self._arrow() + style(self._css()))]
+        parts: List[str] = [defs(self._arrow() + style(self._css(
+            label_size, title_size
+        )))]
         parts.append(rect(0, 0, width, height, fill="#fbfaf7", **{"class": "at-background"}))
         if title:
-            drawn = fit_text(title, width - 2 * MARGIN, 23, bold=True)
+            drawn = fit_text(title, width - 2 * MARGIN, title_size, bold=True)
             parts.append(_named(title, drawn, text(MARGIN, MARGIN + 28, drawn,
                                                    **{"class": "at-title"})))
 
@@ -469,7 +756,7 @@ class AlgorithmTraceTemplate:
                                   **{"class": "at-number"}))
             label = str(step.get("label") or step.get("caption") or f"Step {index + 1}")
             label_x = x + (47 if show_numbers else 14)
-            drawn = fit_text(label, x + panel_width - 12 - label_x, 14, bold=True)
+            drawn = fit_text(label, x + panel_width - 12 - label_x, label_size, bold=True)
             parts.append(_named(label, drawn, text(label_x, y + 26, drawn,
                                                    **{"class": "at-step-label"})))
             parts.append(_embedded_svg(
@@ -498,7 +785,7 @@ class AlgorithmTraceTemplate:
             transition_label = _transition_label(steps[index].get("transition"))
             if transition_label:
                 label_budget = max(36.0, abs(x2 - x1) - 12) if same_row else panel_width
-                drawn = fit_text(transition_label, label_budget, 10, bold=True)
+                drawn = fit_text(transition_label, label_budget, 12, bold=True)
                 parts.append(_named(transition_label, drawn,
                                     text(lx, ly, drawn, text_anchor="middle",
                                          **{"class": "at-transition"})))
@@ -513,13 +800,14 @@ class AlgorithmTraceTemplate:
                 'fill="#7b8794"/></marker>')
 
     @staticmethod
-    def _css() -> str:
+    def _css(label_size: float = 14.0, title_size: float = 23.0) -> str:
         return """
-.at-title{font-size:23px;font-weight:700;font-family:Inter,Helvetica,Arial,sans-serif;fill:#17202a}
 .at-card{fill:#ffffff;stroke:#d9dde2;stroke-width:1.2}
 .at-number-disc{fill:#315fbd}
 .at-number{font-size:12px;font-weight:700;font-family:Inter,Helvetica,Arial,sans-serif;fill:#ffffff}
-.at-step-label{font-size:14px;font-weight:650;font-family:Inter,Helvetica,Arial,sans-serif;fill:#17202a}
 .at-arrow{fill:none;stroke:#7b8794;stroke-width:1.5}
-.at-transition{font-size:10px;font-weight:600;font-family:Inter,Helvetica,Arial,sans-serif;fill:#68717a}
+.at-transition{font-size:12px;font-weight:600;font-family:Inter,Helvetica,Arial,sans-serif;fill:#68717a}
+""" + f"""
+.at-title{{font-size:{title_size:g}px;font-weight:700;font-family:Inter,Helvetica,Arial,sans-serif;fill:#17202a}}
+.at-step-label{{font-size:{label_size:g}px;font-weight:650;font-family:Inter,Helvetica,Arial,sans-serif;fill:#17202a}}
 """

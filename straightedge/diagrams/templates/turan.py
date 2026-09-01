@@ -25,11 +25,7 @@ def _findings(params: Dict[str, Any]) -> List[Finding]:
     try:
         _computed(params)
     except GraphError as exc:
-        witness = exc.witness
-        label = (", ".join(str(value) for value in witness)
-                 if isinstance(witness, (list, tuple)) else
-                 None if witness is None else str(witness))
-        return [Finding("turan_input", "error", str(exc), label=label)]
+        return [Finding("turan_input", "error", str(exc), label=exc.witness_label())]
     return []
 
 
@@ -80,6 +76,8 @@ class TuranTemplate:
         params.get("width", 700)
         params.get("height", 380)
         params.get("node_radius", 18)
-        if self.refusal_findings(params):
+        try:
+            rendered = graph_params(params)
+        except GraphError:
             return ""
-        return DIAGRAM_REGISTRY["graph"].render(graph_params(params))
+        return DIAGRAM_REGISTRY["graph"].render(rendered)

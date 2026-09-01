@@ -303,6 +303,25 @@ def text_width(value: str, font_px: float, bold: bool = False,
     return width * WIDTH_SAFETY if safe else width
 
 
+def label_box(x: float, y: float, value: str, font_px: float,
+              anchor: str = "start") -> tuple[float, float, float, float]:
+    """The ``(x0, x1, y0, y1)`` extent of a text label at its baseline point.
+
+    0.8em above the baseline and 0.25em below covers ascent and descenders the
+    way the legibility parser estimates them; templates that dodge their own
+    labels share this box so their collision maths cannot drift.
+    """
+    width = text_width(value, font_px, safe=True)
+    x0 = x - width if anchor == "end" else x - width / 2 if anchor == "middle" else x
+    return (x0, x0 + width, y - 0.8 * font_px, y + 0.25 * font_px)
+
+
+def boxes_collide(a: tuple[float, float, float, float],
+                  b: tuple[float, float, float, float]) -> bool:
+    """Whether two ``(x0, x1, y0, y1)`` extents overlap."""
+    return a[0] < b[1] and b[0] < a[1] and a[2] < b[3] and b[2] < a[3]
+
+
 def fit_text(
     value: str,
     max_px: float,

@@ -458,7 +458,10 @@ def _classify(value) -> tuple[str, object] | None:
     return None
 
 
-_COERCIONS = {"str": "string", "int": "number", "float": "number", "bool": "boolean"}
+_COERCIONS = {"str": "string", "int": "number", "float": "number", "bool": "boolean",
+              # The templates' tolerant size reader enforces a number the same
+              # way a bare float() does; it merely survives bad input.
+              "_coerce_size": "number"}
 
 
 def _dict_get_parameters(func: Callable, *, receiver: str) -> list[dict]:

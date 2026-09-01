@@ -58,6 +58,17 @@ class GraphError(ValueError):
         self.kind = kind
         self.witness_kind = witness_kind
 
+    def witness_label(self, joiner: str = ", ") -> str | None:
+        """The witness joined for display, or ``None`` when there is none.
+
+        ``witness_kind`` picks the joiner when the producer set one; ``joiner``
+        is the caller's fallback for legacy errors that did not.
+        """
+        if isinstance(self.witness, (list, tuple)):
+            chosen = {"walk": " → ", "edge": "–", "list": ", "}.get(self.witness_kind, joiner)
+            return chosen.join(str(value) for value in self.witness)
+        return None if self.witness is None else str(self.witness)
+
 
 EdgeKey = tuple[str, str]
 
@@ -256,39 +267,29 @@ def require_tree(graph: Graph) -> None:
     """Refuse a directed, cyclic, or disconnected graph with a checkable witness."""
     if graph.directed:
         raise GraphError("a tree must be undirected")
-    parent: dict[str, str | None] = {}
-
-    def visit(vertex: str, previous: str | None, path: list[str]) -> list[str] | None:
-        parent[vertex] = previous
-        for neighbor in graph.neighbors(vertex):
-            if neighbor == previous:
-                continue
-            if neighbor in parent:
-                start = path.index(neighbor) if neighbor in path else 0
-                return path[start:] + [neighbor]
-            found = visit(neighbor, vertex, path + [neighbor])
-            if found:
-                return found
-        return None
-
-    cycle = visit(graph.ids[0], None, [graph.ids[0]])
+    cycle = _find_undirected_cycle(graph)
     if cycle:
-        raise GraphError("the graph has a cycle, so it is not a tree", witness=cycle)
-    if len(parent) != len(graph.ids):
-        first = list(parent)
-        other = next(v for v in graph.ids if v not in parent)
-        second: list[str] = []
-        queue = [other]
-        seen = {other}
+        raise GraphError("the graph has a cycle, so it is not a tree",
+                         witness=cycle + [cycle[0]], witness_kind="walk")
+
+    def component(root: str) -> list[str]:
+        members = [root]
+        seen = {root}
+        queue = [root]
         while queue:
             vertex = queue.pop(0)
-            second.append(vertex)
             for neighbor in graph.neighbors(vertex):
                 if neighbor not in seen:
                     seen.add(neighbor)
+                    members.append(neighbor)
                     queue.append(neighbor)
+        return members
+
+    first = component(graph.ids[0])
+    if len(first) != len(graph.ids):
+        other = next(v for v in graph.ids if v not in set(first))
         raise GraphError("the graph is disconnected, so it is not a tree",
-                         witness=(tuple(first), tuple(second)))
+                         witness=(tuple(first), tuple(component(other))))
 
 
 # --------------------------------------------------------------- Prüfer code
@@ -795,9 +796,10 @@ def hamiltonian_search_steps(graph: Graph, start: Any = None, max_frames: int = 
                                or expect not in {"cycle", "none"}):
         raise GraphError("expect must be cycle or none", kind="input")
     path = [start_vertex]
+    on_path = {start_vertex}
     found: list[str] | None = None
     explored = 1
-    events: list[tuple[str, str, list[str], str | None]] = []
+    events: list[tuple[str, str, list[str], str | None, int]] = []
 
     # An undirected "cycle" on two vertices would traverse its one edge twice
     # — has_edge(B, A) is true for the same edge that got there — so closing
@@ -813,23 +815,25 @@ def hamiltonian_search_steps(graph: Graph, start: Any = None, max_frames: int = 
                 return True
             return False
         for neighbor in graph.neighbors(vertex):
-            if neighbor in path:
+            if neighbor in on_path:
                 continue
             path.append(neighbor)
+            on_path.add(neighbor)
             explored += 1
             # Only the first max_frames states are ever rendered, and the
             # search is exponential: keeping every state made an 11-vertex
             # no-cycle graph copy ~986k paths (665MB) to draw 10 frames.
             if len(events) < max_frames:
                 events.append((f"Try {neighbor}", f"Extend the partial path to {neighbor}",
-                               list(path), None))
+                               list(path), None, explored))
             if search(neighbor):
                 return True
             rejected = path.pop()
+            on_path.discard(rejected)
             if len(events) < max_frames:
                 events.append((f"Backtrack {rejected}",
                                f"No Hamiltonian cycle extends through {rejected}; backtrack",
-                               list(path), rejected))
+                               list(path), rejected, explored))
         return False
 
     search(start_vertex)
@@ -839,7 +843,8 @@ def hamiltonian_search_steps(graph: Graph, start: Any = None, max_frames: int = 
     if expect == "none" and found is not None:
         raise GraphError("a Hamiltonian cycle exists: " + " → ".join(found), witness=found)
 
-    def state(label: str, caption: str, current_path: list[str], rejected: str | None) -> Step:
+    def state(label: str, caption: str, current_path: list[str], rejected: str | None,
+              explored_so_far: int) -> Step:
         nodes = {vertex: "visited" for vertex in current_path}
         nodes[current_path[-1]] = "current"
         if rejected is not None:
@@ -847,9 +852,9 @@ def hamiltonian_search_steps(graph: Graph, start: Any = None, max_frames: int = 
         edges = {graph.key(u, v): "path" for u, v in zip(current_path, current_path[1:])}
         return Step(label, caption, nodes, edges,
                     panel=("path: " + " → ".join(current_path),),
-                    extras={"path": list(current_path), "explored": explored})
+                    extras={"path": list(current_path), "explored": explored_so_far})
 
-    steps = [state("Start", f"Start backtracking at {start_vertex}", [start_vertex], None)]
+    steps = [state("Start", f"Start backtracking at {start_vertex}", [start_vertex], None, 1)]
     for event in events[:max(0, max_frames - 2)]:
         steps.append(state(*event))
     if found is not None:
@@ -904,14 +909,16 @@ def floyd_warshall_steps(graph: Graph) -> list[Step]:
         negative = next((graph.ids[i] for i in range(n) if distance[i][i] < 0), None)
         if negative is not None:
             witness: Any = negative
+            witness_kind = None
             try:
                 bellman_ford_steps(graph, negative)
             except GraphError as exc:
-                if "negative cycle" in str(exc):
+                if exc.kind == "negative_cycle":
                     witness = exc.witness
+                    witness_kind = exc.witness_kind
             raise GraphError(
                 f"negative cycle detected: diagonal entry D[{negative},{negative}] became negative",
-                witness=witness)
+                witness=witness, kind="negative_cycle", witness_kind=witness_kind)
         steps.append(Step(
             f"Via {intermediate}",
             f"Allow {intermediate} as an intermediate vertex; {len(changed)} entries improve",
@@ -925,11 +932,11 @@ def floyd_warshall_steps(graph: Graph) -> list[Step]:
 # ---------------------------------------------------------- Mycielski graph
 
 
-def chromatic_number(graph: Graph) -> int:
-    """Exact chromatic number for the small graphs accepted by figure templates."""
+def optimal_coloring(graph: Graph) -> dict[str, int]:
+    """A coloring using exactly χ(G) colors, for the small graphs accepted here."""
     order = sorted(graph.ids, key=lambda vertex: (-graph.degree(vertex), graph.ids.index(vertex)))
 
-    def colorable(limit: int) -> bool:
+    def colorable(limit: int) -> dict[str, int] | None:
         colors: dict[str, int] = {}
 
         def assign(index: int) -> bool:
@@ -946,9 +953,15 @@ def chromatic_number(graph: Graph) -> int:
                     del colors[vertex]
             return False
 
-        return assign(0)
+        return colors if assign(0) else None
 
-    return next(limit for limit in range(1, len(graph.ids) + 1) if colorable(limit))
+    return next(found for limit in range(1, len(graph.ids) + 1)
+                if (found := colorable(limit)) is not None)
+
+
+def chromatic_number(graph: Graph) -> int:
+    """Exact chromatic number for the small graphs accepted by figure templates."""
+    return max(optimal_coloring(graph).values(), default=0)
 
 
 def _has_triangle(graph: Graph) -> bool:
@@ -988,7 +1001,11 @@ def mycielski_steps(base: Graph) -> list[Step]:
     graph = mycielski_graph(base)
     n = len(base.ids)
     base_chi = chromatic_number(base)
-    result_chi = chromatic_number(graph)
+    # A greedy pass in id order can use more colors than χ(M(G)) on some bases,
+    # drawing a coloring that contradicts the panel's printed chromatic number
+    # — so the revealed coloring is the exact search's own witness.
+    result_colors = optimal_coloring(graph)
+    result_chi = max(result_colors.values(), default=0)
     base_triangle_free = not _has_triangle(base)
     result_triangle_free = not _has_triangle(graph)
     steps = [Step(
@@ -1001,15 +1018,14 @@ def mycielski_steps(base: Graph) -> list[Step]:
     )]
     colors: dict[str, int] = {}
     for vertex in graph.ids:
-        used = {colors[neighbor] for neighbor in graph.neighbors(vertex) if neighbor in colors}
-        colors[vertex] = next(color for color in range(1, len(graph.ids) + 1)
-                              if color not in used)
+        colors[vertex] = result_colors[vertex]
         final = vertex == graph.ids[-1]
         panel = ((f"χ(G) = {base_chi} · χ(M(G)) = {result_chi}",
                   "triangle-free: " + ("yes" if base_triangle_free and result_triangle_free else "no"))
                  if final else (f"colors used: {max(colors.values())}",))
         steps.append(Step(
-            f"Color {vertex}", f"Assign {vertex} the smallest available color {colors[vertex]}",
+            f"Color {vertex}", f"Assign {vertex} color {colors[vertex]} of an optimal "
+            f"{result_chi}-coloring",
             {name: f"color-{color}" for name, color in colors.items()}, panel=panel,
             extras={"graph": graph, "colors": dict(colors), "base_chi": base_chi,
                     "result_chi": result_chi, "triangle_free": result_triangle_free},
@@ -1088,6 +1104,10 @@ def edge_coloring_steps(graph: Graph, classes: Any = None,
         for color, edge_class in enumerate(classes, 1):
             if not isinstance(edge_class, list):
                 raise GraphError(f"class {color} must be an array")
+            if not edge_class:
+                # An empty class would render a blank panel and inflate the
+                # reported chromatic index past the colors actually used.
+                raise GraphError(f"class {color} is empty", witness=color)
             used_vertices: set[str] = set()
             for raw in edge_class:
                 if isinstance(raw, dict):
@@ -1112,14 +1132,28 @@ def edge_coloring_steps(graph: Graph, classes: Any = None,
                              witness=missing[0])
     else:
         colors = {}
+        budget_error: GraphError | None = None
         for limit in range(delta, delta + 2):
-            found = _edge_coloring_with_k(graph, limit)
+            # A Δ-attempt that exhausts its budget is not a proof the graph is
+            # class 2, but neither may it refuse the figure outright: the
+            # Δ+1-colouring Vizing guarantees is often cheap to find.
+            try:
+                found = _edge_coloring_with_k(graph, limit)
+            except GraphError as exc:
+                budget_error = exc
+                continue
             if found is not None:
                 colors = found
                 break
-        if graph.edges and not colors:  # Vizing guarantees this cannot happen for a simple graph.
+        if graph.edges and not colors:
+            if budget_error is not None:
+                raise budget_error
             raise GraphError("could not compute an edge coloring")
     chromatic_index = max(colors.values(), default=0)
+    if chromatic_index > COLOR_ROLES:
+        raise GraphError(
+            f"the coloring uses {chromatic_index} classes; only {COLOR_ROLES} colours "
+            "can tell them apart", witness=chromatic_index)
     if expect is not None and expect != chromatic_index:
         raise GraphError(f"expected edge chromatic number {expect}, computed {chromatic_index}",
                          witness=(expect, chromatic_index))
@@ -1389,7 +1423,7 @@ def bellman_ford_steps(graph: Graph, start: str) -> list[Step]:
             current = previous[current]
         cycle.reverse()
         raise GraphError("the graph has a negative cycle: " + " → ".join(cycle + [cycle[0]]),
-                         witness=cycle)
+                         witness=cycle, kind="negative_cycle", witness_kind="walk")
     return steps
 
 
@@ -1767,6 +1801,21 @@ def max_flow_steps(graph: Graph, source: str, sink: str) -> list[Step]:
 
 
 # ---------------------------------------------------- colouring and matching
+
+
+def partition_keys(declared: dict) -> list[str]:
+    """The declared partition names in drawing order.
+
+    ``left``/``right`` outrank dict order. Naming only one of them is refused
+    rather than guessed — an array literally named "right" beside any other
+    key would otherwise become the left side. Both consumers of authored
+    partitions share this policy so they cannot drift.
+    """
+    if "left" in declared and "right" in declared:
+        return ["left", "right"]
+    if "left" in declared or "right" in declared:
+        raise GraphError("partitions naming one of left/right must name both")
+    return list(declared)
 
 
 def bipartition(graph: Graph) -> tuple[dict[str, int], list[str]]:

@@ -27,6 +27,7 @@ from . import graph_representation  # noqa: F401
 from . import matrix_state  # noqa: F401
 from . import linked_list  # noqa: F401
 from . import binary_tree  # noqa: F401
+from . import tree  # noqa: F401
 from . import search_tree  # noqa: F401
 from . import stack  # noqa: F401
 from . import queue  # noqa: F401
@@ -82,6 +83,7 @@ __all__ = [
     "matrix_state",
     "linked_list",
     "binary_tree",
+    "tree",
     "search_tree",
     "stack",
     "queue",

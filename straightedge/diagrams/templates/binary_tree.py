@@ -35,6 +35,22 @@ class TreeNode:
     y: float = 0
 
 
+def _coerce_size(value: Any, default: float, minimum: float) -> float:
+    """A finite pixel size from an author-supplied value, else ``default``.
+
+    These knobs were ignored for years, so existing callers pass anything
+    ("14px"); a value that cannot be read as a finite number falls back
+    rather than failing the whole figure, and the floor keeps text legible.
+    """
+    try:
+        size = float(value)
+    except (TypeError, ValueError):
+        return default
+    if not math.isfinite(size):
+        return default
+    return max(size, minimum)
+
+
 def _normalize_highlights(highlights: Any) -> Dict[str, str]:
     if not isinstance(highlights, dict):
         return {}
@@ -111,6 +127,11 @@ class BinaryTreeTemplate:
         annotations = params.get("annotations", [])
         path_values = params.get("path", [])
         caption = params.get("caption")
+        label_size = _coerce_size(params.get("label_size", params.get("font_size", 13)),
+                                  default=13.0, minimum=8.0)
+        caption_size = _coerce_size(params.get("caption_size", 13), default=13.0, minimum=8.0)
+        caption_gap = _coerce_size(params.get("caption_gap", 20),
+                                   default=20.0, minimum=0.0) if caption else 0.0
         show_null = bool(params.get("show_null", False))
         heap_mode = bool(params.get("heap_mode", False))
 
@@ -143,11 +164,11 @@ class BinaryTreeTemplate:
         max_x = max(node.x for node in nodes)
         max_y = max(node.y for node in nodes)
         svg_width = max_x + padding + node_radius
-        svg_height = max_y + padding + node_radius + (20 if caption else 0)
+        svg_height = max_y + padding + node_radius + caption_gap
         if caption:
             # A one-node tree is 78px wide; "Red-black tree" beneath it is not.
             # Widen the canvas to the caption and keep the tree centred in it.
-            caption_width = text_width(str(caption), 13, safe=True) + 16.0
+            caption_width = text_width(str(caption), caption_size, safe=True) + 16.0
             if caption_width > svg_width:
                 shift = (caption_width - svg_width) / 2
                 for node in nodes:
@@ -155,7 +176,7 @@ class BinaryTreeTemplate:
                 svg_width = caption_width
 
         elements: List[str] = []
-        elements.append(style(DEFAULT_STYLES + self._extra_styles()))
+        elements.append(style(DEFAULT_STYLES + self._extra_styles(label_size, caption_size)))
         elements.append(defs(self._arrow_marker()))
 
         node_lookup_by_value: Dict[str, TreeNode] = {str(node.value): node for node in nodes}
@@ -287,14 +308,15 @@ class BinaryTreeTemplate:
                     svg_width / 2,
                     svg_height - 8,
                     str(caption),
-                    **{"class": "tree-caption", "text_anchor": "middle"},
+                    **{"class": "tree-caption", "text_anchor": "middle",
+                       "font_size": f"{caption_size:g}px"},
                 )
             )
 
         return svg_document("\n".join(elements), int(svg_width), int(svg_height))
 
     @staticmethod
-    def _extra_styles() -> str:
+    def _extra_styles(label_size: float = 13.0, caption_size: float = 13.0) -> str:
         return """
 .tree-node { stroke: #343a40; stroke-width: 1.5; fill: #f8f9fa; }
 .tree-node-current { fill: #fff3cd; }
@@ -306,13 +328,16 @@ class BinaryTreeTemplate:
 .tree-node-comparison { fill: #FF9800; }
 .tree-node-color-red { fill: #c62828; stroke: #7f1d1d; }
 .tree-node-color-black { fill: #20242a; stroke: #050608; }
-.tree-node-value { font-size: 13px; font-family: sans-serif; fill: #212529; }
+.tree-node-value { font-family: sans-serif; fill: #212529; }
 .tree-node-value-inverse { fill: #fff; font-weight: 600; }
 .tree-edge { stroke: #555; }
 .tree-edge-path { stroke: #9C27B0; stroke-width: 2.5; }
 .tree-pointer-label { font-size: 12px; font-family: sans-serif; font-weight: 600; }
 .tree-annotation { font-size: 12px; font-family: sans-serif; fill: #444; }
-.tree-caption { font-size: 13px; font-family: sans-serif; fill: #333; }
+.tree-caption { font-family: sans-serif; fill: #333; }
+""" + f"""
+.tree-node-value {{ font-size: {label_size:g}px; }}
+.tree-caption {{ font-size: {caption_size:g}px; }}
 """
 
     @staticmethod

@@ -20,11 +20,8 @@ def _findings(params: Dict[str, Any]) -> List[Finding]:
     try:
         _computed(params)
     except GraphError as exc:
-        witness = exc.witness
-        label = ("→".join(str(value) for value in witness)
-                 if isinstance(witness, (list, tuple)) else
-                 None if witness is None else str(witness))
-        return [Finding("mycielski_input", "error", str(exc), label=label)]
+        return [Finding("mycielski_input", "error", str(exc),
+                        label=exc.witness_label("→"))]
     return []
 
 
@@ -71,9 +68,13 @@ class MycielskiTemplate:
         params.get("node_radius", 17)
         params.get("width", 600)
         params.get("height", 380)
-        if self.refusal_findings(params):
+        # One _computed call per render: each one runs the exact chromatic
+        # searches, so recomputing for the frames doubles the expensive part.
+        try:
+            graph, steps = _computed(params)
+        except GraphError:
             return ""
-        trace = frames(params)
+        trace = frames_from_steps(_params(graph, params), steps)
         title = str(params.get("title", "Mycielski construction"))
         if bool(params.get("animate", False)):
             return DIAGRAM_REGISTRY["animated_trace"].render({

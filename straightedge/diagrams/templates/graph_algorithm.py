@@ -17,7 +17,7 @@ from ...graphs import (
     ear_decomposition_steps, edge_coloring_steps,
     euler_steps,
     greedy_coloring_steps, hamiltonian_search_steps,
-    kruskal_steps, matching_steps, max_flow_steps, prim_steps,
+    kruskal_steps, matching_steps, max_flow_steps, partition_keys, prim_steps,
     prufer_decode_graph, prufer_decode_steps, prufer_encode_steps,
     require_vertex, scc_steps, stable_matching_graph, stable_matching_steps,
     topological_sort_steps, vertex_cover_steps,
@@ -62,13 +62,7 @@ def _left_partition(params: Dict[str, Any], graph: Graph) -> List[str]:
     partitions = params.get("partitions")
     if not isinstance(partitions, dict):
         raise GraphError("bipartite_matching needs exactly two named partitions")
-    keys = list(partitions)
-    if "left" in partitions and "right" in partitions:
-        keys = ["left", "right"]
-    elif "left" in partitions or "right" in partitions:
-        # Half-named sides fell through to dict order, so an array literally
-        # named "right" beside any other key became the proposing *left* side.
-        raise GraphError("partitions naming one of left/right must name both")
+    keys = partition_keys(partitions)
     if len(keys) != 2:
         raise GraphError("bipartite_matching needs exactly two named partitions")
     left, right = partitions.get(keys[0]), partitions.get(keys[1])
@@ -85,6 +79,12 @@ def _left_partition(params: Dict[str, Any], graph: Graph) -> List[str]:
             raise GraphError(f"edge {edge.source!r}–{edge.target!r} does not cross the partition",
                              witness=(edge.source, edge.target))
     return left_ids
+
+
+def _step_limit(params: Dict[str, Any]) -> int:
+    """The lane's step budget: an animation holds more frames than a storyboard."""
+    return (MAX_ANIMATED_STEPS if bool(params.get("animate", True))
+            else MAX_STORYBOARD_STEPS)
 
 
 def compute_steps(params: Dict[str, Any]) -> List[Step]:
@@ -120,7 +120,13 @@ def compute_steps(params: Dict[str, Any]) -> List[Step]:
             raise GraphError("start_cycle must be an array", kind="input")
         return ear_decomposition_steps(graph, start_cycle)
     if algorithm == "hamiltonian_search":
-        return hamiltonian_search_steps(graph, start, params.get("max_frames", 20),
+        # The producer already truncates its trace at max_frames, so the
+        # default is sized to the lane: 20 frames fit an animation, but a
+        # storyboard holds only 12 panels and would otherwise refuse its own
+        # default parameters.
+        default_frames = min(20, _step_limit(params))
+        return hamiltonian_search_steps(graph, start,
+                                        params.get("max_frames", default_frames),
                                         params.get("expect"))
     if algorithm == "edge_coloring":
         return edge_coloring_steps(graph, params.get("classes"), params.get("expect"))
@@ -145,8 +151,7 @@ def compute_steps(params: Dict[str, Any]) -> List[Step]:
         # When appending it is exactly what pushes a storyboard past its
         # panel budget, it yields — a figure that rendered before this panel
         # existed still renders. Ask for it explicitly to be refused instead.
-        limit = (MAX_ANIMATED_STEPS if bool(params.get("animate", True))
-                 else MAX_STORYBOARD_STEPS)
+        limit = _step_limit(params)
         if len(steps) == limit + 1:
             return steps[:-1]
         return steps
@@ -186,31 +191,32 @@ def _check_name(message: str) -> str:
     return "graph_algorithm_refused"
 
 
-def _findings(params: Dict[str, Any]) -> List[Finding]:
-    try:
-        steps = compute_steps(params)
-    except GraphError as exc:
-        check = (f"graph_algorithm_{exc.kind}" if exc.kind
-                 else _check_name(str(exc)))
-        witness = exc.witness
-        label = None
-        if isinstance(witness, (list, tuple)):
-            # Prefer the producer's structured witness shape. Legacy errors
-            # retain the old inference until they are converted one by one.
-            joiner = {"walk": " → ", "edge": "–", "list": ", "}.get(
-                exc.witness_kind,
-                " → " if "cycle" in check else ("–" if len(witness) == 2 else ", "),
-            )
-            label = joiner.join(str(x) for x in witness)
-        elif witness is not None:
-            label = str(witness)
-        return [Finding(check, "error", str(exc), label=label)]
-    limit = MAX_ANIMATED_STEPS if bool(params.get("animate", True)) else MAX_STORYBOARD_STEPS
+def _refusal(exc: GraphError) -> Finding:
+    check = (f"graph_algorithm_{exc.kind}" if exc.kind
+             else _check_name(str(exc)))
+    # witness_kind picks the joiner when the producer set one; legacy errors
+    # retain the old check-name inference as the fallback.
+    fallback = (" → " if "cycle" in check else
+                "–" if isinstance(exc.witness, (list, tuple)) and len(exc.witness) == 2
+                else ", ")
+    return Finding(check, "error", str(exc), label=exc.witness_label(fallback))
+
+
+def _step_limit_findings(params: Dict[str, Any], steps: List[Step]) -> List[Finding]:
+    limit = _step_limit(params)
     if len(steps) > limit:
         return [Finding("graph_algorithm_size", "error",
                         f"the algorithm takes {len(steps)} steps; at most {limit} fit one "
                         + ("animation" if limit == MAX_ANIMATED_STEPS else "storyboard"))]
     return []
+
+
+def _findings(params: Dict[str, Any]) -> List[Finding]:
+    try:
+        steps = compute_steps(params)
+    except GraphError as exc:
+        return [_refusal(exc)]
+    return _step_limit_findings(params, steps)
 
 
 def _base(params: Dict[str, Any]) -> Dict[str, Any]:
@@ -268,9 +274,11 @@ def frames_from_steps(params: Dict[str, Any], steps: List[Step]) -> List[Dict[st
             edges = [edge for edge in edges
                      if frame_graph.key(str(edge["from"]), str(edge["to"])) in visible]
         if step.edge_labels:
+            # Relabel the edges already filtered above — rebuilding from
+            # frame_base would silently resurrect edges the step hid.
             edges = [{**edge, "weight": step.edge_labels.get(
                 frame_graph.key(str(edge["from"]), str(edge["to"])), edge.get("weight"))}
-                for edge in frame_base["edges"]]
+                for edge in edges]
         # A one- or two-line panel (a running total, a matching size) fits
         # after the caption; a distance table does not, and its numbers are
         # already on the vertices as badges.
@@ -358,9 +366,16 @@ class GraphAlgorithmTemplate:
         params.get("node_radius", 20)
         params.get("width", 600)
         params.get("height", 360)
-        if self.refusal_findings(params):
+        # Compute once and share the steps with the refusal check: several
+        # algorithms here are exponential searches, and running the search
+        # again for the frames doubles every render.
+        try:
+            steps = compute_steps(params)
+        except GraphError:
             return ""
-        frames = _frames(params)
+        if _step_limit_findings(params, steps):
+            return ""
+        frames = frames_from_steps(params, steps)
         heading = str(title) if title is not None else algorithm.replace("_", " ").title()
         if animate:
             return DIAGRAM_REGISTRY["animated_trace"].render({
