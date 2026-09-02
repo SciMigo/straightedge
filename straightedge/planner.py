@@ -667,6 +667,12 @@ _GRAPH_CONCEPT_WORDS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
       "articulation", "biconnected", "block-cut", "cut vertex", "cut vertices",
       "cut edge", "low-link", "lowlink", "tarjan", "find bridges", "find the bridges",
       "bridge edge", "bridges of", "bridges in", "bridges and")),
+    # Above shortest_path: "trace a walk/path" must not be claimed by the
+    # bare word "path"; these words name the act of following a given route.
+    (ConceptGraph.WALK_TRACE, "trace",
+     ("walk trace", "trace a walk", "trace the walk", "trace a path",
+      "trace the path", "specific walk", "follow the walk", "逐边追踪",
+      "追踪路径", "演示一条路径", "走一条路径")),
     (ConceptGraph.SHORTEST_PATH, "bellman_ford", ("bellman", "负权", "negative weight")),
     (ConceptGraph.SHORTEST_PATH, "dijkstra", ("dijkstra", "最短路", "shortest path")),
     (ConceptGraph.SPANNING_TREE, "prim", ("prim's", "prim 算法", "普里姆")),
@@ -681,6 +687,7 @@ _GRAPH_TITLES_ZH = {
     ConceptGraph.SPANNING_TREE: ("最小生成树", "按权重选边，展示接受与拒绝的理由"),
     ConceptGraph.MAX_FLOW: ("最大流与最小割", "沿增广路径推流，最后给出割的证明"),
     ConceptGraph.CONNECTIVITY: ("图的连通结构", "用 low-link 值找出桥、割点与双连通分量"),
+    ConceptGraph.WALK_TRACE: ("图上的路径追踪", "沿给定的路径逐边行走，每一步都被验证是真实的边"),
 }
 
 
@@ -702,13 +709,19 @@ def _graph_plan(request: str) -> AnimationPlan:
             concept, algorithm = candidate, name
             break
     title, objective = _GRAPH_TITLES_ZH[concept]
+    parameters: dict[str, object] = {"algorithm": algorithm}
+    if concept == ConceptGraph.WALK_TRACE:
+        # A text request names no walks, and walk_trace refuses to invent
+        # them; give the stock graph's two routes from A to D so the prompt
+        # lane still renders an honest lesson.
+        parameters["walks"] = [["A", "C", "E", "D"], ["A", "B", "D"]]
     return AnimationPlan(
         topic=Topic.GRAPH,
         concept=concept,
         title_zh=title,
         objective_zh=objective,
         english_prompt=request,
-        parameters={"algorithm": algorithm},
+        parameters=parameters,
         elements=["graph", "vertex states", "edge states", "state panel", "caption"],
         narration_zh=[
             "先画出图，标出顶点和边。",

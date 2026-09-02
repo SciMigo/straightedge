@@ -63,6 +63,7 @@ DEFAULT_TITLES = {
     ("graph/spanning_tree", "prim"): "Prim's algorithm from {start}",
     ("graph/max_flow", "edmonds_karp"): "Max flow and min cut",
     ("graph/connectivity", "low_link"): "Bridges, articulation vertices, and blocks",
+    ("graph/walk_trace", "trace"): "Walks on the graph, move by move",
 }
 
 
@@ -166,7 +167,7 @@ def _resolve(plan: AnimationPlan) -> tuple[str, dict[str, Any], Graph, list[Step
     algorithm = str(params.get("algorithm", "")).strip().lower() or {
         ConceptGraph.TRAVERSAL: "bfs", ConceptGraph.SHORTEST_PATH: "dijkstra",
         ConceptGraph.SPANNING_TREE: "kruskal", ConceptGraph.MAX_FLOW: "edmonds_karp",
-        ConceptGraph.CONNECTIVITY: "low_link",
+        ConceptGraph.CONNECTIVITY: "low_link", ConceptGraph.WALK_TRACE: "trace",
     }[concept]
     return concept, params, graph, steps, algorithm
 
