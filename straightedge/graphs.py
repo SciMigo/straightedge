@@ -37,6 +37,7 @@ class ConceptGraph:
     SPANNING_TREE = "graph/spanning_tree"
     MAX_FLOW = "graph/max_flow"
     CONNECTIVITY = "graph/connectivity"
+    WALK_TRACE = "graph/walk_trace"
 
 
 class GraphError(ValueError):
@@ -1330,6 +1331,91 @@ def traversal_steps(graph: Graph, start: str, algorithm: str = "bfs",
     return steps
 
 
+# --------------------------------------------------------------- walk trace
+
+
+def walk_trace_steps(graph: Graph, walks: Any) -> list[Step]:
+    """Author-supplied walks traced edge by edge, one beat per move.
+
+    A walk is a sequence of vertices, and here its *validity is the content*:
+    a lecture on walk counting shows specific walks, so a sequence that steps
+    across a non-edge is refused with the offending pair, never smoothed over.
+    Direction is honoured — on a directed graph a walk may only follow arrows.
+
+    Walks are traced one after another. The active walk's edges carry the
+    ``path`` role and its current vertex ``current``; a finished walk keeps its
+    edges as ``tree`` so earlier walks stay visible while the next one runs.
+    Badges number the moves of the active walk.
+    """
+    if not isinstance(walks, list) or not walks:
+        raise GraphError("walks must be a non-empty array of vertex arrays")
+    normalized: list[list[str]] = []
+    for number, walk in enumerate(walks, start=1):
+        if not isinstance(walk, list) or len(walk) < 2:
+            raise GraphError(
+                f"walk {number} needs at least two vertices", witness=walk)
+        names = [require_vertex(graph, v, f"walk {number} vertex") for v in walk]
+        for u, v in zip(names, names[1:]):
+            if not graph.has_edge(u, v):
+                arrow = "→" if graph.directed else "–"
+                raise GraphError(
+                    f"walk {number} steps {u!r}{arrow}{v!r}, which is not an "
+                    "edge of the graph", witness=(u, v))
+        normalized.append(names)
+
+    def walk_text(names: list[str]) -> str:
+        return " → ".join(names)
+
+    def panel_for(active: int | None, done: int) -> tuple[str, ...]:
+        lines = []
+        for i, names in enumerate(normalized):
+            mark = "✓ " if i < done else ("· " if i == active else "  ")
+            lines.append(f"{mark}walk {i + 1}: {walk_text(names)}")
+        return tuple(lines)
+
+    steps: list[Step] = []
+    kept_edges: dict[EdgeKey, str] = {}
+    kept_nodes: dict[str, str] = {}
+    steps.append(Step(
+        "The walks to trace",
+        f"{len(normalized)} walk(s) will be traced edge by edge",
+        panel=panel_for(active=0, done=0),
+        extras={"walks": [list(w) for w in normalized]},
+    ))
+    for index, names in enumerate(normalized):
+        moves = len(names) - 1
+        for position in range(1, len(names)):
+            nodes = dict(kept_nodes)
+            nodes.update({v: "frontier" for v in names[:position]})
+            nodes[names[0]] = "source"
+            nodes[names[position]] = "current"
+            edges = dict(kept_edges)
+            edges.update({graph.key(u, v): "path"
+                          for u, v in zip(names[:position], names[1:position + 1])})
+            badges = {v: f"#{p}" for p, v in enumerate(names[1:position + 1], start=1)}
+            steps.append(Step(
+                f"Walk {index + 1}: move {position}",
+                (f"walk {index + 1}: {names[position - 1]} → {names[position]} "
+                 f"(move {position} of {moves})"),
+                nodes, edges, badges,
+                panel=panel_for(active=index, done=index),
+                extras={"walk": index + 1, "position": position,
+                        "vertices": list(names)},
+            ))
+        for u, v in zip(names, names[1:]):
+            kept_edges[graph.key(u, v)] = "tree"
+        kept_nodes.update({v: "visited" for v in names})
+        steps.append(Step(
+            f"Walk {index + 1} complete",
+            f"walk {index + 1} used {moves} move(s): {walk_text(names)}",
+            dict(kept_nodes), dict(kept_edges),
+            panel=panel_for(active=None if index + 1 == len(normalized) else index + 1,
+                            done=index + 1),
+            extras={"walk": index + 1, "length": moves},
+        ))
+    return steps
+
+
 # ------------------------------------------------------------ shortest paths
 
 
@@ -2201,6 +2287,7 @@ CONCEPT_ALGORITHMS: dict[str, tuple[str, ...]] = {
     ConceptGraph.SPANNING_TREE: ("kruskal", "prim"),
     ConceptGraph.MAX_FLOW: ("edmonds_karp",),
     ConceptGraph.CONNECTIVITY: ("low_link",),
+    ConceptGraph.WALK_TRACE: ("trace",),
 }
 
 
@@ -2227,6 +2314,8 @@ def steps_for(concept: str, params: dict[str, Any]) -> list[Step]:
         return kruskal_steps(graph) if algorithm == "kruskal" else prim_steps(graph, start)
     if concept == ConceptGraph.CONNECTIVITY:
         return connectivity_steps(graph, start)
+    if concept == ConceptGraph.WALK_TRACE:
+        return walk_trace_steps(graph, params.get("walks"))
     return max_flow_steps(graph, params.get("source", graph.ids[0]),
                           params.get("sink", graph.ids[-1]))
 
@@ -2239,8 +2328,9 @@ def steps_for(concept: str, params: dict[str, Any]) -> list[Step]:
                  "graph theory", "spanning tree", "shortest path", "max flow",
                  "bridges", "cut vertex", "cut vertices", "articulation", "biconnected",
                  "block-cut", "low-link", "connectivity",
-                 "min cut", "adjacency"))
+                 "min cut", "adjacency",
+                 "walk trace", "trace a walk", "trace a path", "逐边追踪"))
 class GraphTheory:
-    """Five graph lessons, including connectivity, with every state computed."""
+    """Six graph lessons, including connectivity, with every state computed."""
 
     concepts = ConceptGraph
