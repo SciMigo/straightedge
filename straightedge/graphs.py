@@ -155,6 +155,11 @@ class Step:
     badges: dict[str, str] = field(default_factory=dict)
     edge_labels: dict[EdgeKey, str] = field(default_factory=dict)
     panel: tuple[str, ...] = ()
+    #: Edges to pulse on this step whether or not their role changed. Roles
+    #: describe *state*, and the scene animates a change of state; an edge
+    #: traversed twice in a row has the same state both times, so a walk
+    #: names the edge of each move here and the move is seen every time.
+    flash: tuple[EdgeKey, ...] = ()
     #: Algorithm-specific state a lane may want verbatim (a traversal's
     #: frontier list, say) rather than parsed back out of the caption.
     extras: dict[str, Any] = field(default_factory=dict)
@@ -1345,7 +1350,9 @@ def walk_trace_steps(graph: Graph, walks: Any) -> list[Step]:
     Walks are traced one after another. The active walk's edges carry the
     ``path`` role and its current vertex ``current``; a finished walk keeps its
     edges as ``tree`` so earlier walks stay visible while the next one runs.
-    Badges number the moves of the active walk.
+    Badges number the moves of the active walk, and every move flashes the
+    edge it crosses — a walk may reuse an edge (``A → B → A``), and a reused
+    edge's role does not change, so the flash is what shows the second move.
     """
     if not isinstance(walks, list) or not walks:
         raise GraphError("walks must be a non-empty array of vertex arrays")
@@ -1399,6 +1406,7 @@ def walk_trace_steps(graph: Graph, walks: Any) -> list[Step]:
                  f"(move {position} of {moves})"),
                 nodes, edges, badges,
                 panel=panel_for(active=index, done=index),
+                flash=(graph.key(names[position - 1], names[position]),),
                 extras={"walk": index + 1, "position": position,
                         "vertices": list(names)},
             ))

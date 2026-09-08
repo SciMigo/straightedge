@@ -93,6 +93,27 @@ def test_scene_builds_from_a_plan():
     assert source.count("_beat(self,") == 1 + 9  # draw + intro + every move/completion
 
 
+def test_a_reused_edge_is_animated_on_every_move():
+    """A -> B -> A crosses one undirected edge twice. Its role is ``path``
+    both times, and the scene animates a change of role, so without a flash
+    the second move would be invisible on the edge it crosses."""
+    from straightedge.graph_scene import graph_scene
+    from straightedge.models import AnimationPlan, Topic
+
+    two = {"nodes": [{"id": "A"}, {"id": "B"}], "edges": [{"from": "A", "to": "B"}]}
+    steps = walk_trace_steps(coerce_graph(two), [["A", "B", "A"]])
+    assert [s.flash for s in steps] == [(), (("A", "B"),), (("A", "B"),), ()]
+    plan = AnimationPlan(
+        topic=Topic.GRAPH, concept=ConceptGraph.WALK_TRACE,
+        title_zh="", objective_zh="", english_prompt="",
+        parameters={**two, "walks": [["A", "B", "A"]]})
+    beats = [line for line in graph_scene(plan).splitlines() if "_beat(self," in line]
+    moves = [b for b in beats if "Indicate(edges[0]" in b]
+    assert len(moves) == 2
+    # Only the first crossing changes the edge's role; the flash carries both.
+    assert sum("edges[0].animate" in b for b in moves) == 1
+
+
 def test_prompt_plan_supplies_stock_walks():
     from straightedge.planner import _graph_plan
 

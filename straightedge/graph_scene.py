@@ -264,6 +264,8 @@ def graph_scene(plan: AnimationPlan) -> str:
                 colour, width, opacity = EDGE_STYLES.get(role_now or "", NEUTRAL_EDGE)
                 anims.append("edges[%d].animate.set_color(%s).set_stroke(width=%r)"
                              ".set_opacity(%r)" % (edge_index, colour, width, opacity))
+            if key in step.flash:
+                anims.append("Indicate(edges[%d], color=C_WARN, scale_factor=1.06)" % edge_index)
             label_now, label_before = step.edge_labels.get(key), previous.edge_labels.get(key)
             if label_now is not None and label_now != label_before and edge_index in _weight_indices(graph, concept, weighted):
                 anims.append("Transform(weights[%d], _t(%r, font_size=20, color=C_MUTED)"
