@@ -19,7 +19,7 @@ import math
 from typing import Any
 
 from .graphs import (ConceptGraph, Graph, GraphError, Step, coerce_graph,
-                     STOCK_GRAPH, STOCK_NETWORK, steps_for)
+                     steps_for, stock_params)
 from .models import AnimationPlan, Topic
 from .topics import scene_for
 
@@ -159,9 +159,8 @@ def _badge_positions(positions: dict[str, tuple[float, float]]) -> dict[str, tup
 def _resolve(plan: AnimationPlan) -> tuple[str, dict[str, Any], Graph, list[Step], str]:
     concept = plan.concept or ConceptGraph.TRAVERSAL
     params = dict(plan.parameters or {})
-    stock = STOCK_NETWORK if concept == ConceptGraph.MAX_FLOW else STOCK_GRAPH
     if params.get("nodes") is None:
-        params = {**stock, **params}
+        params = {**stock_params(concept), **params}
     graph = coerce_graph(params)
     steps = steps_for(concept, params)
     algorithm = str(params.get("algorithm", "")).strip().lower() or {

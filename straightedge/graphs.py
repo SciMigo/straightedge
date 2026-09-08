@@ -2267,6 +2267,12 @@ STOCK_GRAPH: dict[str, Any] = {
     ],
 }
 
+#: The walks ``graph/walk_trace`` traces when a request supplies none: the
+#: stock graph's two routes from ``A`` to ``D``. Only the stock graph gets a
+#: default — a caller's own graph with no walks is refused, because the
+#: template exists to show the walks an author chose, not ones it invented.
+STOCK_WALKS: list[list[str]] = [["A", "C", "E", "D"], ["A", "B", "D"]]
+
 #: The stock flow network: directed, with capacities, source ``s``, sink ``t``.
 STOCK_NETWORK: dict[str, Any] = {
     "directed": True,
@@ -2291,6 +2297,21 @@ CONCEPT_ALGORITHMS: dict[str, tuple[str, ...]] = {
 }
 
 
+def stock_params(concept: str) -> dict[str, Any]:
+    """The request a concept runs when the caller supplies no graph.
+
+    The flow network for max flow and the stock graph for everything else,
+    plus, for ``walk_trace``, the stock walks — so a bare template id renders
+    a complete scene there too. Both :func:`steps_for` and the scene builder
+    merge a graph-less request over this, and so cannot disagree about it.
+    """
+    if concept == ConceptGraph.MAX_FLOW:
+        return dict(STOCK_NETWORK)
+    if concept == ConceptGraph.WALK_TRACE:
+        return {**STOCK_GRAPH, "walks": [list(walk) for walk in STOCK_WALKS]}
+    return dict(STOCK_GRAPH)
+
+
 def steps_for(concept: str, params: dict[str, Any]) -> list[Step]:
     """The computed states for a concept's parameters, or :class:`GraphError`.
 
@@ -2301,8 +2322,9 @@ def steps_for(concept: str, params: dict[str, Any]) -> list[Step]:
     algorithm = str(params.get("algorithm", algorithms[0])).strip().lower()
     if algorithm not in algorithms:
         raise GraphError(f"{concept} runs {' or '.join(algorithms)}, not {algorithm!r}")
-    stock = STOCK_NETWORK if concept == ConceptGraph.MAX_FLOW else STOCK_GRAPH
-    graph = coerce_graph(params if params.get("nodes") is not None else {**stock, **params})
+    if params.get("nodes") is None:
+        params = {**stock_params(concept), **params}
+    graph = coerce_graph(params)
     start = params.get("start", graph.ids[0])
     if concept == ConceptGraph.TRAVERSAL:
         order = params.get("neighbor_order")
@@ -2320,6 +2342,16 @@ def steps_for(concept: str, params: dict[str, Any]) -> list[Step]:
                           params.get("sink", graph.ids[-1]))
 
 
+#: The words that name following a given route, edge by edge. The topic
+#: keywords below and the planner's concept matcher both read this tuple, so
+#: a request that reaches ``walk_trace`` inside the graph topic is guaranteed
+#: to have reached the graph topic in the first place.
+WALK_TRACE_KEYWORDS: tuple[str, ...] = (
+    "walk trace", "trace a walk", "trace the walk", "trace a path",
+    "trace the path", "specific walk", "follow the walk", "逐边追踪",
+    "追踪路径", "演示一条路径", "走一条路径")
+
+
 @topic(Topic.GRAPH, priority=20,
        keywords=("图论", "最短路", "生成树", "网络流", "最大流", "最小割",
                  "广度优先", "深度优先", "拓扑排序", "二分图",
@@ -2329,7 +2361,7 @@ def steps_for(concept: str, params: dict[str, Any]) -> list[Step]:
                  "bridges", "cut vertex", "cut vertices", "articulation", "biconnected",
                  "block-cut", "low-link", "connectivity",
                  "min cut", "adjacency",
-                 "walk trace", "trace a walk", "trace a path", "逐边追踪"))
+                 *WALK_TRACE_KEYWORDS))
 class GraphTheory:
     """Six graph lessons, including connectivity, with every state computed."""
 

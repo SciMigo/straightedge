@@ -11,7 +11,7 @@ from .calculus import (
 )
 from .conics import ConceptConic
 from .expr import parse_function, pretty_expr
-from .graphs import ConceptGraph
+from .graphs import STOCK_WALKS, WALK_TRACE_KEYWORDS, ConceptGraph
 from .linalg import VIEWS, ConceptLinAlg
 from .models import AnimationPlan, Topic
 from .topics import detect, plan_builder, plan_for
@@ -668,11 +668,9 @@ _GRAPH_CONCEPT_WORDS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
       "cut edge", "low-link", "lowlink", "tarjan", "find bridges", "find the bridges",
       "bridge edge", "bridges of", "bridges in", "bridges and")),
     # Above shortest_path: "trace a walk/path" must not be claimed by the
-    # bare word "path"; these words name the act of following a given route.
-    (ConceptGraph.WALK_TRACE, "trace",
-     ("walk trace", "trace a walk", "trace the walk", "trace a path",
-      "trace the path", "specific walk", "follow the walk", "逐边追踪",
-      "追踪路径", "演示一条路径", "走一条路径")),
+    # bare word "path". The words live in graphs.py beside the topic
+    # keywords, so every one of them also routes the request here.
+    (ConceptGraph.WALK_TRACE, "trace", WALK_TRACE_KEYWORDS),
     (ConceptGraph.SHORTEST_PATH, "bellman_ford", ("bellman", "负权", "negative weight")),
     (ConceptGraph.SHORTEST_PATH, "dijkstra", ("dijkstra", "最短路", "shortest path")),
     (ConceptGraph.SPANNING_TREE, "prim", ("prim's", "prim 算法", "普里姆")),
@@ -712,9 +710,10 @@ def _graph_plan(request: str) -> AnimationPlan:
     parameters: dict[str, object] = {"algorithm": algorithm}
     if concept == ConceptGraph.WALK_TRACE:
         # A text request names no walks, and walk_trace refuses to invent
-        # them; give the stock graph's two routes from A to D so the prompt
-        # lane still renders an honest lesson.
-        parameters["walks"] = [["A", "C", "E", "D"], ["A", "B", "D"]]
+        # them; name the stock walks in the plan so the JSON a caller reads
+        # back says which routes will be traced, rather than leaving it to
+        # steps_for's default for the stock graph.
+        parameters["walks"] = [list(walk) for walk in STOCK_WALKS]
     return AnimationPlan(
         topic=Topic.GRAPH,
         concept=concept,

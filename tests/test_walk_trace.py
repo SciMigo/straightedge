@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import pytest
 
-from straightedge.graphs import (ConceptGraph, GraphError, coerce_graph,
-                                 steps_for, walk_trace_steps)
+from straightedge.graphs import (STOCK_WALKS, WALK_TRACE_KEYWORDS, ConceptGraph,
+                                 GraphError, coerce_graph, steps_for,
+                                 walk_trace_steps)
 
 # The five-vertex lecture graph walk counting is taught on: two three-step
 # walks lead from 1 to 4, and the template exists to show exactly that.
@@ -101,3 +102,33 @@ def test_prompt_plan_supplies_stock_walks():
     assert walks and all(len(walk) >= 2 for walk in walks)
     # And the stock walks actually run on the stock graph.
     assert steps_for(ConceptGraph.WALK_TRACE, dict(plan.parameters))
+
+
+def test_bare_template_traces_the_stock_walks():
+    """plan_from_template("graph/walk_trace") with no parameters must render a
+    complete scene, like every other bare animation template."""
+    from straightedge.graph_scene import graph_scene
+    from straightedge.planner import plan_from_template
+
+    plan = plan_from_template(ConceptGraph.WALK_TRACE)
+    assert "walks" not in plan.parameters
+    source = graph_scene(plan)
+    assert "Nothing to draw" not in source
+    assert source.count("_beat(self,") == 1 + 1 + sum(len(w) for w in STOCK_WALKS)
+
+
+def test_a_callers_own_graph_still_needs_its_walks():
+    """The stock default is for the stock graph only: an author's graph with
+    no walks is refused, not traced along routes the template made up."""
+    with pytest.raises(GraphError):
+        steps_for(ConceptGraph.WALK_TRACE, dict(LECTURE_GRAPH))
+
+
+@pytest.mark.parametrize("word", WALK_TRACE_KEYWORDS)
+def test_every_walk_trace_word_reaches_the_concept_through_build_plan(word):
+    """Topic detection runs before the graph concept matcher, so a word the
+    matcher knows must also be a graph-topic keyword or it never arrives."""
+    from straightedge.planner import build_plan
+
+    plan = build_plan(f"please {word} now")
+    assert (plan.topic, plan.concept) == ("graph", ConceptGraph.WALK_TRACE)
