@@ -19,7 +19,7 @@ import math
 from typing import Any
 
 from .graphs import (ConceptGraph, Graph, GraphError, Step, coerce_graph,
-                     STOCK_GRAPH, STOCK_NETWORK, steps_for)
+                     steps_for, stock_params)
 from .models import AnimationPlan, Topic
 from .topics import scene_for
 
@@ -63,6 +63,7 @@ DEFAULT_TITLES = {
     ("graph/spanning_tree", "prim"): "Prim's algorithm from {start}",
     ("graph/max_flow", "edmonds_karp"): "Max flow and min cut",
     ("graph/connectivity", "low_link"): "Bridges, articulation vertices, and blocks",
+    ("graph/walk_trace", "trace"): "Walks on the graph, move by move",
 }
 
 
@@ -158,15 +159,14 @@ def _badge_positions(positions: dict[str, tuple[float, float]]) -> dict[str, tup
 def _resolve(plan: AnimationPlan) -> tuple[str, dict[str, Any], Graph, list[Step], str]:
     concept = plan.concept or ConceptGraph.TRAVERSAL
     params = dict(plan.parameters or {})
-    stock = STOCK_NETWORK if concept == ConceptGraph.MAX_FLOW else STOCK_GRAPH
     if params.get("nodes") is None:
-        params = {**stock, **params}
+        params = {**stock_params(concept), **params}
     graph = coerce_graph(params)
     steps = steps_for(concept, params)
     algorithm = str(params.get("algorithm", "")).strip().lower() or {
         ConceptGraph.TRAVERSAL: "bfs", ConceptGraph.SHORTEST_PATH: "dijkstra",
         ConceptGraph.SPANNING_TREE: "kruskal", ConceptGraph.MAX_FLOW: "edmonds_karp",
-        ConceptGraph.CONNECTIVITY: "low_link",
+        ConceptGraph.CONNECTIVITY: "low_link", ConceptGraph.WALK_TRACE: "trace",
     }[concept]
     return concept, params, graph, steps, algorithm
 
@@ -264,6 +264,8 @@ def graph_scene(plan: AnimationPlan) -> str:
                 colour, width, opacity = EDGE_STYLES.get(role_now or "", NEUTRAL_EDGE)
                 anims.append("edges[%d].animate.set_color(%s).set_stroke(width=%r)"
                              ".set_opacity(%r)" % (edge_index, colour, width, opacity))
+            if key in step.flash:
+                anims.append("Indicate(edges[%d], color=C_WARN, scale_factor=1.06)" % edge_index)
             label_now, label_before = step.edge_labels.get(key), previous.edge_labels.get(key)
             if label_now is not None and label_now != label_before and edge_index in _weight_indices(graph, concept, weighted):
                 anims.append("Transform(weights[%d], _t(%r, font_size=20, color=C_MUTED)"

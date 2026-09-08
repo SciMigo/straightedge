@@ -37,6 +37,7 @@ class ConceptGraph:
     SPANNING_TREE = "graph/spanning_tree"
     MAX_FLOW = "graph/max_flow"
     CONNECTIVITY = "graph/connectivity"
+    WALK_TRACE = "graph/walk_trace"
 
 
 class GraphError(ValueError):
@@ -154,6 +155,11 @@ class Step:
     badges: dict[str, str] = field(default_factory=dict)
     edge_labels: dict[EdgeKey, str] = field(default_factory=dict)
     panel: tuple[str, ...] = ()
+    #: Edges to pulse on this step whether or not their role changed. Roles
+    #: describe *state*, and the scene animates a change of state; an edge
+    #: traversed twice in a row has the same state both times, so a walk
+    #: names the edge of each move here and the move is seen every time.
+    flash: tuple[EdgeKey, ...] = ()
     #: Algorithm-specific state a lane may want verbatim (a traversal's
     #: frontier list, say) rather than parsed back out of the caption.
     extras: dict[str, Any] = field(default_factory=dict)
@@ -1330,6 +1336,94 @@ def traversal_steps(graph: Graph, start: str, algorithm: str = "bfs",
     return steps
 
 
+# --------------------------------------------------------------- walk trace
+
+
+def walk_trace_steps(graph: Graph, walks: Any) -> list[Step]:
+    """Author-supplied walks traced edge by edge, one beat per move.
+
+    A walk is a sequence of vertices, and here its *validity is the content*:
+    a lecture on walk counting shows specific walks, so a sequence that steps
+    across a non-edge is refused with the offending pair, never smoothed over.
+    Direction is honoured — on a directed graph a walk may only follow arrows.
+
+    Walks are traced one after another. The active walk's edges carry the
+    ``path`` role and its current vertex ``current``; a finished walk keeps its
+    edges as ``tree`` so earlier walks stay visible while the next one runs.
+    Badges number the moves of the active walk, and every move flashes the
+    edge it crosses — a walk may reuse an edge (``A → B → A``), and a reused
+    edge's role does not change, so the flash is what shows the second move.
+    """
+    if not isinstance(walks, list) or not walks:
+        raise GraphError("walks must be a non-empty array of vertex arrays")
+    normalized: list[list[str]] = []
+    for number, walk in enumerate(walks, start=1):
+        if not isinstance(walk, list) or len(walk) < 2:
+            raise GraphError(
+                f"walk {number} needs at least two vertices", witness=walk)
+        names = [require_vertex(graph, v, f"walk {number} vertex") for v in walk]
+        for u, v in zip(names, names[1:]):
+            if not graph.has_edge(u, v):
+                arrow = "→" if graph.directed else "–"
+                raise GraphError(
+                    f"walk {number} steps {u!r}{arrow}{v!r}, which is not an "
+                    "edge of the graph", witness=(u, v))
+        normalized.append(names)
+
+    def walk_text(names: list[str]) -> str:
+        return " → ".join(names)
+
+    def panel_for(active: int | None, done: int) -> tuple[str, ...]:
+        lines = []
+        for i, names in enumerate(normalized):
+            mark = "✓ " if i < done else ("· " if i == active else "  ")
+            lines.append(f"{mark}walk {i + 1}: {walk_text(names)}")
+        return tuple(lines)
+
+    steps: list[Step] = []
+    kept_edges: dict[EdgeKey, str] = {}
+    kept_nodes: dict[str, str] = {}
+    steps.append(Step(
+        "The walks to trace",
+        f"{len(normalized)} walk(s) will be traced edge by edge",
+        panel=panel_for(active=0, done=0),
+        extras={"walks": [list(w) for w in normalized]},
+    ))
+    for index, names in enumerate(normalized):
+        moves = len(names) - 1
+        for position in range(1, len(names)):
+            nodes = dict(kept_nodes)
+            nodes.update({v: "frontier" for v in names[:position]})
+            nodes[names[0]] = "source"
+            nodes[names[position]] = "current"
+            edges = dict(kept_edges)
+            edges.update({graph.key(u, v): "path"
+                          for u, v in zip(names[:position], names[1:position + 1])})
+            badges = {v: f"#{p}" for p, v in enumerate(names[1:position + 1], start=1)}
+            steps.append(Step(
+                f"Walk {index + 1}: move {position}",
+                (f"walk {index + 1}: {names[position - 1]} → {names[position]} "
+                 f"(move {position} of {moves})"),
+                nodes, edges, badges,
+                panel=panel_for(active=index, done=index),
+                flash=(graph.key(names[position - 1], names[position]),),
+                extras={"walk": index + 1, "position": position,
+                        "vertices": list(names)},
+            ))
+        for u, v in zip(names, names[1:]):
+            kept_edges[graph.key(u, v)] = "tree"
+        kept_nodes.update({v: "visited" for v in names})
+        steps.append(Step(
+            f"Walk {index + 1} complete",
+            f"walk {index + 1} used {moves} move(s): {walk_text(names)}",
+            dict(kept_nodes), dict(kept_edges),
+            panel=panel_for(active=None if index + 1 == len(normalized) else index + 1,
+                            done=index + 1),
+            extras={"walk": index + 1, "length": moves},
+        ))
+    return steps
+
+
 # ------------------------------------------------------------ shortest paths
 
 
@@ -2181,6 +2275,12 @@ STOCK_GRAPH: dict[str, Any] = {
     ],
 }
 
+#: The walks ``graph/walk_trace`` traces when a request supplies none: the
+#: stock graph's two routes from ``A`` to ``D``. Only the stock graph gets a
+#: default — a caller's own graph with no walks is refused, because the
+#: template exists to show the walks an author chose, not ones it invented.
+STOCK_WALKS: list[list[str]] = [["A", "C", "E", "D"], ["A", "B", "D"]]
+
 #: The stock flow network: directed, with capacities, source ``s``, sink ``t``.
 STOCK_NETWORK: dict[str, Any] = {
     "directed": True,
@@ -2201,7 +2301,23 @@ CONCEPT_ALGORITHMS: dict[str, tuple[str, ...]] = {
     ConceptGraph.SPANNING_TREE: ("kruskal", "prim"),
     ConceptGraph.MAX_FLOW: ("edmonds_karp",),
     ConceptGraph.CONNECTIVITY: ("low_link",),
+    ConceptGraph.WALK_TRACE: ("trace",),
 }
+
+
+def stock_params(concept: str) -> dict[str, Any]:
+    """The request a concept runs when the caller supplies no graph.
+
+    The flow network for max flow and the stock graph for everything else,
+    plus, for ``walk_trace``, the stock walks — so a bare template id renders
+    a complete scene there too. Both :func:`steps_for` and the scene builder
+    merge a graph-less request over this, and so cannot disagree about it.
+    """
+    if concept == ConceptGraph.MAX_FLOW:
+        return dict(STOCK_NETWORK)
+    if concept == ConceptGraph.WALK_TRACE:
+        return {**STOCK_GRAPH, "walks": [list(walk) for walk in STOCK_WALKS]}
+    return dict(STOCK_GRAPH)
 
 
 def steps_for(concept: str, params: dict[str, Any]) -> list[Step]:
@@ -2214,8 +2330,9 @@ def steps_for(concept: str, params: dict[str, Any]) -> list[Step]:
     algorithm = str(params.get("algorithm", algorithms[0])).strip().lower()
     if algorithm not in algorithms:
         raise GraphError(f"{concept} runs {' or '.join(algorithms)}, not {algorithm!r}")
-    stock = STOCK_NETWORK if concept == ConceptGraph.MAX_FLOW else STOCK_GRAPH
-    graph = coerce_graph(params if params.get("nodes") is not None else {**stock, **params})
+    if params.get("nodes") is None:
+        params = {**stock_params(concept), **params}
+    graph = coerce_graph(params)
     start = params.get("start", graph.ids[0])
     if concept == ConceptGraph.TRAVERSAL:
         order = params.get("neighbor_order")
@@ -2227,8 +2344,20 @@ def steps_for(concept: str, params: dict[str, Any]) -> list[Step]:
         return kruskal_steps(graph) if algorithm == "kruskal" else prim_steps(graph, start)
     if concept == ConceptGraph.CONNECTIVITY:
         return connectivity_steps(graph, start)
+    if concept == ConceptGraph.WALK_TRACE:
+        return walk_trace_steps(graph, params.get("walks"))
     return max_flow_steps(graph, params.get("source", graph.ids[0]),
                           params.get("sink", graph.ids[-1]))
+
+
+#: The words that name following a given route, edge by edge. The topic
+#: keywords below and the planner's concept matcher both read this tuple, so
+#: a request that reaches ``walk_trace`` inside the graph topic is guaranteed
+#: to have reached the graph topic in the first place.
+WALK_TRACE_KEYWORDS: tuple[str, ...] = (
+    "walk trace", "trace a walk", "trace the walk", "trace a path",
+    "trace the path", "specific walk", "follow the walk", "逐边追踪",
+    "追踪路径", "演示一条路径", "走一条路径")
 
 
 @topic(Topic.GRAPH, priority=20,
@@ -2239,8 +2368,9 @@ def steps_for(concept: str, params: dict[str, Any]) -> list[Step]:
                  "graph theory", "spanning tree", "shortest path", "max flow",
                  "bridges", "cut vertex", "cut vertices", "articulation", "biconnected",
                  "block-cut", "low-link", "connectivity",
-                 "min cut", "adjacency"))
+                 "min cut", "adjacency",
+                 *WALK_TRACE_KEYWORDS))
 class GraphTheory:
-    """Five graph lessons, including connectivity, with every state computed."""
+    """Six graph lessons, including connectivity, with every state computed."""
 
     concepts = ConceptGraph
