@@ -475,7 +475,8 @@ def _is_vertex_name(name: str) -> bool:
 
 @register(ConceptGraph.TRAVERSAL, ConceptGraph.SHORTEST_PATH,
           ConceptGraph.SPANNING_TREE, ConceptGraph.MAX_FLOW,
-          ConceptGraph.CONNECTIVITY, ConceptGraph.WALK_TRACE)
+          ConceptGraph.CONNECTIVITY, ConceptGraph.WALK_TRACE,
+          ConceptGraph.BOOLEAN_POWER)
 def _graph_states_are_computable(plan: AnimationPlan) -> list[Violation]:
     """The algorithm must run on the supplied graph, and fit in one video.
 
@@ -500,6 +501,7 @@ def _graph_states_are_computable(plan: AnimationPlan) -> list[Violation]:
         "layout": plan.parameters.get("layout"),
         "title": plan.parameters.get("title"),
         "walks": plan.parameters.get("walks"),
+        "max_power": plan.parameters.get("max_power"),
     }
     params = {key: value for key, value in params.items() if value is not None}
     out: list[Violation] = []

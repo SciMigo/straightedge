@@ -38,6 +38,7 @@ class ConceptGraph:
     MAX_FLOW = "graph/max_flow"
     CONNECTIVITY = "graph/connectivity"
     WALK_TRACE = "graph/walk_trace"
+    BOOLEAN_POWER = "graph/boolean_power"
 
 
 class GraphError(ValueError):
@@ -1424,6 +1425,87 @@ def walk_trace_steps(graph: Graph, walks: Any) -> list[Step]:
     return steps
 
 
+# ------------------------------------------------------- boolean power flood
+
+
+def boolean_power_steps(graph: Graph, max_power: Any = None) -> list[Step]:
+    """Boolean reachability matrices R, R^2, R^4, ... by repeated squaring.
+
+    R is I OR A over the Boolean semiring, so entry (i, j) of R^k is one
+    exactly when some walk of length at most k joins i to j. Every matrix
+    shown is computed here at generation time, and the sequence stops at the
+    first squaring that changes nothing — that fixed point *is* the
+    transitive closure, which is the lesson's payoff, not an early exit.
+
+    Step ``extras`` carry the matrix (tuple of 0/1 rows), the power, and the
+    entries that just turned one (``new_ones``), so a scene lights up exactly
+    the reachability each squaring proved and nothing else.
+    """
+    n = len(graph.ids)
+    if max_power is not None:
+        if not isinstance(max_power, int) or isinstance(max_power, bool) or max_power < 1:
+            raise GraphError("max_power must be a positive integer", witness=max_power)
+    bound = max(1, n - 1) if max_power is None else max_power
+    index = {v: i for i, v in enumerate(graph.ids)}
+    current = [[1 if i == j else 0 for j in range(n)] for i in range(n)]
+    for edge in graph.edges:
+        a, b = index[edge.source], index[edge.target]
+        current[a][b] = 1
+        if not graph.directed:
+            current[b][a] = 1
+
+    def snap(rows: list[list[int]]) -> tuple[tuple[int, ...], ...]:
+        return tuple(tuple(row) for row in rows)
+
+    def bool_square(rows: list[list[int]]) -> list[list[int]]:
+        return [[1 if any(rows[i][k] and rows[k][j] for k in range(n)) else 0
+                 for j in range(n)] for i in range(n)]
+
+    ones = sum(sum(row) for row in current)
+    steps: list[Step] = [Step(
+        "R = I OR A",
+        f"R marks walks of length at most 1: {ones} pair(s) reachable",
+        panel=("R = I \u2228 A",
+               "1 means: a walk of length \u2264 1"),
+        extras={"matrix": snap(current), "power": 1,
+                "new_ones": tuple((i, j) for i in range(n) for j in range(n)
+                                  if current[i][j])},
+    )]
+    power = 1
+    while power < bound:
+        squared = bool_square(current)
+        power *= 2
+        new = tuple((i, j) for i in range(n) for j in range(n)
+                    if squared[i][j] and not current[i][j])
+        if not new:
+            steps.append(Step(
+                "Fixed point",
+                f"Squaring changes nothing: R^{power // 2} is the closure",
+                panel=(f"R^{power} = R^{power // 2}",
+                       "the transitive closure is reached"),
+                extras={"matrix": snap(squared), "power": power,
+                        "new_ones": ()},
+            ))
+            break
+        current = squared
+        steps.append(Step(
+            f"Square to R^{power}",
+            f"R^{power}: {len(new)} new pair(s) proved reachable",
+            panel=(f"R^{power} = R^{power // 2} \u00b7 R^{power // 2}",
+                   f"1 means: a walk of length \u2264 {power}",
+                   f"{len(new)} entries turned on"),
+            extras={"matrix": snap(current), "power": power, "new_ones": new},
+        ))
+    else:
+        steps.append(Step(
+            "Closure reached",
+            f"Every pair a walk can join is joined within {bound} step(s)",
+            panel=(f"R^{{{bound}}} is the transitive closure",),
+            extras={"matrix": snap(current), "power": power, "new_ones": ()},
+        ))
+    return steps
+
+
 # ------------------------------------------------------------ shortest paths
 
 
@@ -2302,6 +2384,7 @@ CONCEPT_ALGORITHMS: dict[str, tuple[str, ...]] = {
     ConceptGraph.MAX_FLOW: ("edmonds_karp",),
     ConceptGraph.CONNECTIVITY: ("low_link",),
     ConceptGraph.WALK_TRACE: ("trace",),
+    ConceptGraph.BOOLEAN_POWER: ("squaring",),
 }
 
 
@@ -2346,6 +2429,8 @@ def steps_for(concept: str, params: dict[str, Any]) -> list[Step]:
         return connectivity_steps(graph, start)
     if concept == ConceptGraph.WALK_TRACE:
         return walk_trace_steps(graph, params.get("walks"))
+    if concept == ConceptGraph.BOOLEAN_POWER:
+        return boolean_power_steps(graph, params.get("max_power"))
     return max_flow_steps(graph, params.get("source", graph.ids[0]),
                           params.get("sink", graph.ids[-1]))
 
@@ -2359,6 +2444,13 @@ WALK_TRACE_KEYWORDS: tuple[str, ...] = (
     "trace the path", "specific walk", "follow the walk", "逐边追踪",
     "追踪路径", "演示一条路径", "走一条路径")
 
+#: Same contract for the closure flood: one tuple feeds the topic gate and the
+#: concept matcher, so reaching ``boolean_power`` implies reaching the topic.
+BOOLEAN_POWER_KEYWORDS: tuple[str, ...] = (
+    "transitive closure", "reachability matrix", "boolean matrix",
+    "repeated squaring", "closure by squaring", "传递闭包", "可达矩阵",
+    "布尔矩阵")
+
 
 @topic(Topic.GRAPH, priority=20,
        keywords=("图论", "最短路", "生成树", "网络流", "最大流", "最小割",
@@ -2369,8 +2461,8 @@ WALK_TRACE_KEYWORDS: tuple[str, ...] = (
                  "bridges", "cut vertex", "cut vertices", "articulation", "biconnected",
                  "block-cut", "low-link", "connectivity",
                  "min cut", "adjacency",
-                 *WALK_TRACE_KEYWORDS))
+                 *WALK_TRACE_KEYWORDS, *BOOLEAN_POWER_KEYWORDS))
 class GraphTheory:
-    """Six graph lessons, including connectivity, with every state computed."""
+    """Seven graph lessons, including connectivity, with every state computed."""
 
     concepts = ConceptGraph

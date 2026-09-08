@@ -11,7 +11,8 @@ from .calculus import (
 )
 from .conics import ConceptConic
 from .expr import parse_function, pretty_expr
-from .graphs import STOCK_WALKS, WALK_TRACE_KEYWORDS, ConceptGraph
+from .graphs import (BOOLEAN_POWER_KEYWORDS, STOCK_WALKS,
+                     WALK_TRACE_KEYWORDS, ConceptGraph)
 from .linalg import VIEWS, ConceptLinAlg
 from .models import AnimationPlan, Topic
 from .topics import detect, plan_builder, plan_for
@@ -670,6 +671,7 @@ _GRAPH_CONCEPT_WORDS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
     # Above shortest_path: "trace a walk/path" must not be claimed by the
     # bare word "path". The words live in graphs.py beside the topic
     # keywords, so every one of them also routes the request here.
+    (ConceptGraph.BOOLEAN_POWER, "squaring", BOOLEAN_POWER_KEYWORDS),
     (ConceptGraph.WALK_TRACE, "trace", WALK_TRACE_KEYWORDS),
     (ConceptGraph.SHORTEST_PATH, "bellman_ford", ("bellman", "负权", "negative weight")),
     (ConceptGraph.SHORTEST_PATH, "dijkstra", ("dijkstra", "最短路", "shortest path")),
@@ -686,6 +688,7 @@ _GRAPH_TITLES_ZH = {
     ConceptGraph.MAX_FLOW: ("最大流与最小割", "沿增广路径推流，最后给出割的证明"),
     ConceptGraph.CONNECTIVITY: ("图的连通结构", "用 low-link 值找出桥、割点与双连通分量"),
     ConceptGraph.WALK_TRACE: ("图上的路径追踪", "沿给定的路径逐边行走，每一步都被验证是真实的边"),
+    ConceptGraph.BOOLEAN_POWER: ("传递闭包与可达性", "布尔矩阵反复平方，看 1 像洪水一样蔓延到所有可达点"),
 }
 
 
