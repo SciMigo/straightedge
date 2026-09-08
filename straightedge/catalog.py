@@ -223,6 +223,7 @@ CANONICAL_PROMPTS: dict[str, str] = {
     "graph/max_flow": "画网络流的最大流和最小割",
     "graph/connectivity": "找出图中的桥和割点",
     "graph/walk_trace": "trace a walk on the graph, edge by edge",
+    "graph/boolean_power": "show the transitive closure by squaring the reachability matrix",
 }
 
 

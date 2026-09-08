@@ -64,6 +64,7 @@ DEFAULT_TITLES = {
     ("graph/max_flow", "edmonds_karp"): "Max flow and min cut",
     ("graph/connectivity", "low_link"): "Bridges, articulation vertices, and blocks",
     ("graph/walk_trace", "trace"): "Walks on the graph, move by move",
+    ("graph/boolean_power", "squaring"): "Reachability by repeated squaring",
 }
 
 
@@ -167,6 +168,7 @@ def _resolve(plan: AnimationPlan) -> tuple[str, dict[str, Any], Graph, list[Step
         ConceptGraph.TRAVERSAL: "bfs", ConceptGraph.SHORTEST_PATH: "dijkstra",
         ConceptGraph.SPANNING_TREE: "kruskal", ConceptGraph.MAX_FLOW: "edmonds_karp",
         ConceptGraph.CONNECTIVITY: "low_link", ConceptGraph.WALK_TRACE: "trace",
+        ConceptGraph.BOOLEAN_POWER: "squaring",
     }[concept]
     return concept, params, graph, steps, algorithm
 
@@ -187,6 +189,9 @@ def graph_scene(plan: AnimationPlan) -> str:
         # to return a scene, so it says on screen what it could not draw.
         return _refusal_scene(str(exc))
     steps = steps[:MAX_STEPS]
+    if concept == ConceptGraph.BOOLEAN_POWER:
+        title = str(params.get("title") or DEFAULT_TITLES[(concept, "squaring")])
+        return _boolean_power_scene(graph, steps, title)
     start = str(params.get("start", graph.ids[0]))
     title = str(params.get("title") or DEFAULT_TITLES.get(
         (concept, algorithm), concept).format(start=start))
@@ -313,6 +318,117 @@ def _first_panel(steps: list[Step]) -> tuple[str, ...]:
         if step.panel:
             return step.panel
     return (steps[0].label,)
+
+
+
+def _boolean_power_scene(graph: Graph, steps: list, title: str) -> str:
+    """Graph on the left, its Boolean reachability matrix on the right.
+
+    Each squaring beat lights up exactly the entries the computation proved —
+    the ``new_ones`` carried in the step extras — so the flood the viewer
+    watches is the arithmetic, not an animator's guess. Already-proved pairs
+    stay dimly lit; the just-proved ones flash in the warning colour before
+    settling, which is what makes the doubling *visible*.
+    """
+    n = len(graph.ids)
+    positions = layout(graph, "auto")
+    # Remap the standard layout into the left third so the matrix owns the rest.
+    xs = [x for x, _ in positions.values()]
+    ys = [y for _, y in positions.values()]
+    span_x = (max(xs) - min(xs)) or 1.0
+    span_y = (max(ys) - min(ys)) or 1.0
+    scale = min(3.4 / span_x, 3.8 / span_y)
+    cx, cy = sum(xs) / n, sum(ys) / n
+    gpos = {v: (-4.5 + (x - cx) * scale, 0.1 + (y - cy) * scale)
+            for v, (x, y) in positions.items()}
+    radius = 0.26
+
+    cell = min(0.55, 3.6 / n)
+    gx0 = 3.4 - cell * (n - 1) / 2.0
+    gy0 = 0.5 + cell * (n - 1) / 2.0
+    beats = _Beats()
+    L: list[str] = []
+    emit = L.append
+
+    emit("class GeneratedScene(Scene):")
+    emit("    def construct(self):")
+    emit("        title = _t(%r, font_size=34).to_edge(UP, buff=0.3)" % title)
+    emit("        cells, values, nodes, labels = {}, {}, {}, {}")
+    for edge in graph.edges:
+        a, b = gpos[edge.source], gpos[edge.target]
+        tip = 0.05 if graph.directed else 0.0
+        (sx, sy), (tx, ty) = _shorten(a, b, radius, radius + tip)
+        maker = ("Arrow([%r, %r, 0], [%r, %r, 0], buff=0, color=C_MUTED, "
+                 "stroke_width=3.0, max_tip_length_to_length_ratio=0.14)"
+                 if graph.directed else
+                 "Line([%r, %r, 0], [%r, %r, 0], color=C_MUTED, stroke_width=3.0)")
+        emit("        edges_%d = %s" % (len(L), maker % (_r(sx), _r(sy), _r(tx), _r(ty))))
+    edge_names = [line.split(" = ")[0].strip() for line in L if line.strip().startswith("edges_")]
+    for v in graph.ids:
+        x, y = gpos[v]
+        emit("        nodes[%r] = Circle(radius=%r, color=C_FG, stroke_width=2.5, "
+             "fill_color=C_WELL, fill_opacity=1.0).move_to([%r, %r, 0])"
+             % (v, radius, _r(x), _r(y)))
+        emit("        labels[%r] = _t(%r, font_size=20).move_to(nodes[%r])"
+             % (v, graph.labels[v], v))
+    first = steps[0].extras["matrix"]
+    for i in range(n):
+        for j in range(n):
+            x = gx0 + j * cell
+            y = gy0 - i * cell
+            emit("        cells[(%d, %d)] = Square(side_length=%r, color=C_MUTED, "
+                 "stroke_width=1.2, fill_color=C_FLOW, fill_opacity=%r)"
+                 ".move_to([%r, %r, 0])"
+                 % (i, j, _r(cell * 0.96), 0.45 if first[i][j] else 0.0,
+                    _r(x), _r(y)))
+            emit("        values[(%d, %d)] = _t(%r, font_size=%d, color=%s)"
+                 ".move_to([%r, %r, 0])"
+                 % (i, j, str(first[i][j]), max(14, int(cell * 34)),
+                    "C_FG" if first[i][j] else "C_MUTED", _r(x), _r(y)))
+    for k, v in enumerate(graph.ids):
+        emit("        labels['row%d'] = _t(%r, font_size=15, color=C_MUTED)"
+             ".move_to([%r, %r, 0])"
+             % (k, graph.labels[v], _r(gx0 - cell * 0.5 - 0.32), _r(gy0 - k * cell)))
+        emit("        labels['col%d'] = _t(%r, font_size=15, color=C_MUTED)"
+             ".move_to([%r, %r, 0])"
+             % (k, graph.labels[v], _r(gx0 + k * cell), _r(gy0 + cell * 0.5 + 0.28)))
+    emit("        power = _t(%r, font_size=26).move_to([%r, %r, 0])"
+         % ("R", _r(gx0 + cell * (n - 1) / 2.0), _r(gy0 + cell * 0.5 + 0.85)))
+    emit("        caption = _t(%r, font_size=24).to_edge(DOWN, buff=0.35)"
+         % steps[0].caption)
+    emit("        %s(self, %s, Write(title), %s*[FadeIn(x) for x in nodes.values()], "
+         "*[Write(x) for x in labels.values()], *[FadeIn(c) for c in cells.values()], "
+         "*[Write(v) for v in values.values()], Write(power), Write(caption))"
+         % ("_beat", beats.next(),
+            "".join("Create(%s), " % name for name in edge_names)))
+
+    prev_power, prev_caption = "power", "caption"
+    for index, step in enumerate(steps[1:], start=1):
+        anims = []
+        for (i, j) in step.extras.get("new_ones", ()):
+            anims.append("cells[(%d, %d)].animate.set_fill(C_WARN, opacity=0.8)" % (i, j))
+            anims.append("FadeTransform(values[(%d, %d)], _t('1', font_size=%d, "
+                         "color=C_FG).move_to(values[(%d, %d)]))"
+                         % (i, j, max(14, int(cell * 34)), i, j))
+        # FadeTransform does not mutate its source the way Transform does, so
+        # each label change chains a fresh mobject — re-targeting the original
+        # leaves ghost glyphs stacked on screen (shipped once as "R^2/R^4").
+        emit("        power%d = _t(%r, font_size=26).move_to(%s)"
+             % (index, "R^%d" % step.extras.get("power", 1), prev_power))
+        emit("        caption%d = _t(%r, font_size=24).to_edge(DOWN, buff=0.35)"
+             % (index, step.caption))
+        anims.append("FadeTransform(%s, power%d)" % (prev_power, index))
+        anims.append("FadeTransform(%s, caption%d)" % (prev_caption, index))
+        prev_power, prev_caption = "power%d" % index, "caption%d" % index
+        emit("        # %s" % step.label)
+        emit("        _beat(self, %s, %s)" % (beats.next(), ", ".join(anims)))
+        if step.extras.get("new_ones"):
+            settle = ", ".join(
+                "cells[(%d, %d)].animate.set_fill(C_FLOW, opacity=0.45)" % (i, j)
+                for (i, j) in step.extras["new_ones"])
+            emit("        self.play(%s, run_time=0.4)" % settle)
+    emit("        self.wait(1)")
+    return "\n".join(L)
 
 
 class _Beats:
