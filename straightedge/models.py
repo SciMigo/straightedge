@@ -26,6 +26,7 @@ class Topic:
     CALCULUS = "calculus"
     LINEAR_ALGEBRA = "linear_algebra"
     GRAPH = "graph"
+    PROBABILITY = "probability"
 
 
 @dataclass(frozen=True)
