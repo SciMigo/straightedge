@@ -24,6 +24,18 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `walk_claims` checks every drawn path is a genuine absorbed ±1 walk before a
   frame is drawn; a start on an end, an unreachable exit side, or a tally too
   small to be a frequency is refused with the parameter that caused it.
+- **Sequence diagrams.** The new `sequence_diagram` template draws one lifeline
+  per participant and messages in time order down the page — the shape of a
+  protocol explanation, which the registry could not draw: `flow_diagram` is a
+  single chain and `architecture_diagram` has no time. Rows are messages (solid
+  or dashed), self-messages, notes over one or more lifelines, and gaps whose
+  `breaks` interrupt the lifelines of absent participants while the others carry
+  on. An optional `event` number per row fills a left gutter headed by
+  `event_label`. Input is checked before drawing: a row naming an undeclared
+  participant, a duplicate participant id, or event numbers that do not increase
+  down the page is refused with the row that breaks it (`refusal_findings`).
+  Columns widen until every label fits between the lifelines it spans. Themes:
+  `professional`, `dark`, `high-contrast`, `print-friendly`.
 
 ## [0.8.0] - 2026-09-01
 

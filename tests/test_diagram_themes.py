@@ -27,7 +27,7 @@ from straightedge.diagrams.themes import (
     resolve_theme,
 )
 
-THEMED = ("roadmap", "org_chart", "unit_circle", "linked_list")
+THEMED = ("roadmap", "org_chart", "unit_circle", "linked_list", "sequence_diagram")
 
 CASES = {
     "roadmap": {
@@ -53,6 +53,10 @@ CASES = {
                     "highlights": {"a": "current", "b": "comparison", "c": "visited"},
                     "pointers": [{"node": "a", "label": "head"}],
                     "caption": "Two pointers", "type": "doubly"},
+    "sequence_diagram": {"participants": ["worker", "service"], "rows": [
+        {"from": "worker", "to": "service", "label": "StartTimer", "event": 11, "tone": "warning"},
+        {"gap": "time passes", "breaks": ["worker"]},
+        {"from": "service", "to": "worker", "label": "TimerFired", "event": 12, "tone": "primary"}]},
 }
 
 #: What each pre-theme renderer drew with, harvested from the templates as
@@ -69,6 +73,9 @@ LEGACY_LITERALS = {
     "linked_list": {"#212529", "#6c757d", "stroke: #343a40", 'stroke="#343a40"',
                     'stroke="#333"', 'stroke="#666"', 'fill="#333"', "#fff3cd",
                     "#d1ecf1", "#FF9800", "#f8f9fa", "#2196F3"},
+    # Born themed: there is no pre-theme renderer, so its professional palette
+    # is the shared one, and these are that palette's paper, ink and head.
+    "sequence_diagram": {"#fbfaf7", "#17202a", "#eef2f7"},
 }
 SHARED_SUBSTITUTES = {
     "org_chart": {"#17202a", "#68717a", "#fbfaf7"},

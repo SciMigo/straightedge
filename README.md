@@ -100,13 +100,14 @@ template are published by `list_templates()`; see
 diagram type returns an empty string so a missing optional figure does not abort
 an entire document build.
 
-The registry currently contains 54 templates across several domains:
+The registry currently contains 55 templates across several domains:
 
 - Math and data: function graphs, coordinate planes, Riemann sums, unit circles,
   polar graphs, matrices, step functions, heatmaps, tables, and compass-and-
   straightedge constructions with exactly placed points.
 - Computer science: binary trees, linked lists, stacks, queues, hash tables, call
-  stacks, dynamic-programming tables, architecture diagrams, checked search
+  stacks, dynamic-programming tables, architecture diagrams, sequence diagrams
+  (lifelines, time-ordered messages, and gaps that break a lifeline), checked search
   trees (BST, AVL, and left-leaning red-black), disjoint-set forests,
   min-priority queues, planar embeddings, network flows, block-cut forests,
   and equivalent graph representations. An

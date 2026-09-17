@@ -22,6 +22,7 @@ Theme choices are deliberately family-specific:
 | Organisations | `org_chart` | `professional`, `friendly`, `pastel`, `high-contrast`, `print-friendly` |
 | Mathematics | `unit_circle` | `professional`, `classroom`, `dark`, `high-contrast`, `print-friendly` |
 | Data structures | `linked_list` | `professional`, `classroom`, `playful`, `dark`, `high-contrast` |
+| Protocols | `sequence_diagram` | `professional`, `dark`, `high-contrast`, `print-friendly` |
 
 `professional` is the default and is the pre-theme renderer, byte for byte:
 each template declares its own `professional` palette from the constants it
