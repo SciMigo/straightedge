@@ -205,6 +205,25 @@ def _findings(params: Dict[str, Any]) -> List[Finding]:
     return findings
 
 
+def _gap_run(ids: List[str], col: Dict[str, int]) -> Tuple[int, int]:
+    """The contiguous run of broken lifelines a gap's label is centred over.
+
+    Centring on the span of *all* broken lifelines put the label across any
+    lifeline between them that carries on — Worker 1 and Worker 2 broken, the
+    Service between them unbroken, and "kill -9 Worker 1" drawn straight through
+    the one line the figure exists to show continuing. The widest run of adjacent
+    broken lifelines is empty of continuing ones by construction; ties go left.
+    """
+    cols = sorted({col[i] for i in ids})
+    runs: List[Tuple[int, int]] = []
+    for c in cols:
+        if runs and c == runs[-1][1] + 1:
+            runs[-1] = (runs[-1][0], c)
+        else:
+            runs.append((c, c))
+    return max(runs, key=lambda r: r[1] - r[0])
+
+
 def _event_text(value: Any) -> str:
     number = float(value)
     return str(int(number)) if number.is_integer() else f"{number:g}"
@@ -281,8 +300,22 @@ class SequenceDiagramTemplate:
                     spans.append((i, i + 1, reach + 12))
                 else:
                     right_need = max(right_need, reach)
-            elif row["kind"] in ("note", "gap") and (row.get("over") or row.get("breaks")):
-                ids = row.get("over") or row.get("breaks")
+            elif row["kind"] == "gap" and row["breaks"]:
+                # The label sits over a run of broken lifelines and must stay clear
+                # of the continuing lifelines either side of that run.
+                a, b = _gap_run(row["breaks"], col)
+                half = (row["w"] + 2 * NOTE_PAD) / 2 + 8
+                inner = sum(spacing[a:b]) / 2
+                if a > 0:
+                    spans.append((a - 1, a, max(0.0, half - inner)))
+                else:
+                    left_need = max(left_need, half - inner)
+                if b < n - 1:
+                    spans.append((b, b + 1, max(0.0, half - inner)))
+                else:
+                    right_need = max(right_need, half - inner)
+            elif row["kind"] == "note" and row["over"]:
+                ids = row["over"]
                 a, b = min(col[i] for i in ids), max(col[i] for i in ids)
                 chip = row["w"] + 2 * NOTE_PAD
                 if a == b:
@@ -410,7 +443,7 @@ class SequenceDiagramTemplate:
         else:
             ids = row["breaks"]
             if ids:
-                a, b = min(col[i] for i in ids), max(col[i] for i in ids)
+                a, b = _gap_run(ids, col)
                 cx = (xs[a] + xs[b]) / 2
             else:
                 cx = (xs[0] + xs[-1]) / 2

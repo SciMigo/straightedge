@@ -94,6 +94,24 @@ def test_a_gap_breaks_only_the_lifelines_it_names():
     assert segments[svc_x] == 1
 
 
+def test_a_gap_label_never_crosses_a_lifeline_that_carries_on():
+    """Breaks on both sides of a continuing lifeline: the label must not sit on it."""
+    params = {"participants": ["worker1", "service", "worker2"],
+              "rows": [{"from": "worker1", "to": "service", "label": "StartTimer"},
+                       {"gap": "kill -9 Worker 1; the timer keeps running",
+                        "breaks": ["worker1", "worker2"]},
+                       {"self": "service", "label": "TimerFired"}]}
+    svg = _svg(params)
+    segments = {}
+    for x, _, _ in _lifelines(svg):
+        segments[x] = segments.get(x, 0) + 1
+    continuing = [x for x, count in segments.items() if count == 1]
+    assert len(continuing) == 1
+    [gap] = [t for t in _texts(svg) if t[3].startswith("sq-gap")]
+    half = text_width(gap[0], LABEL_FONT, safe=True) / 2
+    assert not (gap[1] - half <= continuing[0] <= gap[1] + half)
+
+
 def test_a_label_fits_between_the_lifelines_it_spans():
     long_label = "Command ScheduleActivityTask(call_llm, prompt, key) with a retry policy"
     params = {"participants": ["A", "B"],
