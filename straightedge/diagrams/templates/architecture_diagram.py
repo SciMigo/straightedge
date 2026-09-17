@@ -353,6 +353,7 @@ def _render_connection(
     conn: Dict[str, Any],
     centers: Dict[str, Tuple[float, float]],
     kinds: Dict[str, str],
+    end_gap: float = 0,
 ) -> str:
     src = str(conn.get("from", ""))
     tgt = str(conn.get("to", ""))
@@ -363,17 +364,55 @@ def _render_connection(
 
     sc = centers[src]
     tc = centers[tgt]
-
-    p1 = _edge_anchor(sc, tc, kinds.get(src, "service"))
-    p2 = _edge_anchor(tc, sc, kinds.get(tgt, "service"))
+    via = conn.get("via", [])
+    if not isinstance(via, list) or any(
+        not isinstance(point, (list, tuple)) or len(point) != 2
+        or not all(isinstance(v, (int, float)) and math.isfinite(v) for v in point)
+        for point in via
+    ):
+        via = []
+    p1 = _edge_anchor(sc, tuple(via[0]) if via else tc,
+                      kinds.get(src, "service"))
+    p2 = _edge_anchor(tc, tuple(via[-1]) if via else sc,
+                      kinds.get(tgt, "service"))
+    if end_gap:
+        previous = tuple(via[-1]) if via else p1
+        dx, dy = previous[0] - p2[0], previous[1] - p2[1]
+        distance = math.hypot(dx, dy)
+        if distance:
+            p2 = (p2[0] + end_gap * dx / distance,
+                  p2[1] + end_gap * dy / distance)
 
     elements: List[str] = []
-    elements.append(line(
-        p1[0], p1[1], p2[0], p2[1],
-        stroke="#546E7A",
-        stroke_width="1.6",
-        marker_end="url(#arch-arrow)",
-    ))
+    if via:
+        points = [p1, *via, p2]
+        elements.append(path(
+            "M " + " L ".join(f"{x} {y}" for x, y in points),
+            fill="none", stroke="#546E7A", stroke_width="1.6",
+            **({} if end_gap else {"marker_end": "url(#arch-arrow)"}),
+        ))
+    else:
+        elements.append(line(
+            p1[0], p1[1], p2[0], p2[1],
+            stroke="#546E7A",
+            stroke_width="1.6",
+            **({} if end_gap else {"marker_end": "url(#arch-arrow)"}),
+        ))
+    if end_gap:
+        # Some SVG rasterizers omit marker-end. A small explicit triangle also
+        # survives when this diagram is embedded as an image in a document.
+        previous = tuple(via[-1]) if via else p1
+        dx, dy = p2[0] - previous[0], p2[1] - previous[1]
+        length = math.hypot(dx, dy)
+        if length:
+            ux, uy = dx / length, dy / length
+            bx, by = p2[0] - 8 * ux, p2[1] - 8 * uy
+            left = (bx - 4 * uy, by + 4 * ux)
+            right = (bx + 4 * uy, by - 4 * ux)
+            elements.append(path(
+                f"M {p2[0]} {p2[1]} L {left[0]} {left[1]} "
+                f"L {right[0]} {right[1]} Z", fill="#546E7A",
+            ))
 
     if label:
         mid_x = (p1[0] + p2[0]) / 2
@@ -387,6 +426,57 @@ def _render_connection(
         ))
 
     return "\n".join(elements)
+
+
+def _manual_layout(
+    components: List[Dict[str, Any]], params: Dict[str, Any],
+) -> Tuple[Dict[str, Tuple[float, float]], int, int]:
+    """Use author-supplied top-left coordinates for an architecture canvas.
+
+    Unlike the layered layout, a manual canvas can show feedback paths and
+    separate control/data planes without implying every component is a stage
+    in one long pipeline. Invalid coordinates refuse the drawing rather than
+    silently placing a box at (0, 0).
+    """
+    width = params.get("width")
+    height = params.get("height")
+    if not isinstance(width, int) or not isinstance(height, int) or width < 200 or height < 100:
+        raise ValueError("manual architecture layout needs integer width and height")
+    positions = {}
+    for comp in components:
+        if "id" not in comp:
+            continue
+        x, y = comp.get("x"), comp.get("y")
+        if not all(isinstance(v, (int, float)) and math.isfinite(v) for v in (x, y)):
+            raise ValueError(f"manual architecture component {comp['id']!r} needs finite x and y")
+        h = _CYLINDER_H if comp.get("type") in ("database", "datastore") else _BOX_H
+        if x < 0 or y < 0 or x + _BOX_W > width or y + h > height:
+            raise ValueError(f"manual architecture component {comp['id']!r} is outside canvas")
+        positions[str(comp["id"])] = (x, y)
+    return positions, width, height
+
+
+def _manual_groups(params: Dict[str, Any], width: int, height: int) -> List[str]:
+    """Draw optional labelled background bands behind components and edges."""
+    result = []
+    for band in params.get("groups", []):
+        if not isinstance(band, dict):
+            raise ValueError("architecture group must be an object")
+        x, y, w, h = (band.get(k) for k in ("x", "y", "width", "height"))
+        if not all(isinstance(v, (int, float)) and math.isfinite(v) for v in (x, y, w, h)):
+            raise ValueError("architecture group needs finite x, y, width and height")
+        if x < 0 or y < 0 or w <= 0 or h <= 0 or x + w > width or y + h > height:
+            raise ValueError("architecture group is outside canvas")
+        label = str(band.get("label", ""))
+        fill = "#eff6ff" if band.get("kind") == "control" else "#f0fdf4"
+        if band.get("kind") == "client":
+            fill = "#f8fafc"
+        result.append(titled_group(label or "Architecture group", [
+            rect(x, y, w, h, rx=14, fill=fill, stroke="#cbd5e1", stroke_width="1.2"),
+            text(x + 18, y + 29, label, font_size="16px", font_weight="600",
+                 font_family="sans-serif", fill="#334155"),
+        ]))
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -403,7 +493,7 @@ class ArchitectureDiagramTemplate:
         annotations = _normalise_annotations(params)
         caption = params.get("caption") or params.get("title") or ""
         direction = str(params.get("layout", "left-to-right"))
-        if direction not in ("left-to-right", "top-to-bottom"):
+        if direction not in ("left-to-right", "top-to-bottom", "manual"):
             direction = "left-to-right"
 
         if not components:
@@ -432,9 +522,12 @@ class ArchitectureDiagramTemplate:
         extra_gap = max((16 + count * _NOTE_LINE for count in stack_lines.values()),
                         default=0)
 
-        positions, svg_w, svg_h = _hierarchical_layout(
-            node_ids, connections, direction, extra_gap,
-        )
+        if direction == "manual":
+            positions, svg_w, svg_h = _manual_layout(components, params)
+        else:
+            positions, svg_w, svg_h = _hierarchical_layout(
+                node_ids, connections, direction, extra_gap,
+            )
         for cid, count in stack_lines.items():
             if cid not in positions:
                 continue
@@ -472,12 +565,16 @@ class ArchitectureDiagramTemplate:
         elements: List[str] = []
         elements.append(style(_STYLES))
         elements.append(defs(_arrow_marker()))
+        if direction == "manual":
+            elements.append(rect(0, 0, svg_w, svg_h, fill="#ffffff"))
+            elements.extend(_manual_groups(params, svg_w, svg_h))
 
         # Map id → kind and id → center for connection rendering
         kind_map: Dict[str, str] = {}
         center_map: Dict[str, Tuple[float, float]] = {}
 
         # Render components
+        component_elements: List[str] = []
         for comp in components:
             cid = str(comp.get("id", ""))
             if cid not in positions:
@@ -487,11 +584,18 @@ class ArchitectureDiagramTemplate:
             cx, cy = positions[cid]
             svg_frag, center = _render_component(comp, cx, cy)
             center_map[cid] = center
-            elements.append(svg_frag)
+            component_elements.append(svg_frag)
 
-        # Render connections (on top of components for visibility)
+        # Manual routes go behind boxes so arrows never strike through labels.
+        if direction != "manual":
+            elements.extend(component_elements)
         for conn in connections:
-            elements.append(_render_connection(conn, center_map, kind_map))
+            elements.append(_render_connection(
+                conn, center_map, kind_map,
+                end_gap=10 if direction == "manual" else 0,
+            ))
+        if direction == "manual":
+            elements.extend(component_elements)
 
         # Annotations that point at something, drawn where they point — with
         # the same care the loose stack gets. Drawn raw they had every defect

@@ -100,6 +100,25 @@ template are published by `list_templates()`; see
 diagram type returns an empty string so a missing optional figure does not abort
 an entire document build.
 
+For architecture diagrams with feedback paths or distinct planes, set
+`layout: "manual"`, give the canvas `width` and `height`, and give each component
+top-left `x`/`y` coordinates. Optional `groups` draw labelled background bands;
+connection `via: [[x, y], ...]` supplies route points. Invalid coordinates
+refuse the diagram instead of silently drawing outside the frame:
+
+```python
+svg = render_diagram({"type": "architecture_diagram", "params": {
+    "layout": "manual", "width": 620, "height": 260,
+    "groups": [{"label": "Control plane", "kind": "control",
+                "x": 10, "y": 10, "width": 600, "height": 240}],
+    "components": [
+        {"id": "api", "type": "service", "label": "Run API", "x": 50, "y": 90},
+        {"id": "db", "type": "database", "label": "Run DB", "x": 400, "y": 90},
+    ],
+    "connections": [{"from": "api", "to": "db", "via": [[280, 70], [350, 70]]}],
+}})
+```
+
 The registry currently contains 54 templates across several domains:
 
 - Math and data: function graphs, coordinate planes, Riemann sums, unit circles,

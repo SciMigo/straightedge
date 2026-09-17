@@ -309,6 +309,40 @@ class TestFlatFormatRegistryIntegration:
         assert "Y" in svg
 
 
+class TestManualArchitectureLayout:
+    def test_positions_groups_and_routed_connection(self):
+        import xml.etree.ElementTree as ET
+
+        svg = render_diagram({"type": "architecture_diagram", "params": {
+            "layout": "manual", "width": 620, "height": 260,
+            "groups": [{"label": "Control plane", "kind": "control",
+                        "x": 10, "y": 10, "width": 600, "height": 240}],
+            "components": [
+                {"id": "a", "type": "service", "label": "Run API", "x": 50, "y": 90},
+                {"id": "b", "type": "database", "label": "Run DB", "x": 400, "y": 90},
+            ],
+            "connections": [{"from": "a", "to": "b", "via": [[280, 70], [350, 70]]}],
+        }})
+        root = ET.fromstring(svg)
+        ns = "{http://www.w3.org/2000/svg}"
+        assert root.get("viewBox") == "0 0 620 260"
+        assert "Control plane" in svg
+        assert any("280 70" in (p.get("d") or "")
+                   for p in root.iter(f"{ns}path"))
+        assert any(r.get("x") == "50" and r.get("y") == "90"
+                   for r in root.iter(f"{ns}rect"))
+
+    @pytest.mark.parametrize("bad", [
+        {"x": -1, "y": 20}, {"x": 500, "y": 20}, {"x": float("nan"), "y": 20},
+    ])
+    def test_invalid_manual_position_refuses_drawing(self, bad):
+        svg = render_diagram({"type": "architecture_diagram", "params": {
+            "layout": "manual", "width": 600, "height": 200,
+            "components": [{"id": "bad", "type": "service", "label": "Bad", **bad}],
+        }})
+        assert svg == ""
+
+
 class TestRealL06Data:
     """Integration test with actual L06 hint structure."""
 
