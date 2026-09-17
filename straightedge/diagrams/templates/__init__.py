@@ -48,6 +48,7 @@ from . import aoa_work  # noqa: F401
 from . import aon_node  # noqa: F401
 from . import structure_chart  # noqa: F401
 from . import flow_diagram  # noqa: F401
+from . import sequence_diagram  # noqa: F401
 from . import cycle_diagram  # noqa: F401
 from . import t_account  # noqa: F401
 from . import comparison  # noqa: F401
@@ -104,6 +105,7 @@ __all__ = [
     "aon_node",
     "structure_chart",
     "flow_diagram",
+    "sequence_diagram",
     "cycle_diagram",
     "t_account",
     "comparison",
