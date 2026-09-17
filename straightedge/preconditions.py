@@ -46,6 +46,9 @@ from straightedge.expr import validate_expression
 from straightedge.graph_scene import MAX_STEPS as _GRAPH_MAX_STEPS
 from straightedge.graph_scene import MAX_VERTICES as _GRAPH_MAX_VERTICES
 from straightedge.graphs import ConceptGraph, GraphError, coerce_graph, steps_for
+from straightedge.probability import ConceptProbability, ProbabilityError
+from straightedge.probability import coerce_model as coerce_walk_model
+from straightedge.probability import walk_claims
 from straightedge.linalg import (
     MAX_DIM,
     VIEWS,
@@ -520,3 +523,38 @@ def _graph_states_are_computable(plan: AnimationPlan) -> list[Violation]:
             f"the algorithm takes {len(steps)} steps; at most {_GRAPH_MAX_STEPS} fit "
             "one narrated video, and the scene would stop early"))
     return out
+
+
+# -------------------------------------------------------------- probability
+
+
+@register(ConceptProbability.RANDOM_WALK_EXITS)
+def _random_walk_is_drawable(plan: AnimationPlan) -> list[Violation]:
+    """Every path the scene draws must be a genuine absorbed walk.
+
+    The scene builder runs the same check and refuses, so this is the early copy:
+    an impossible request (a start on an end, an exit side no seed reaches, a
+    tally too small to be a frequency) is rejected at submit time with the
+    offending parameter, before a Manim process is spent on it.
+    """
+    # Named one by one, not forwarded wholesale: this is where the catalog reads
+    # a concept's parameter names from, and a check that passes the dict along
+    # publishes none of them.
+    supplied = {
+        "n": plan.parameters.get("n"),
+        "start": plan.parameters.get("start"),
+        "p": plan.parameters.get("p"),
+        "seed": plan.parameters.get("seed"),
+        "exit": plan.parameters.get("exit"),
+        "runs": plan.parameters.get("runs"),
+        "phases": plan.parameters.get("phases"),
+        "step_seconds": plan.parameters.get("step_seconds"),
+        "low_label": plan.parameters.get("low_label"),
+        "high_label": plan.parameters.get("high_label"),
+        "title": plan.parameters.get("title"),
+    }
+    try:
+        walk_claims(coerce_walk_model({k: v for k, v in supplied.items() if v is not None}))
+    except ProbabilityError as exc:
+        return [Violation(ConceptProbability.RANDOM_WALK_EXITS, exc.param, str(exc))]
+    return []

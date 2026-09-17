@@ -203,6 +203,7 @@ def _animation_templates() -> list[Template]:
 #: is *verified* against these rather than declared: the test suite asserts each
 #: routes to its concept, and that the orphans below are reached by none of them.
 CANONICAL_PROMPTS: dict[str, str] = {
+    "probability/random_walk_exits": "画一个赌徒破产的随机游走，在 0 和 N 两个吸收壁之间走到停下",
     "calculus/derivative_tangent": "画 y=x^2 的导数，用割线逼近切线",
     "calculus/riemann_integral": "画 y=x^2+1 的积分面积，用黎曼矩形展示",
     "calculus/ftc_accumulation": "用 y=x^2 展示微积分基本定理，变上限面积函数 F(x)",

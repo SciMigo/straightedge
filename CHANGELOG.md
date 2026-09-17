@@ -6,6 +6,25 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **A probability topic, starting with `probability/random_walk_exits`.** A walk
+  on `0..N` that steps up with probability `p` and down with `q`, drawn as
+  position against time between two absorbing barriers — the picture behind
+  gambler's ruin and every expected-absorption-time interview question. Five
+  optional phases map one-to-one onto narration beats: `walk`, `ends`, `steps`,
+  `absorb`, `tally` (many replays from the same start, coloured by the end each
+  reached, with a running count — the frequency whose limit is the ruin
+  probability). `walk` and `absorb` are required.
+- The walk is real and repeatable. Paths come from a seeded `walk_path`, and the
+  scene carries that function's **verbatim source** so it picks the path with
+  the measured narration lengths in hand: the first seed whose walk ends on the
+  requested side, changes direction, and paces each step between `step_seconds`
+  bounds, so the token reaches its end on the sentence that says the game stops.
+  `walk_claims` checks every drawn path is a genuine absorbed ±1 walk before a
+  frame is drawn; a start on an end, an unreachable exit side, or a tally too
+  small to be a frequency is refused with the parameter that caused it.
+
 ## [0.8.0] - 2026-09-01
 
 A minor release that closes the graph-theory course's algorithm work list

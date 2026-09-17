@@ -678,3 +678,12 @@ REQUESTS = {
  'trig': '画一个正弦函数的图像',
  'trig/graph_transform': 'y=2sin(x)的图像变换',
  'trig/unit_circle_to_sine': '单位圆生成正弦曲线的图像'}
+
+# probability: appended rather than merged into the literals above so the block a
+# generator may rewrite stays untouched.
+EXAMPLES['probability/random_walk_exits'] = {
+    'params': {'n': 10, 'start': 4, 'p': 0.5, 'seed': 7, 'runs': 40,
+               'phases': ['walk', 'ends', 'steps', 'absorb', 'tally']},
+    'template': 'probability/random_walk_exits'}
+REQUESTS['probability/random_walk_exits'] = '画一个赌徒破产的随机游走，在 0 和 N 两个吸收壁之间走到停下'
+

@@ -14,6 +14,7 @@ from .expr import parse_function, pretty_expr
 from .graphs import STOCK_WALKS, WALK_TRACE_KEYWORDS, ConceptGraph
 from .linalg import VIEWS, ConceptLinAlg
 from .models import AnimationPlan, Topic
+from .probability import ConceptProbability  # noqa: F401  (declares Topic.PROBABILITY)
 from .topics import detect, plan_builder, plan_for
 from .solids3d import (
     Concept3D,
@@ -687,6 +688,32 @@ _GRAPH_TITLES_ZH = {
     ConceptGraph.CONNECTIVITY: ("图的连通结构", "用 low-link 值找出桥、割点与双连通分量"),
     ConceptGraph.WALK_TRACE: ("图上的路径追踪", "沿给定的路径逐边行走，每一步都被验证是真实的边"),
 }
+
+
+@plan_for(Topic.PROBABILITY)
+def _probability_plan(request: str) -> AnimationPlan:
+    """A random walk between two absorbing ends — gambler's ruin, drawn.
+
+    A text request carries no N, start or p, so the plan names the concept and
+    the scene draws the default walk; callers set ``n``/``start``/``p``/``phases``
+    through ``parameters`` via :func:`plan_from_template`.
+    """
+    return AnimationPlan(
+        topic=Topic.PROBABILITY,
+        concept=ConceptProbability.RANDOM_WALK_EXITS,
+        title_zh="带两个吸收壁的随机游走",
+        objective_zh="看一条随机游走在 0 和 N 之间徘徊，直到碰到一端停下；多次重复后统计停在哪一端",
+        english_prompt=request,
+        parameters={},
+        elements=["number line", "absorbing barriers", "walk path", "token", "step probabilities", "tally"],
+        narration_zh=[
+            "把故事去掉，游戏就是一条线上的一个棋子，每一轮走一步。",
+            "线的一端是 0，破产；另一端是 N，赢下全部。",
+            "每一轮以概率 p 向上，以概率 q 向下。",
+            "迟早会碰到其中一端，一碰到就停下：这就是吸收壁。",
+            "从同一个起点反复玩很多次，停在 0 的比例就是破产概率。",
+        ],
+    )
 
 
 @plan_for(Topic.GRAPH)
