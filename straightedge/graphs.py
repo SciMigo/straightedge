@@ -1497,12 +1497,24 @@ def boolean_power_steps(graph: Graph, max_power: Any = None) -> list[Step]:
             extras={"matrix": snap(current), "power": power, "new_ones": new},
         ))
     else:
-        steps.append(Step(
-            "Closure reached",
-            f"Every pair a walk can join is joined within {bound} step(s)",
-            panel=(f"R^{{{bound}}} is the transitive closure",),
-            extras={"matrix": snap(current), "power": power, "new_ones": ()},
-        ))
+        # The loop stopped on the power bound, not on a fixed point. With the default bound
+        # (n - 1) that is the closure: no shortest walk is longer. A caller's smaller max_power
+        # may stop short, so say so instead of calling the last matrix the closure.
+        if bool_square(current) == current or max_power is None:
+            steps.append(Step(
+                "Closure reached",
+                f"Every pair a walk can join is joined within {power} step(s)",
+                panel=(f"R^{power} is the transitive closure",),
+                extras={"matrix": snap(current), "power": power, "new_ones": ()},
+            ))
+        else:
+            steps.append(Step(
+                "Stopped before the closure",
+                f"max_power {max_power} reached: R^{power} is not yet the closure",
+                panel=(f"R^{power}: walks of length \u2264 {power} only",
+                       "squaring again would still add pairs"),
+                extras={"matrix": snap(current), "power": power, "new_ones": ()},
+            ))
     return steps
 
 

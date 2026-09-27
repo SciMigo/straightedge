@@ -99,3 +99,32 @@ def test_prompt_routes_to_the_concept():
 
     plan = _graph_plan("show the transitive closure by squaring the reachability matrix")
     assert plan.concept == ConceptGraph.BOOLEAN_POWER
+
+
+PATH_OF_FIVE = {
+    "nodes": [{"id": v} for v in "abcde"],
+    "edges": [{"from": a, "to": b} for a, b in ("ab", "bc", "cd", "de")],
+}
+
+
+def test_a_small_max_power_does_not_claim_the_closure():
+    # a..e needs walks of length 4; stopping at R^2 must not be called the closure.
+    steps = boolean_power_steps(coerce_graph(PATH_OF_FIVE), 2)
+    last = steps[-1]
+    assert last.extras["power"] == 2
+    assert last.extras["matrix"][0][4] == 0          # a cannot reach e within 2 steps
+    assert "closure" not in last.label.lower() or "before" in last.label.lower()
+    assert not any("is the transitive closure" in line for line in last.panel)
+
+
+def test_a_sufficient_max_power_still_reports_the_closure():
+    steps = boolean_power_steps(coerce_graph(PATH_OF_FIVE), 4)
+    assert all(all(row) for row in steps[-1].extras["matrix"])
+    assert any("closure" in line for line in steps[-1].panel)
+
+
+def test_panels_write_powers_without_tex_braces():
+    # Panels are plain Text, not TeX: "R^{4}" would show its braces.
+    for graph, cap in ((LECTURE_GRAPH, None), (PATH_OF_FIVE, 2), (PATH_OF_FIVE, 4)):
+        for step in boolean_power_steps(coerce_graph(graph), cap):
+            assert all("{" not in line for line in step.panel), step.panel
