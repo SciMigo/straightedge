@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any, Dict, List, Tuple
 
 from ..registry import register
-from ..renderer import DEFAULT_STYLES, defs, line, rect, style, svg_document, text
+from ..renderer import DEFAULT_STYLES, cell_arrow_ends, defs, line, rect, style, svg_document, text
 
 
 STATE_COLORS = {
@@ -207,6 +207,8 @@ class DPTableTemplate:
                 y1 = table_y + start_row * cell_height + cell_height / 2
                 x2 = table_x + end_col * cell_width + cell_width / 2
                 y2 = table_y + end_row * cell_height + cell_height / 2
+                # End short of both centres, so the arrow never covers a value.
+                x1, y1, x2, y2 = cell_arrow_ends(x1, y1, x2, y2, cell_width / 2, cell_height / 2)
                 elements.append(
                     line(
                         x1,

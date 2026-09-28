@@ -6,7 +6,20 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-09-28
+
+A minor release: a probability topic, sequence diagrams, two graph scenes, and a
+fix for table arrows that covered the values they point at.
+
 ### Added
+
+- **`graph/walk_trace`.** Traces an author-supplied walk edge by edge on a
+  graph, for explanations that follow one specific route rather than an
+  algorithm's choices.
+- **`graph/boolean_power`.** The transitive-closure flood by repeated boolean
+  squaring of the adjacency matrix. A panel names each power reached; a
+  `max_power` too small to reach the closure is labelled as a power, never as
+  the closure.
 
 - **A probability topic, starting with `probability/random_walk_exits`.** A walk
   on `0..N` that steps up with probability `p` and down with `q`, drawn as
@@ -36,6 +49,16 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   down the page is refused with the row that breaks it (`refusal_findings`).
   Columns widen until every label fits between the lifelines it spans. Themes:
   `professional`, `dark`, `high-contrast`, `print-friendly`.
+
+### Fixed
+
+- **Table arrows no longer cover the values they connect.** `dp_table` and
+  `matrix_state` drew each dependency arrow from cell centre to cell centre, so
+  the line and head sat on the number printed in the target cell (reported from
+  a knapsack lab, where two arrows into one cell hid its value). Both ends now
+  stop short of their cells' centres (`renderer.cell_arrow_ends`), and an
+  arrow between adjacent cells stays visible. `matrix_state`'s arrowhead is
+  smaller, so it no longer reaches back over the source cell's value.
 
 ## [0.8.0] - 2026-09-01
 

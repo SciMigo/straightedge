@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 from ..registry import register
-from ..renderer import DEFAULT_STYLES, defs, line, polyline, rect, style, svg_document, text
+from ..renderer import DEFAULT_STYLES, cell_arrow_ends, defs, line, polyline, rect, style, svg_document, text
 
 
 STATE_COLORS = {
@@ -188,6 +188,8 @@ class MatrixStateTemplate:
         for start, end in arrows:
             start_x, start_y = self._cell_center(start, left_margin, top_margin, cell_width, cell_height)
             end_x, end_y = self._cell_center(end, left_margin, top_margin, cell_width, cell_height)
+            start_x, start_y, end_x, end_y = cell_arrow_ends(
+                start_x, start_y, end_x, end_y, cell_width / 2, cell_height / 2)
             elements.append(
                 line(
                     start_x,
@@ -247,7 +249,7 @@ class MatrixStateTemplate:
     @staticmethod
     def _arrow_marker() -> str:
         return """
-<marker id="matrix-arrow" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+<marker id="matrix-arrow" viewBox="0 0 10 7" markerWidth="6" markerHeight="4.2" refX="9" refY="3.5" orient="auto">
   <polygon points="0 0, 10 3.5, 0 7" fill="#555"/>
 </marker>
 """

@@ -59,6 +59,28 @@ def line(x1: float, y1: float, x2: float, y2: float, **attrs: Any) -> str:
     return f'<line x1="{x1}" y1="{y1}" x2="{x2}" y2="{y2}" {attr_str}/>'
 
 
+def cell_arrow_ends(
+    x1: float, y1: float, x2: float, y2: float,
+    half_width: float, half_height: float, fraction: float = 0.65,
+) -> tuple[float, float, float, float]:
+    """Endpoints for an arrow between two table cells centred at (x1, y1) and (x2, y2).
+
+    Drawn centre to centre, an arrow's line and head land on the value printed in the target
+    cell (and start on the source's). Each end is instead moved from its cell's centre towards
+    the other cell, a ``fraction`` of the way to that cell's border along the arrow's direction,
+    so both values stay clear. With the default 0.65 an arrow between two adjacent cells keeps
+    about a third of a cell's span, and its head stops short of the digits in the middle.
+    """
+    dx, dy = x2 - x1, y2 - y1
+    if dx == 0 and dy == 0:
+        return x1, y1, x2, y2
+    # Parameter at which the ray from a centre along (dx, dy) leaves a cell of this size.
+    exits = [half_width / abs(dx)] if dx else []
+    exits += [half_height / abs(dy)] if dy else []
+    step = fraction * min(exits)
+    return x1 + step * dx, y1 + step * dy, x2 - step * dx, y2 - step * dy
+
+
 def polyline(points: List[tuple[float, float]], **attrs: Any) -> str:
     """Create an SVG polyline element."""
     points_str = " ".join(f"{x},{y}" for x, y in points)
