@@ -117,6 +117,14 @@ def test_a_small_max_power_does_not_claim_the_closure():
     assert not any("is the transitive closure" in line for line in last.panel)
 
 
+def test_a_non_power_of_two_max_power_is_not_exceeded():
+    steps = boolean_power_steps(coerce_graph(PATH_OF_FIVE), 3)
+    assert all(step.extras["power"] <= 3 for step in steps)
+    assert steps[-1].extras["power"] == 2
+    assert steps[-1].extras["matrix"][0][4] == 0
+    assert "max_power 3 allows up to R^2" in steps[-1].caption
+
+
 def test_a_sufficient_max_power_still_reports_the_closure():
     steps = boolean_power_steps(coerce_graph(PATH_OF_FIVE), 4)
     assert all(all(row) for row in steps[-1].extras["matrix"])
