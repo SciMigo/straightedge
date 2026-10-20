@@ -100,11 +100,15 @@ template are published by `list_templates()`; see
 diagram type returns an empty string so a missing optional figure does not abort
 an entire document build.
 
-The registry currently contains 55 templates across several domains:
+The registry currently contains 59 templates across several domains:
 
 - Math and data: function graphs, coordinate planes, Riemann sums, unit circles,
-  polar graphs, matrices, step functions, heatmaps, tables, and compass-and-
-  straightedge constructions with exactly placed points.
+  polar graphs, matrices, step functions, heatmaps, tables, compass-and-
+  straightedge constructions with exactly placed points, and number theory:
+  binary bit selection, squaring ladders, residue permutations and coprime
+  grids, each computing its own numbers. These four also support
+  [staged reveal](docs/staged-reveal.md) — `data-stage` groups a narrated page
+  can show one step at a time.
 - Computer science: binary trees, linked lists, stacks, queues, hash tables, call
   stacks, dynamic-programming tables, architecture diagrams, sequence diagrams
   (lifelines, time-ordered messages, and gaps that break a lifeline), checked search

@@ -6,6 +6,42 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-10-20
+
+A minor release: four number-theory figures, and staged reveal — one static SVG
+that a narrated page can build up step by step.
+
+### Added
+
+- **Number-theory figures for modular exponentiation and Fermat/Euler.** Every
+  number they print is computed from their inputs and checked against `pow` or a
+  direct `gcd` count; none accepts a result from the caller.
+  - `bit_selection` — the binary digits of `n` under the powers of two, set bits
+    lit, and the chosen powers combining (`117 = 64 + 32 + 16 + 4 + 1`,
+    `3¹¹⁷ = 3⁶⁴ · 3³² · 3¹⁶ · 3⁴ · 3¹`). With a `modulus` it writes each chosen
+    rung's residue under its bit and the running product, reduced after every
+    step (`3 → 15 → 8 → 13 → 18` for 3¹¹⁷ mod 19).
+  - `squaring_ladder` — `a, a², a⁴, …` as cards, each the square of the
+    remainder below it, the residue linked to the next square; `select: true`
+    marks the rungs the bits of `n` pick. More than five rungs wrap to two rows.
+  - `residue_tiles` — `1 … p−1`, the row `a·k mod p` under it, and lines into a
+    sorted copy, so the permutation behind Fermat's little theorem is visible.
+    Refused (blank, with a finding) when `p` is not prime or divides `a`.
+  - `coprime_grid` — `1 … n` in rows, the multiples of each prime factor of `n`
+    struck in turn, the coprime residues outlined and counted:
+    `φ(100) = 100 − 50 − 10 = 40`. Not built on `lattice_grid`, which plots
+    lattice points `(x, y)` with `gcd(x, y) = 1`, a statement about pairs.
+  - Themes `professional`, `dark`, `high-contrast`, `print-friendly`. Type is
+    sized for a full-width slide: nothing below 11 px at 1180 px wide.
+- **Staged reveal** (`docs/staged-reveal.md`). These four group their drawing
+  into ordered natural steps; a `reveal` list assigns each step a stage, emitted
+  as `<g data-stage="k">`, so a page can show stage `k` with its own `k`-th
+  reveal. Without `reveal` nothing changes; a consumer that ignores the attribute
+  sees the complete figure. `upto: k` draws a still part-way through. A plan of
+  the wrong length, or one that goes backwards, is refused with a `stage_input`
+  finding. `straightedge.diagrams.natural_steps(type, params)` lists a figure's
+  steps.
+
 ## [0.9.0] - 2026-09-28
 
 A minor release: a probability topic, sequence diagrams, two graph scenes, and a

@@ -58,6 +58,10 @@ from . import org_chart  # noqa: F401
 from . import construction  # noqa: F401
 from . import descent_triangles  # noqa: F401
 from . import circle_chord_rational  # noqa: F401
+from . import bit_selection  # noqa: F401
+from . import squaring_ladder  # noqa: F401
+from . import residue_tiles  # noqa: F401
+from . import coprime_grid  # noqa: F401
 
 __all__ = [
     "lattice_grid",
@@ -115,4 +119,8 @@ __all__ = [
     "roadmap",
     "org_chart",
     "construction",
+    "bit_selection",
+    "squaring_ladder",
+    "residue_tiles",
+    "coprime_grid",
 ]

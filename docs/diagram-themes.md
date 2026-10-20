@@ -23,6 +23,7 @@ Theme choices are deliberately family-specific:
 | Mathematics | `unit_circle` | `professional`, `classroom`, `dark`, `high-contrast`, `print-friendly` |
 | Data structures | `linked_list` | `professional`, `classroom`, `playful`, `dark`, `high-contrast` |
 | Protocols | `sequence_diagram` | `professional`, `dark`, `high-contrast`, `print-friendly` |
+| Number theory | `bit_selection`, `squaring_ladder`, `residue_tiles`, `coprime_grid` | `professional`, `dark`, `high-contrast`, `print-friendly` |
 
 `professional` is the default and is the pre-theme renderer, byte for byte:
 each template declares its own `professional` palette from the constants it
