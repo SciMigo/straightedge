@@ -213,6 +213,39 @@ render_scene(scene, quality="h")
 `write_scene` is the only writer, so this is the only place the numbers need to
 go — there is no separate timing pass to keep in step.
 
+## Sentences inside a beat
+
+A beat is one step of the animation; a long beat is several sentences, and a
+visual event often belongs to one of them — a card that should enter *with*
+the takeaway, a tally that should finish *before* its result is read out.
+The beat map can say where each sentence starts:
+
+```json
+{ "b04": 31.8, "b04.s1": 0.0, "b04.s2": 3.69, "b04.s3": 8.58 }
+```
+
+`bNN.sK` is the start of sentence `K` (counting from 1) of beat `NN`, in
+seconds from the beat's own start. It is zero or more, so the CLI accepts a
+zero there where it refuses one for a beat length. A TTS pipeline that
+synthesizes one clip per sentence already knows these numbers.
+
+Builders that place events on sentences take a **cue** for each such moment:
+
+| Cue | Moment |
+|---|---|
+| `"tally"` | the start of that phase |
+| `{"phase": "tally", "sentence": 3}` | the start of its third sentence |
+| `{"phase": "tally", "sentence": 3, "offset": -0.4}` | 0.4 s before it |
+| `{"phase": "tally", "at": 0.5}` | halfway through the phase |
+
+A cue whose sentence was not measured falls back to an even split of its phase
+(sentence `k` of the `K` the plan refers to at `(k − 1)/K`), so a silent render
+and a preview still lay out. The resolver is `probability.cue_seconds`, and
+the scene carries its verbatim source, so the moment a check computes is the
+moment the scene draws. `probability/random_walk_exits` takes cues for its
+caption cards, its fades, the absorption, the tally window and the renewal
+counter.
+
 ## Converting a builder
 
 If a builder you need is on the unconverted list, the change is mechanical.

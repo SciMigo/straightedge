@@ -6,6 +6,52 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **`probability/random_walk_exits` can argue, not just show.** A new optional
+  `renewal` phase, after `absorb`, cuts the finished walk at each return to a
+  set of *renewal states* (default: one step either side of the start) and
+  counts the blocks off one by one: returned blocks settle grey, the escaping
+  block takes its end's colour, a dot marks each return, and a counter reads
+  out the block number. This is the picture of a first-step / renewal argument
+  ("from one away, each pair of flips escapes with chance 1/4 or puts you
+  back"), drawn on the real walk. `walk_claims` reports the decomposition
+  (`renewal_first_steps`, `renewal_blocks`, `renewal_block_steps`) and the exact
+  chance each block escapes (`renewal_escape_exact`, solved over Fractions).
+  An optional `average` cue marks the exact expected length on the walk's own
+  time axis. `expected_steps(start, n, p)` gives that value exactly.
+- **Sentence cues.** Beat maps may carry sentence starts (`bNN.sK`), and the
+  template takes cues — a phase, a sentence of a phase plus an offset, or a
+  fraction of a phase — for every timed event. See
+  `docs/narration-timing.md`.
+- **Caption cards.** A phase's caption may be a list of cards, each entering on
+  its own cue; `build: true` stacks a card under the ones before it so an
+  argument can be written up line by line; `until` ends one early.
+- **Tally statistics.** `tally_stat` is `end` (as before), `mean` (running mean
+  of the walk lengths) or `histogram` (bars of walk lengths on the fan's step
+  scale); `tally_target` draws a dashed line at a number of steps;
+  `tally_from` / `tally_until` set the window the walks are drawn in, so the
+  readout can reach its final value before the narration names it;
+  `tally_ease: slow_start` gives the first walks time to be seen; `tally_text`
+  rewrites the readouts; `step_axis` labels step counts under the fan.
+- **`layout: adaptive`** re-lays a 9:16 frame: the plot takes about half the
+  height, the title is larger and wraps to two lines, readouts move to the band
+  above the plot and captions grow. Landscape is unchanged.
+- **Labels.** `axis_labels` replaces `0` / `N = n` / `i`; `labels_until` fades
+  the end labels, the position labels or the title at a cue. A step axis takes
+  the end labels down with the tally at the latest.
+- **`showcase_steps`** asks for a walk of exactly that length, so a script can
+  say how long the walk is before anything is rendered (an impossible length
+  is refused, by parity, before searching). `absorb_at` may be a cue, so the
+  walk is absorbed on the sentence that says so.
+- The CLI's `--beat-seconds` accepts `bNN.sK` sentence starts, including zero.
+
+### Unchanged
+
+- A plan that sets none of the new parameters gets the scene source the
+  previous release wrote, byte for byte (pinned by hash in
+  `tests/test_probability_walk.py`), so it renders the same frames.
+
 ## [0.9.0] - 2026-09-28
 
 A minor release: a probability topic, sequence diagrams, two graph scenes, and a
