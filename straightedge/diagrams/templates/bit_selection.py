@@ -18,6 +18,8 @@ image_hint usage::
         "n": 117, "base": 3, "modulus": 19, "theme": "dark",
         "reveal": [1, 2, 2, 3, 4, 4, 4, 4]}}
 
+``show_title: false`` drops the title line, for a figure that must stay short.
+
 Natural steps, in order: ``bits``, ``sum``, then ``powers`` with a ``base``, then
 ``residues`` and one ``multiply_<k>`` per multiplication with a ``modulus``. See
 ``docs/staged-reveal.md`` for ``reveal`` and ``upto``.
@@ -117,6 +119,7 @@ class BitSelectionTemplate:
         params = params or {}
         theme = resolve_theme(params.get("theme", "professional"), THEMES)
         title = str(params.get("title", "") or "").strip()
+        show_title = bool(params.get("show_title", True))
         reveal = params.get("reveal") or []
         if _findings(params):
             return ""
@@ -183,6 +186,8 @@ class BitSelectionTemplate:
         chain_rows = _chain_rows(chips, arrow_w) if chips else []
         result = f"{power(base, n)} ≡ {running[-1]}   (mod {modulus})" if chips else ""
 
+        if not show_title:
+            title = ""
         widths = [grid_w, text_width(plain(title), TITLE_FONT, bold=True, safe=True),
                   *(text_width(plain(s), LINE_FONT, safe=True) for s in lines),
                   text_width(plain(result), LINE_FONT, bold=True, safe=True)]
@@ -192,11 +197,14 @@ class BitSelectionTemplate:
         width = max(widths) + 2 * MARGIN
         gx = (width - grid_w) / 2 + label_w
 
-        y = MARGIN + TITLE_FONT
         parts: List[str] = [style(self._css(theme)),
-                            rect(0, 0, 0, 0, **{"class": "bs-background"}),   # sized below
-                            mtext(width / 2, y, title, **{"class": "bs-title", "text-anchor": "middle"})]
-        y += 34
+                            rect(0, 0, 0, 0, **{"class": "bs-background"})]   # sized below
+        if title:
+            y = MARGIN + TITLE_FONT
+            parts.append(mtext(width / 2, y, title, **{"class": "bs-title", "text-anchor": "middle"}))
+            y += 34
+        else:
+            y = MARGIN - 6
 
         def col_x(i: int) -> float:
             return gx + i * cell + cell / 2

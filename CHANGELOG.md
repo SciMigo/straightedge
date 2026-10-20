@@ -23,7 +23,9 @@ that a narrated page can build up step by step.
     step (`3 → 15 → 8 → 13 → 18` for 3¹¹⁷ mod 19).
   - `squaring_ladder` — `a, a², a⁴, …` as cards, each the square of the
     remainder below it, the residue linked to the next square; `select: true`
-    marks the rungs the bits of `n` pick. More than five rungs wrap to two rows.
+    marks the rungs the bits of `n` pick. More than five rungs wrap to two rows
+    unless `columns` says otherwise; `columns` at or above the rung count draws
+    one row, for a wide, short slot.
   - `residue_tiles` — `1 … p−1`, the row `a·k mod p` under it, and lines into a
     sorted copy, so the permutation behind Fermat's little theorem is visible.
     Refused (blank, with a finding) when `p` is not prime or divides `a`.
@@ -31,6 +33,8 @@ that a narrated page can build up step by step.
     struck in turn, the coprime residues outlined and counted:
     `φ(100) = 100 − 50 − 10 = 40`. Not built on `lattice_grid`, which plots
     lattice points `(x, y)` with `gcd(x, y) = 1`, a statement about pairs.
+  - `show_title: false` on `bit_selection` and `squaring_ladder` drops the
+    title line when the figure has to stay short.
   - Themes `professional`, `dark`, `high-contrast`, `print-friendly`. Type is
     sized for a full-width slide: nothing below 11 px at 1180 px wide.
 - **Staged reveal** (`docs/staged-reveal.md`). These four group their drawing

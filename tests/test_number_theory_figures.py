@@ -62,6 +62,37 @@ class TestTheSquaringLadder:
         # 9² = 81, 5² = 25, 6² = 36, 17² = 289, 4² = 16: the residue, never the power
         assert squares == ["32 = 9", "92 = 81", "52 = 25", "62 = 36", "172 = 289", "42 = 16"]
 
+    def _rows(self, svg: str) -> list[float]:
+        return sorted({float(y) for y in re.findall(r'<rect x="[^"]+" y="([^"]+)"[^>]*class="sl-card"', svg)})
+
+    def test_columns_puts_every_rung_on_one_row(self):
+        params = LECTURE["squaring_ladder"]
+        assert len(self._rows(_svg("squaring_ladder", **params))) == 2      # default wraps 7 rungs
+        one = _svg("squaring_ladder", **params, columns=7)
+        assert len(self._rows(one)) == 1
+        assert _svg("squaring_ladder", **params, columns=12) == _svg("squaring_ladder", **params, columns=7)
+        assert len(self._rows(_svg("squaring_ladder", **params, columns=3))) == 3
+        assert _residues(one) == [3, 9, 5, 6, 17, 4, 16]
+
+    def test_one_row_stays_legible_in_a_wide_short_slot(self):
+        """A slide slot of about 1660 x 420: fit by whichever side binds."""
+        svg = _svg("squaring_ladder", **LECTURE["squaring_ladder"], columns=7, theme="dark")
+        w, h = (float(v) for v in re.search(r'width="(\d+)" height="(\d+)"', svg).groups())
+        display = w * min(1660 / w, 420 / h)
+        assert not [f for f in check_figure(svg, display_width=display) if f.severity == "error"]
+        assert 54 * display / w >= 40          # the residue numerals stay big
+
+    @pytest.mark.parametrize("columns", [0, -1, 65, 2.5, True])
+    def test_bad_columns_are_refused(self, columns):
+        assert refusal_findings("squaring_ladder", {**LECTURE["squaring_ladder"], "columns": columns})
+
+    def test_the_title_can_be_dropped(self):
+        for kind in ("squaring_ladder", "bit_selection"):
+            full, bare = _svg(kind, **LECTURE[kind]), _svg(kind, **LECTURE[kind], show_title=False)
+            height = lambda svg: int(re.search(r'height="(\d+)"', svg).group(1))
+            assert height(bare) < height(full)
+            assert "-title" not in re.sub(r"<style>.*?</style>", "", bare, flags=re.S)
+
     def test_select_names_the_rungs_the_bits_pick(self):
         svg = _svg("squaring_ladder", **LECTURE["squaring_ladder"])
         assert svg.count('class="sl-chosen"') == bin(117).count("1")

@@ -14,6 +14,9 @@ image_hint usage::
 ``n`` is the exponent the ladder is climbed for: it has a rung for every power
 of two up to ``n`` (3¹ … 3⁶⁴ for 117). ``select: true`` marks the rungs the
 binary digits of ``n`` pick out and writes the expansion under the ladder.
+``columns`` sets the rungs per row (default: one row up to five rungs, two rows
+beyond); ``columns`` at or above the rung count draws a single row, for a wide,
+short slot. ``show_title: false`` drops the title line.
 
 Natural steps, in order: one per rung (``rung_1``, ``rung_2``, ``rung_4``, …),
 then ``select`` when it is on. See ``docs/staged-reveal.md`` for ``reveal`` and
@@ -45,13 +48,14 @@ CARD_H = 236
 CARD_PAD = 24
 GAP = 64
 ROW_GAP = 70            # between two rows of cards, room for the turn-around arrow
-WRAP_AT = 5             # more rungs than this go on two rows
+WRAP_AT = 5             # by default, more rungs than this go on two rows
 
 def _findings(params: Dict[str, Any]) -> List[Finding]:
     found: List[Finding] = []
     as_int(params, "base", found, low=1, high=10**6)
     as_int(params, "modulus", found, low=2, high=10**6)
     as_int(params, "n", found, low=1, high=(1 << MAX_RUNGS) - 1)
+    as_int(params, "columns", found, low=1, high=64, required=False)
     if found:
         return found
     return reveal_findings(params, steps(params))
@@ -90,6 +94,8 @@ class SquaringLadderTemplate:
         params = params or {}
         theme = resolve_theme(params.get("theme", "professional"), THEMES)
         title = str(params.get("title", "") or "").strip()
+        show_title = bool(params.get("show_title", True))
+        columns = int(params.get("columns")) if params.get("columns") is not None else 0
         select = bool(params.get("select", False))
         reveal = params.get("reveal") or []
         if _findings(params):
@@ -101,6 +107,8 @@ class SquaringLadderTemplate:
         chosen = set(set_powers(n)) if select else set()
         if not title:
             title = f"Powers of {base} mod {modulus}: each rung squares the remainder below it"
+        if not show_title:
+            title = ""
 
         calcs = []
         for exponent, prev, raw, residue in rungs:
@@ -113,7 +121,10 @@ class SquaringLadderTemplate:
                      *(text_width(f"≡ {r[3]}", RESIDUE_FONT, bold=True, safe=True) + 2 * CARD_PAD
                        for r in rungs))
         count = len(rungs)
-        per_row = count if count <= WRAP_AT else (count + 1) // 2
+        if columns:
+            per_row = min(columns, count)       # columns >= rungs: one row
+        else:
+            per_row = count if count <= WRAP_AT else (count + 1) // 2
         rows = (count + per_row - 1) // per_row
         row_w = per_row * card_w + (per_row - 1) * GAP
         foot = ""
@@ -123,7 +134,7 @@ class SquaringLadderTemplate:
         width = max(row_w, text_width(title, TITLE_FONT, bold=True, safe=True),
                     text_width(plain(foot), FOOT_FONT, bold=True, safe=True)) + 2 * MARGIN
         x0 = (width - row_w) / 2
-        top = MARGIN + TITLE_FONT + 30
+        top = MARGIN + TITLE_FONT + 30 if title else MARGIN + 8
         cards_h = rows * CARD_H + (rows - 1) * ROW_GAP
         height = top + cards_h + (FOOT_FONT + 48 if foot else 0) + MARGIN
 
@@ -131,9 +142,10 @@ class SquaringLadderTemplate:
             return x0 + (i % per_row) * (card_w + GAP), top + (i // per_row) * (CARD_H + ROW_GAP)
 
         parts: List[str] = [style(self._css(theme)), defs(self._marker(theme)),
-                            rect(0, 0, round(width), round(height), **{"class": "sl-background"}),
-                            text(width / 2, MARGIN + TITLE_FONT, title,
-                                 **{"class": "sl-title", "text-anchor": "middle"})]
+                            rect(0, 0, round(width), round(height), **{"class": "sl-background"})]
+        if title:
+            parts.append(text(width / 2, MARGIN + TITLE_FONT, title,
+                              **{"class": "sl-title", "text-anchor": "middle"}))
         for i, ((exponent, prev, raw, residue), calc) in enumerate(zip(rungs, calcs)):
             x, y = place(i)
             cx = x + card_w / 2
