@@ -59,6 +59,25 @@ def _block(src: str, depth: int = 8) -> str:
     return indent(dedent(src).strip("\n"), " " * depth) + "\n"
 
 
+class _EmptyStatistic:
+    """A placeholder that renders as a dash under every numeric format spec."""
+
+    def __format__(self, _spec: str) -> str:
+        return "-"
+
+    def __str__(self) -> str:
+        return "-"
+
+    def __repr__(self) -> str:
+        return "-"
+
+
+def _empty_stat_text(template: str, runs: int) -> str:
+    """The statistic row before the first sample, with no raw placeholders."""
+    empty = _EmptyStatistic()
+    return template.format(k=0, runs=runs, mean=empty, median=empty)
+
+
 # --------------------------------------------------------------- sections
 #
 # Each returns source indented for ``construct`` (8 spaces), ending in "\n".
@@ -398,9 +417,13 @@ def _tally(m: P.WalkModel, adaptive: bool) -> str:
     legacy = stat == "end" and not m.tally_text and not adaptive
     custom_window = m.tally_from is not None or m.tally_until is not None or m.tally_ease != "linear"
     head = ['if TALLY:',
-            '    LONGEST = max(len(r) - 1 for r in TALLY)',
-            '    TDX = (X1 - X0) / max(LONGEST, 1)',
-            '    IT = PHASES.index("tally")']
+            '    LONGEST = max(len(r) - 1 for r in TALLY)']
+    if m.tally_target is None:
+        head.append('    TDX = (X1 - X0) / max(LONGEST, 1)')
+    else:
+        head += [f'    SCALE_STEPS = max(LONGEST, 1, {m.tally_target!r})',
+                 '    TDX = (X1 - X0) / SCALE_STEPS']
+    head.append('    IT = PHASES.index("tally")')
     if custom_window:
         tf = f"cue_t({_cue(m, m.tally_from)})" if m.tally_from else "T_TALLY + 0.8"
         tu = (f"cue_t({_cue(m, m.tally_until)})" if m.tally_until
@@ -473,11 +496,13 @@ def _tally(m: P.WalkModel, adaptive: bool) -> str:
         '''
     else:
         drop = "0.5" if m.step_axis else "0.0"
+        empty_stat = _empty_stat_text(ttext["stat"], m.runs)
         rows = f'''
             # A running statistic of the walks drawn so far, cached per count like
             # the end tally: at most RUNS+1 values per row.
             ROW_CACHE = {{}}
             TALLY_TEXT = {ttext!r}
+            EMPTY_STAT = {empty_stat!r}
             STEPS_OF = [len(r) - 1 for r in TALLY]
 
             def row(top):
@@ -490,10 +515,11 @@ def _tally(m: P.WalkModel, adaptive: bool) -> str:
                     else:
                         seen = sorted(STEPS_OF[:k])
                         if k:
+                            median = (seen[(k - 1) // 2] + seen[k // 2]) / 2
                             text = TALLY_TEXT["stat"].format(k=k, runs=len(TALLY),
-                                                             mean=sum(seen) / k, median=seen[k // 2])
+                                                             mean=sum(seen) / k, median=median)
                         else:
-                            text = TALLY_TEXT["stat"].split("{{")[0].rstrip() + "  -"
+                            text = EMPTY_STAT
                         big = BIG_ROW * (1.2 if vertical and BIG_ROW > 1 else 1.0)
                         mob = _t(text, font_size=36 * big, color=C_HOLD)
                     ROW_CACHE[key] = place_row(mob, top, drop={drop})
@@ -506,7 +532,8 @@ def _tally(m: P.WalkModel, adaptive: bool) -> str:
             target_line = DashedLine([X_TARGET, Y0, 0.0], [X_TARGET, Y1, 0.0], color=C_HOLD,
                                      stroke_width=4, dash_length=0.12)
             target_label = _t("{_q(m.tally_target_label)}", font_size=34, color=C_HOLD).next_to(
-                np.array([X_TARGET, Y1 - 0.25 * UNIT, 0.0]), RIGHT, buff=0.12)
+                np.array([X_TARGET, Y1 - 0.25 * UNIT, 0.0]),
+                LEFT if X_TARGET > (X0 + X1) / 2.0 else RIGHT, buff=0.12)
             target_line.add_updater(lambda mob: mob.set_opacity(fade(T_TALLY + 0.8, 0.8)))
             target_label.add_updater(lambda mob: mob.set_opacity(fade(T_TALLY + 0.8, 0.8)))
             self.add(target_line, target_label)

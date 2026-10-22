@@ -256,8 +256,8 @@ import hashlib  # noqa: E402
 from straightedge.cli import _read_beat_seconds  # noqa: E402
 from straightedge.errors import InputFileError  # noqa: E402
 from straightedge.probability import (Cue, cue_seconds, cue_time, expected_steps,  # noqa: E402
-                                      renewal_blocks, renewal_escape, showcase_of_length,
-                                      walking_seconds)
+                                      exact_walk_exits, renewal_blocks, renewal_escape,
+                                      showcase_of_length, walking_seconds)
 from straightedge.probability_scene import random_walk_scene  # noqa: E402
 
 #: sha256 of ``random_walk_scene`` for four plans, as the first release wrote
@@ -391,6 +391,22 @@ def test_showcase_of_length_is_a_true_walk_of_that_length():
     assert path == walk_path(3, 6, 0.5, seed)
 
 
+def test_exact_length_uses_the_requested_ends_parity():
+    assert exact_walk_exits(4, 9, 5) == ("top",)
+    for exit_side in ("top", "any", "TOP"):
+        assert coerce_model({"n": 9, "start": 4, "exit": exit_side,
+                             "showcase_steps": 5}).showcase_steps == 5
+    with pytest.raises(ProbabilityError) as err:
+        coerce_model({"n": 9, "start": 4, "exit": "zero", "showcase_steps": 5})
+    assert err.value.param == "showcase_steps"
+
+
+def test_exact_length_falls_back_when_four_turns_are_impossible():
+    seed, path, _ok = showcase_of_length(3, 6, 0.5, 3, "zero", 3, 20.0, 0.5, 2.0)
+    assert path == [3, 2, 1, 0]
+    assert path == walk_path(3, 6, 0.5, seed)
+
+
 @pytest.mark.parametrize("steps", [2, 20, 1])
 def test_impossible_lengths_are_refused_before_searching(steps):
     """From the middle of 0..6 every exit takes an odd number of steps, at least 3."""
@@ -514,6 +530,8 @@ def test_mean_tally_reports_what_it_draws():
     facts = walk_claims(coerce_model(dict(V1, tally_stat="mean", tally_target=9)), V1_BEATS)
     steps = facts["tally_steps"]
     assert len(steps) == 120 and facts["tally_mean"] == sum(steps) / 120
+    ordered = sorted(steps)
+    assert facts["tally_median"] == (ordered[59] + ordered[60]) / 2
     assert all(s % 2 == 1 for s in steps), "from the middle every exit is odd"
 
 
@@ -558,6 +576,21 @@ def test_statistic_tallies_compile(stat):
                        tally_until={"sentence": 2}, tally_ease="slow_start"), beats=V1_BEATS)
     compile(code, "scene", "exec")
     assert "STEPS_OF" in code and "X_TARGET" in code and "STEP_TICK" in code
+
+
+def test_statistic_rows_have_a_real_empty_value_and_an_even_sample_median():
+    code = _scene(dict(V1, tally_stat="mean", tally_text={"stat": "median {median:.1f}"}),
+                  beats=V1_BEATS)
+    compile(code, "scene", "exec")
+    assert "EMPTY_STAT = 'median -'" in code
+    assert "median = (seen[(k - 1) // 2] + seen[k // 2]) / 2" in code
+
+
+def test_a_tally_target_expands_the_scale_and_keeps_its_label_inside():
+    code = _scene(dict(V1, tally_stat="mean", tally_target=1000), beats=V1_BEATS)
+    compile(code, "scene", "exec")
+    assert "SCALE_STEPS = max(LONGEST, 1, 1000.0)" in code
+    assert "LEFT if X_TARGET > (X0 + X1) / 2.0 else RIGHT" in code
 
 
 def test_end_tally_text_can_be_rewritten():

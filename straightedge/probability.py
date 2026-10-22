@@ -308,13 +308,14 @@ def showcase_of_length(start, n, p, seed, exit_side, steps, walking_seconds, lo,
                        min_turns=4, tries=20000, cap=4000):
     """``(seed_used, path, in_range)`` for a showcase walk of exactly ``steps`` steps.
 
-    The first seed from ``seed`` upward whose walk ends on the requested side,
-    changes direction at least ``min_turns`` times, and is that long. The choice
-    does not depend on the narration's timing, so a script can state the walk's
-    length before anything is rendered; ``in_range`` reports whether filling
-    ``walking_seconds`` paces it inside ``lo``..``hi``. ``(None, None, False)``
-    if no seed within ``tries`` has that length.
+    Prefer the first seed whose walk also changes direction at least
+    ``min_turns`` times, but fall back to the first exact-length walk when that
+    visual flourish is impossible. The choice does not depend on narration
+    timing, so a script can state the walk's length before anything is rendered;
+    ``in_range`` reports whether filling ``walking_seconds`` paces it inside
+    ``lo``..``hi``. ``(None, None, False)`` if no seed has that length.
     """
+    fallback = None
     for k in range(tries):
         path = walk_path(start, n, p, seed + k, cap)
         if path is None or len(path) - 1 != steps:
@@ -323,11 +324,32 @@ def showcase_of_length(start, n, p, seed, exit_side, steps, walking_seconds, lo,
             continue
         if exit_side == "top" and path[-1] != n:
             continue
+        if fallback is None:
+            fallback = (seed + k, path)
         turns = sum(1 for a, b, c in zip(path, path[1:], path[2:]) if (b - a) != (c - b))
         if turns < min_turns:
             continue
         return seed + k, path, lo <= walking_seconds / steps <= hi
+    if fallback is not None:
+        seed_used, path = fallback
+        return seed_used, path, lo <= walking_seconds / steps <= hi
     return None, None, False
+
+
+def exact_walk_exits(start: int, n: int, steps: int) -> tuple[str, ...]:
+    """Absorbing ends reachable for the first time on exactly ``steps`` moves."""
+    positions = {start}
+    for move in range(1, steps + 1):
+        final = move == steps
+        following = set()
+        for position in positions:
+            for candidate in (position - 1, position + 1):
+                if not 0 <= candidate <= n:
+                    continue
+                if final or 0 < candidate < n:
+                    following.add(candidate)
+        positions = following
+    return tuple(side for side, end in (("zero", 0), ("top", n)) if end in positions)
 
 
 def tally_paths(start, n, p, seed, runs, stride=104729, cap=4000):
@@ -582,11 +604,13 @@ def _coerce_extensions(params: dict, phases: tuple, n: int, start: int, runs: in
 
     if params.get("showcase_steps") is not None:
         steps = _as_int(params["showcase_steps"], "showcase_steps")
-        nearest = min(start, n - start)
-        if steps < nearest or (steps - nearest) % 2:
+        possible = set(exact_walk_exits(start, n, steps))
+        exit_side = str(params.get("exit", "any")).strip().lower()
+        requested = {"zero", "top"} if exit_side == "any" else {exit_side}
+        if not possible.intersection(requested):
             raise ProbabilityError(
-                f"showcase_steps={steps} is impossible: from {start} the nearest end is "
-                f"{nearest} steps away and every walk to it has that parity", steps,
+                f"showcase_steps={steps} is impossible: no walk from {start} first reaches "
+                f"the requested '{exit_side}' end on that move", steps,
                 param="showcase_steps")
         if steps > 200:
             raise ProbabilityError("showcase_steps above 200 would not be legible", steps,
@@ -934,6 +958,7 @@ def walk_claims(m: WalkModel, beat_seconds: dict | None = None) -> dict:
                 raise ProbabilityError(f"tally walk invalid: {bad}", None, param="runs")
         at_zero = sum(1 for r in runs if r[-1] == 0)
         steps = [len(r) - 1 for r in runs]
+        ordered_steps = sorted(steps)
         t_from, t_until = tally_times(m, spans, beat_seconds)
         i = m.phases.index("tally")
         t0 = phase_starts(spans)[i]
@@ -945,7 +970,8 @@ def walk_claims(m: WalkModel, beat_seconds: dict | None = None) -> dict:
         facts.update({"tally_zero": at_zero, "tally_top": m.runs - at_zero,
                       "tally_longest": max(steps), "tally_steps": steps,
                       "tally_mean": sum(steps) / len(steps),
-                      "tally_median": sorted(steps)[len(steps) // 2],
+                      "tally_median": ((ordered_steps[(len(steps) - 1) // 2]
+                                        + ordered_steps[len(steps) // 2]) / 2),
                       "tally_from_seconds": t_from, "tally_done_seconds": t_until})
     return facts
 
