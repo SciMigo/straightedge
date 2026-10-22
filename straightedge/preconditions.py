@@ -554,6 +554,23 @@ def _random_walk_is_drawable(plan: AnimationPlan) -> list[Violation]:
         "low_label": plan.parameters.get("low_label"),
         "high_label": plan.parameters.get("high_label"),
         "title": plan.parameters.get("title"),
+        "absorb_at": plan.parameters.get("absorb_at"),
+        "captions": plan.parameters.get("captions"),
+        "axis_labels": plan.parameters.get("axis_labels"),
+        "labels_until": plan.parameters.get("labels_until"),
+        "showcase_steps": plan.parameters.get("showcase_steps"),
+        "layout": plan.parameters.get("layout"),
+        "renewal_states": plan.parameters.get("renewal_states"),
+        "renewal_cues": plan.parameters.get("renewal_cues"),
+        "renewal_text": plan.parameters.get("renewal_text"),
+        "tally_stat": plan.parameters.get("tally_stat"),
+        "tally_target": plan.parameters.get("tally_target"),
+        "tally_target_label": plan.parameters.get("tally_target_label"),
+        "tally_from": plan.parameters.get("tally_from"),
+        "tally_until": plan.parameters.get("tally_until"),
+        "tally_ease": plan.parameters.get("tally_ease"),
+        "tally_text": plan.parameters.get("tally_text"),
+        "step_axis": plan.parameters.get("step_axis"),
     }
     try:
         walk_claims(coerce_walk_model({k: v for k, v in supplied.items() if v is not None}))

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from dataclasses import asdict
 from pathlib import Path
@@ -432,6 +433,10 @@ def _agent_error(exc: Exception) -> StraightedgeError:
     return StraightedgeError(str(exc))
 
 
+#: ``bNN.sK``: where sentence ``K`` of beat ``NN`` starts, from the beat's start.
+SENTENCE_KEY = re.compile(r"b\d+\.s\d+")
+
+
 def _read_beat_seconds(path: Path | None) -> dict[str, float] | None:
     """Measured narration lengths, keyed by beat.
 
@@ -470,6 +475,15 @@ def _read_beat_seconds(path: Path | None) -> dict[str, float] | None:
         if isinstance(value, bool) or not isinstance(value, (int, float)):
             raise InputFileError(
                 f"--beat-seconds[{key!r}] must be a number of seconds, got {value!r}")
+        if SENTENCE_KEY.fullmatch(str(key)):
+            # A sentence start, in seconds from its beat's start: the first
+            # sentence of a beat legitimately starts at zero.
+            if value < 0:
+                raise InputFileError(
+                    f"--beat-seconds[{key!r}] is a sentence start and cannot be negative, "
+                    f"got {value!r}")
+            beats[str(key)] = float(value)
+            continue
         if value <= 0:
             raise InputFileError(
                 f"--beat-seconds[{key!r}] must be positive, got {value!r}; a beat "
