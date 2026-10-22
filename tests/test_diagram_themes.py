@@ -27,7 +27,8 @@ from straightedge.diagrams.themes import (
     resolve_theme,
 )
 
-THEMED = ("roadmap", "org_chart", "unit_circle", "linked_list", "sequence_diagram")
+THEMED = ("roadmap", "org_chart", "unit_circle", "linked_list", "sequence_diagram",
+          "bit_selection", "squaring_ladder", "residue_tiles", "coprime_grid")
 
 CASES = {
     "roadmap": {
@@ -57,6 +58,10 @@ CASES = {
         {"from": "worker", "to": "service", "label": "StartTimer", "event": 11, "tone": "warning"},
         {"gap": "time passes", "breaks": ["worker"]},
         {"from": "service", "to": "worker", "label": "TimerFired", "event": 12, "tone": "primary"}]},
+    "bit_selection": {"n": 117, "base": 3, "modulus": 19},
+    "squaring_ladder": {"base": 3, "modulus": 19, "n": 117, "select": True},
+    "residue_tiles": {"p": 7, "a": 3},
+    "coprime_grid": {"n": 100},
 }
 
 #: What each pre-theme renderer drew with, harvested from the templates as
@@ -76,6 +81,11 @@ LEGACY_LITERALS = {
     # Born themed: there is no pre-theme renderer, so its professional palette
     # is the shared one, and these are that palette's paper, ink and head.
     "sequence_diagram": {"#fbfaf7", "#17202a", "#eef2f7"},
+    # The number-theory figures are born themed too.
+    "bit_selection": {"#fbfaf7", "#17202a", "#eef2f7"},
+    "squaring_ladder": {"#fbfaf7", "#17202a", "#eef2f7"},
+    "residue_tiles": {"#fbfaf7", "#17202a", "#eef2f7"},
+    "coprime_grid": {"#fbfaf7", "#17202a", "#eef2f7"},
 }
 SHARED_SUBSTITUTES = {
     "org_chart": {"#17202a", "#68717a", "#fbfaf7"},
