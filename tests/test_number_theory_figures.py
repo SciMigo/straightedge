@@ -82,9 +82,11 @@ class TestTheSquaringLadder:
         assert not [f for f in check_figure(svg, display_width=display) if f.severity == "error"]
         assert 54 * display / w >= 40          # the residue numerals stay big
 
-    @pytest.mark.parametrize("columns", [0, -1, 65, 2.5, True])
+    @pytest.mark.parametrize("columns", [0, -1, 65, 2.5, True, "wide"])
     def test_bad_columns_are_refused(self, columns):
-        assert refusal_findings("squaring_ladder", {**LECTURE["squaring_ladder"], "columns": columns})
+        params = {**LECTURE["squaring_ladder"], "columns": columns}
+        assert refusal_findings("squaring_ladder", params)
+        assert DIAGRAM_REGISTRY["squaring_ladder"].render(params) == ""
 
     def test_the_title_can_be_dropped(self):
         for kind in ("squaring_ladder", "bit_selection"):
@@ -126,6 +128,13 @@ class TestBitSelection:
         chain = [t for t in texts if t.startswith("× ")]
         assert chain == ["× 5 = 15", "× 17 = 255 ≡ 8", "× 4 = 32 ≡ 13", "× 16 = 208 ≡ 18"]
         assert f"3117 ≡ {pow(3, 117, 19)}   (mod 19)" in texts
+
+    def test_accepted_inputs_stay_above_the_slide_text_floor(self):
+        extreme = {"n": 4095, "base": 999999, "modulus": 999983}
+        findings = refusal_findings("bit_selection", extreme)
+        assert findings and findings[0].check == "figure_legibility"
+        assert _svg("bit_selection", **extreme) == ""
+        assert _svg("bit_selection", n=4095, base=3, modulus=19)
 
     @pytest.mark.parametrize("n,base,modulus", [(10, 7, 13), (26, 3, 100), (23, 5, 17), (1, 4, 9)])
     def test_other_exponents(self, n, base, modulus):

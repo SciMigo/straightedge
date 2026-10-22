@@ -95,11 +95,11 @@ class SquaringLadderTemplate:
         theme = resolve_theme(params.get("theme", "professional"), THEMES)
         title = str(params.get("title", "") or "").strip()
         show_title = bool(params.get("show_title", True))
-        columns = int(params.get("columns")) if params.get("columns") is not None else 0
         select = bool(params.get("select", False))
         reveal = params.get("reveal") or []
         if _findings(params):
             return ""
+        columns = int(params.get("columns")) if params.get("columns") is not None else 0
         base, modulus, n = int(params.get("base")), int(params.get("modulus")), int(params.get("n"))
         upto = int(params.get("upto")) if params.get("upto") is not None else None
         stager = Stager({"reveal": reveal, "upto": upto}, steps(params))

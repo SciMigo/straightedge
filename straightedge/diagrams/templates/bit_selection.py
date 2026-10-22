@@ -52,11 +52,34 @@ BIT_BOX = 78
 ROW_GAP = 18
 LINE_GAP = 22
 CHAIN_MAX_W = 1400
+SLIDE_WIDTH = 1180
+MIN_DISPLAY_TEXT = 11
+
+
+def _grid_width(n: int, base: Optional[int], modulus: Optional[int]) -> float:
+    """The minimum canvas width forced by the bit grid for these inputs."""
+    bits = n.bit_length()
+    exps = [1 << k for k in range(bits - 1, -1, -1)]
+    labels = ["power of 2", "bit"]
+    if base is not None:
+        labels.append("rung")
+    residues: Dict[int, int] = {}
+    if base is not None and modulus is not None:
+        labels.append(f"mod {modulus}")
+        residues = {e: r for e, _p, _raw, r in ladder(base, n, modulus)}
+    label_w = max(text_width(s, LABEL_FONT, safe=True) for s in labels) + 24
+    cell = max(CELL_MIN, BIT_BOX + 20,
+               *(text_width(str(e), POW_FONT, safe=True) + 20 for e in exps),
+               *((text_width(plain(power(base, e)), RUNG_FONT, bold=True, safe=True) + 20)
+                 for e in exps if base is not None),
+               *((text_width(f"≡ {r}", RUNG_FONT, bold=True, safe=True) + 20)
+                 for r in residues.values()))
+    return label_w + bits * cell + 2 * MARGIN
 
 
 def _findings(params: Dict[str, Any]) -> List[Finding]:
     found: List[Finding] = []
-    as_int(params, "n", found, low=1, high=(1 << MAX_BITS) - 1)
+    n = as_int(params, "n", found, low=1, high=(1 << MAX_BITS) - 1)
     base = as_int(params, "base", found, low=1, high=10**6, required=False)
     modulus = as_int(params, "modulus", found, low=2, high=10**6, required=False)
     if modulus is not None and base is None and params.get("base") is None:
@@ -64,6 +87,15 @@ def _findings(params: Dict[str, Any]) -> List[Finding]:
                              "a modulus needs a base: there are no rungs to reduce without one"))
     if found:
         return found
+    width = _grid_width(n, base, modulus)
+    displayed = LABEL_FONT * SLIDE_WIDTH / width
+    if displayed < MIN_DISPLAY_TEXT:
+        return [Finding(
+            "figure_legibility", "error",
+            f"these inputs make the {width:.0f}px bit grid too wide for a {SLIDE_WIDTH}px slide; "
+            f"its {LABEL_FONT}px labels would render at {displayed:.1f}px, below the "
+            f"{MIN_DISPLAY_TEXT}px minimum",
+        )]
     return reveal_findings(params, steps(params))
 
 
