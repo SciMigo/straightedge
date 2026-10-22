@@ -1436,6 +1436,8 @@ def boolean_power_steps(graph: Graph, max_power: Any = None) -> list[Step]:
     shown is computed here at generation time, and the sequence stops at the
     first squaring that changes nothing — that fixed point *is* the
     transitive closure, which is the lesson's payoff, not an early exit.
+    When ``max_power`` is supplied, no displayed matrix exceeds that power;
+    repeated squaring stops at the largest power of two within the limit.
 
     Step ``extras`` carry the matrix (tuple of 0/1 rows), the power, and the
     entries that just turned one (``new_ones``), so a scene lights up exactly
@@ -1445,7 +1447,12 @@ def boolean_power_steps(graph: Graph, max_power: Any = None) -> list[Step]:
     if max_power is not None:
         if not isinstance(max_power, int) or isinstance(max_power, bool) or max_power < 1:
             raise GraphError("max_power must be a positive integer", witness=max_power)
-    bound = max(1, n - 1) if max_power is None else max_power
+    if max_power is None:
+        bound = max(1, n - 1)
+    else:
+        # Repeated squaring can only produce R, R^2, R^4, ... . Treat the
+        # caller's maximum as a strict ceiling rather than overshooting it.
+        bound = 1 << (max_power.bit_length() - 1)
     index = {v: i for i, v in enumerate(graph.ids)}
     current = [[1 if i == j else 0 for j in range(n)] for i in range(n)]
     for edge in graph.edges:
@@ -1510,7 +1517,7 @@ def boolean_power_steps(graph: Graph, max_power: Any = None) -> list[Step]:
         else:
             steps.append(Step(
                 "Stopped before the closure",
-                f"max_power {max_power} reached: R^{power} is not yet the closure",
+                f"max_power {max_power} allows up to R^{power}, which is not yet the closure",
                 panel=(f"R^{power}: walks of length \u2264 {power} only",
                        "squaring again would still add pairs"),
                 extras={"matrix": snap(current), "power": power, "new_ones": ()},
