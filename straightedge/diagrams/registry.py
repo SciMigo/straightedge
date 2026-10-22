@@ -128,6 +128,21 @@ def refusal_findings(diagram_type: str, params: Dict[str, Any]) -> List[Finding]
     return list(refuse(params if isinstance(params, dict) else {}))
 
 
+def natural_steps(diagram_type: str, params: Dict[str, Any]) -> List[str]:
+    """The ordered steps a staged figure reveals for ``params`` — empty if it has none.
+
+    A template that supports staged reveal (see ``docs/staged-reveal.md``)
+    exposes ``natural_steps(params)``; the length of this list is the length a
+    ``reveal`` plan must have. A caller pairing stages with its own beats asks
+    here rather than counting ``data-stage`` groups in the markup.
+    """
+    template = DIAGRAM_REGISTRY.get(diagram_type)
+    steps = getattr(template, "natural_steps", None)
+    if not callable(steps):
+        return []
+    return list(steps(params if isinstance(params, dict) else {}))
+
+
 def refusal_reason(findings: List[Finding]) -> str:
     """The first finding's message, and how many stand behind it."""
     reason = findings[0].message
