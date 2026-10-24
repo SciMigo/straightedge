@@ -49,6 +49,8 @@ from straightedge.graphs import ConceptGraph, GraphError, coerce_graph, steps_fo
 from straightedge.probability import ConceptProbability, ProbabilityError
 from straightedge.probability import coerce_model as coerce_walk_model
 from straightedge.probability import walk_claims
+from straightedge.probability_counting import (coerce_arrangement_gaps, coerce_outcome_grid,
+                                               gap_claims, grid_claims)
 from straightedge.linalg import (
     MAX_DIM,
     VIEWS,
@@ -576,4 +578,62 @@ def _random_walk_is_drawable(plan: AnimationPlan) -> list[Violation]:
         walk_claims(coerce_walk_model({k: v for k, v in supplied.items() if v is not None}))
     except ProbabilityError as exc:
         return [Violation(ConceptProbability.RANDOM_WALK_EXITS, exc.param, str(exc))]
+    return []
+
+
+@register(ConceptProbability.OUTCOME_GRID)
+def _outcome_grid_is_drawable(plan: AnimationPlan) -> list[Violation]:
+    """The events must be real, non-empty and disjoint, and every caption field computed."""
+    supplied = {
+        "faces": plan.parameters.get("faces"),
+        "events": plan.parameters.get("events"),
+        "phases": plan.parameters.get("phases"),
+        "cell_text": plan.parameters.get("cell_text"),
+        "title": plan.parameters.get("title"),
+        "row_label": plan.parameters.get("row_label"),
+        "col_label": plan.parameters.get("col_label"),
+        "captions": plan.parameters.get("captions"),
+        "cues": plan.parameters.get("cues"),
+        "condition_text": plan.parameters.get("condition_text"),
+        "result_text": plan.parameters.get("result_text"),
+        "safe_area": plan.parameters.get("safe_area"),
+    }
+    try:
+        grid_claims(coerce_outcome_grid({k: v for k, v in supplied.items() if v is not None}))
+    except ProbabilityError as exc:
+        return [Violation(ConceptProbability.OUTCOME_GRID, exc.param, str(exc))]
+    return []
+
+
+@register(ConceptProbability.ARRANGEMENT_GAPS)
+def _arrangement_gaps_is_drawable(plan: AnimationPlan) -> list[Violation]:
+    """A legible row, a feasible showcase deal, and cues that run in order."""
+    supplied = {
+        "total": plan.parameters.get("total"),
+        "markers": plan.parameters.get("markers"),
+        "seed": plan.parameters.get("seed"),
+        "min_gap": plan.parameters.get("min_gap"),
+        "max_gap": plan.parameters.get("max_gap"),
+        "runs": plan.parameters.get("runs"),
+        "focus": plan.parameters.get("focus"),
+        "phases": plan.parameters.get("phases"),
+        "title": plan.parameters.get("title"),
+        "marker_label": plan.parameters.get("marker_label"),
+        "gap_label": plan.parameters.get("gap_label"),
+        "counter_text": plan.parameters.get("counter_text"),
+        "target_text": plan.parameters.get("target_text"),
+        "focus_text": plan.parameters.get("focus_text"),
+        "captions": plan.parameters.get("captions"),
+        "cues": plan.parameters.get("cues"),
+        "ease": plan.parameters.get("ease"),
+        "safe_area": plan.parameters.get("safe_area"),
+    }
+    try:
+        model = coerce_arrangement_gaps({k: v for k, v in supplied.items() if v is not None})
+        # The averages are the expensive part; a submit-time check needs only the
+        # deal and the cue order, so it runs the claims without them.
+        gap_claims(model if "average" not in model.phases else
+                   type(model)(**{**model.__dict__, "runs": 100}))
+    except ProbabilityError as exc:
+        return [Violation(ConceptProbability.ARRANGEMENT_GAPS, exc.param, str(exc))]
     return []

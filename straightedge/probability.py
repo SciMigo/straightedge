@@ -69,6 +69,10 @@ class ConceptProbability:
     """Sub-topic identifiers under ``Topic.PROBABILITY``."""
 
     RANDOM_WALK_EXITS = "probability/random_walk_exits"
+    #: Two dice as a grid of equally likely outcomes; see probability_counting.
+    OUTCOME_GRID = "probability/outcome_grid"
+    #: Markers in a shuffle cutting the rest into gaps; see probability_counting.
+    ARRANGEMENT_GAPS = "probability/arrangement_gaps"
 
 
 class ProbabilityError(ValueError):
@@ -88,9 +92,14 @@ class ProbabilityError(ValueError):
 RANDOM_WALK_KEYWORDS = ("随机游走", "赌徒破产", "吸收壁", "吸收态", "破产概率",
                         "random walk", "gambler's ruin", "gamblers ruin",
                         "absorbing barrier", "ruin probability")
+#: Words for the counting concepts (probability_counting). They route a prompt to
+#: this topic; the plan builder then picks the concept.
+DICE_KEYWORDS = ("两个骰子", "骰子", "two dice", "pair of dice", "dice")
+CARD_KEYWORDS = ("洗牌", "扑克牌", "shuffled deck", "first ace", "deck of cards")
 
 
-@topic(Topic.PROBABILITY, keywords=RANDOM_WALK_KEYWORDS, priority=15)
+@topic(Topic.PROBABILITY, keywords=RANDOM_WALK_KEYWORDS + DICE_KEYWORDS + CARD_KEYWORDS,
+       priority=15)
 class Probability:
     """Random processes whose outcome is decided by where they stop."""
 

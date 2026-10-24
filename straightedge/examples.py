@@ -709,4 +709,16 @@ EXAMPLES['probability/random_walk_exits'] = {
                'phases': ['walk', 'ends', 'steps', 'absorb', 'tally']},
     'template': 'probability/random_walk_exits'}
 REQUESTS['probability/random_walk_exits'] = '画一个赌徒破产的随机游走，在 0 和 N 两个吸收壁之间走到停下'
-
+EXAMPLES['probability/outcome_grid'] = {
+    'params': {'faces': [6, 6],
+               'events': [{'stat': 'sum', 'values': [7], 'label': 'sum 7: {n1}'},
+                          {'stat': 'sum', 'values': [6], 'label': 'sum 6: {n2}'}],
+               'phases': ['grid', 'events', 'condition', 'result'],
+               'result_text': 'P(7 first) = {n1}/{n_all} = <b>{p1}</b>'},
+    'template': 'probability/outcome_grid'}
+REQUESTS['probability/outcome_grid'] = '掷两个骰子，画出 36 种结果，比较点数和为 7 与为 6'
+EXAMPLES['probability/arrangement_gaps'] = {
+    'params': {'total': 52, 'markers': 4, 'seed': 1, 'runs': 20000, 'focus': 1,
+               'phases': ['deal', 'gaps', 'average', 'focus']},
+    'template': 'probability/arrangement_gaps'}
+REQUESTS['probability/arrangement_gaps'] = '洗牌后一张张翻，第一张A平均在第几张'

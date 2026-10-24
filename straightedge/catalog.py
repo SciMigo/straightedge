@@ -204,6 +204,8 @@ def _animation_templates() -> list[Template]:
 #: routes to its concept, and that the orphans below are reached by none of them.
 CANONICAL_PROMPTS: dict[str, str] = {
     "probability/random_walk_exits": "画一个赌徒破产的随机游走，在 0 和 N 两个吸收壁之间走到停下",
+    "probability/outcome_grid": "掷两个骰子，画出 36 种结果，比较点数和为 7 与为 6",
+    "probability/arrangement_gaps": "洗牌后一张张翻，第一张A平均在第几张",
     "calculus/derivative_tangent": "画 y=x^2 的导数，用割线逼近切线",
     "calculus/riemann_integral": "画 y=x^2+1 的积分面积，用黎曼矩形展示",
     "calculus/ftc_accumulation": "用 y=x^2 展示微积分基本定理，变上限面积函数 F(x)",

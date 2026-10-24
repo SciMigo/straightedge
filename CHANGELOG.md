@@ -8,6 +8,34 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **`probability/outcome_grid`** — two independent dice (2..10 faces each) as a
+  grid of equally likely outcomes. Events are sets of cells given by a statistic
+  of the roll (`sum`, `difference`, `absdiff`, `product`, `max`, `min`, `first`,
+  `second`) and the values it takes; each is highlighted in its own colour and
+  counted, a `condition` phase fades every other cell, and a `result` phase
+  writes the race probability. Phases `grid`, `events`, `condition`, `result`.
+  Events must be non-empty and disjoint (an overlap is refused with the shared
+  roll). `grid_claims` reports the cells, counts, single-roll and "which comes
+  first" probabilities as exact fractions.
+- **`probability/arrangement_gaps`** — a seeded shuffle of `total` items with
+  `markers` special ones, which cut the rest into `markers + 1` gaps. Phases
+  `deal` (the row is dealt), `gaps` (each gap bracketed and counted), `average`
+  (one bar per gap, from this deal's sizes to the running mean over `runs`
+  seeded shuffles, with a dashed line at the exact mean) and `focus` (the wait
+  for the `focus`-th marker: that many gaps plus that many markers). The
+  showcase deal is the first seed whose gaps lie in `min_gap..max_gap`, so
+  counts stay legible; `gap_claims` reports the seed used, the gap sizes, the
+  final running means, and the expectation computed two ways (the gap argument
+  and a direct sum over the marker's position distribution).
+- **Computed caption fields.** Both counting templates fill `{field}`s in
+  captions and readouts from their own computed facts (`{n1}`, `{p1}`,
+  `{n_all}`, `{mean_gap}`, `{answer_decimal}`, …); an unknown field is refused
+  before a render, so a caption cannot state a number the template did not
+  compute.
+- **`safe_area: "shorts"`** (default in 9:16 for the counting templates) keeps
+  every mark out of the bottom 21% and right 14% of a vertical frame, where
+  short-video players draw their own controls.
+- Prompts about dice or a shuffled deck now route to these concepts.
 - **`probability/random_walk_exits` can argue, not just show.** A new optional
   `renewal` phase, after `absorb`, cuts the finished walk at each return to a
   set of *renewal states* (default: one step either side of the start) and

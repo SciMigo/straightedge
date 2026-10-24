@@ -36,6 +36,8 @@ from .topics import scene_for
 def probability_scene(plan: AnimationPlan) -> str:
     """The scene body for a probability plan. Refuses before drawing."""
     concept = plan.concept or P.ConceptProbability.RANDOM_WALK_EXITS
+    if concept in (P.ConceptProbability.OUTCOME_GRID, P.ConceptProbability.ARRANGEMENT_GAPS):
+        return _counting_scene(concept, plan)
     if concept != P.ConceptProbability.RANDOM_WALK_EXITS:
         return _refusal_scene(f"unknown probability concept {concept!r}")
     try:
@@ -44,6 +46,22 @@ def probability_scene(plan: AnimationPlan) -> str:
     except P.ProbabilityError as exc:
         return _refusal_scene(str(exc))
     return random_walk_scene(model)
+
+
+def _counting_scene(concept: str, plan: AnimationPlan) -> str:
+    from . import probability_counting as C
+    from . import probability_counting_scene as CS
+
+    try:
+        if concept == C.ConceptCounting.OUTCOME_GRID:
+            model = C.coerce_outcome_grid(plan.parameters)
+            C.grid_claims(model)
+            return CS.outcome_grid_scene(model)
+        model = C.coerce_arrangement_gaps(plan.parameters)
+        C.gap_claims(model)
+        return CS.arrangement_gaps_scene(model)
+    except P.ProbabilityError as exc:
+        return _refusal_scene(str(exc))
 
 
 def _q(text: str) -> str:
