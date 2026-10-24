@@ -699,8 +699,46 @@ def _probability_plan(request: str) -> AnimationPlan:
 
     A text request carries no N, start or p, so the plan names the concept and
     the scene draws the default walk; callers set ``n``/``start``/``p``/``phases``
-    through ``parameters`` via :func:`plan_from_template`.
+    through ``parameters`` via :func:`plan_from_template`. A request about dice
+    or a shuffled deck goes to the counting concepts instead (outcome grid,
+    arrangement gaps), with their defaults: two dice racing a 7 against a 6, and
+    the four aces of a deck cutting it into five gaps.
     """
+    from .probability import CARD_KEYWORDS, DICE_KEYWORDS
+
+    lowered = request.lower()
+    if any(word in lowered for word in DICE_KEYWORDS):
+        return AnimationPlan(
+            topic=Topic.PROBABILITY,
+            concept=ConceptProbability.OUTCOME_GRID,
+            title_zh="两个骰子的结果网格",
+            objective_zh="把两个骰子的 36 种等可能结果画成网格，标出事件并计数，再只保留相关的格子做条件概率",
+            english_prompt=request,
+            parameters={},
+            elements=["outcome grid", "die faces", "event cells", "counts", "conditioning"],
+            narration_zh=[
+                "两个骰子一共有 36 种等可能的结果。",
+                "把关心的事件涂上颜色，数一数各有几格。",
+                "其余的格子什么也不改变，把它们淡出。",
+                "剩下的格子里，每个事件所占的比例就是它先出现的概率。",
+            ],
+        )
+    if any(word in lowered for word in CARD_KEYWORDS):
+        return AnimationPlan(
+            topic=Topic.PROBABILITY,
+            concept=ConceptProbability.ARRANGEMENT_GAPS,
+            title_zh="洗牌后标记牌之间的间隔",
+            objective_zh="洗一副牌，四张 A 把其余 48 张分成 5 段；每段平均 48/5 张，第一张 A 平均出现在第 53/5 张",
+            english_prompt=request,
+            parameters={},
+            elements=["dealt row", "markers", "gap brackets", "running averages", "target line"],
+            narration_zh=[
+                "洗好一副牌，一张一张翻开。",
+                "四张 A 把其余的牌分成五段。",
+                "每张普通牌落在每一段的机会相同，所以每段平均一样长。",
+                "第一张 A 之前平均有一段，再加上 A 本身。",
+            ],
+        )
     return AnimationPlan(
         topic=Topic.PROBABILITY,
         concept=ConceptProbability.RANDOM_WALK_EXITS,
